@@ -1,25 +1,26 @@
 # Architecture and lifecycle
 
-Foundry combines a coordinator with an explicit, durable task lifecycle. Native
+Native Agent Orchestrator combines a coordinator with a durable task lifecycle. Native
 Codex and Claude clients perform model execution and provider-native delegation.
-Foundry records custody, continuation, review results, usage, and result receipts.
+The runtime records custody, continuation, review results, usage, and result receipts.
 
 ## Ownership and dependency direction
 
 | Surface | Owner |
 | --- | --- |
 | Requirements, task order, project rules and preflight | Target project |
-| CLI routing, native calls, runtime and session provenance | Foundry runtime |
-| Goal sequencing and manager/worker coordination | Existing Foundry goal lifecycle |
+| CLI routing, native calls, runtime and session provenance | Runtime dispatcher |
+| Goal sequencing and manager/worker coordination | Goal controller |
 | Provider authentication and model availability | Installed native client and account |
 | Tests, review requirements, acceptance and integration | Target project |
 | Optional code index | Project-selected external tool |
 
 Project wrappers call the public CLI or supply their adapter to
 `foundry_runtime.cli.main`. Descriptors select an existing project context.
-Runtime internals use relative package imports; the extracted runtime does not
-require the original development checkout. Historical `pdcl` names remain in
-some serialized formats and environment settings.
+Runtime internals use relative package imports. Historical `pdcl` names remain
+in serialized formats and environment settings. The
+[configuration reference](CONFIGURATION.md) owns descriptor fields and the
+[command reference](CLI.md) owns operator commands.
 
 ## One lifecycle
 
@@ -29,26 +30,25 @@ interpreter, execution intent, and evidence. Manager, worker, expert, and review
 roles use that retained context. Receipts distinguish verified results, stopped
 execution, pending work, unknown outcomes, and project-owned acceptance.
 
-Continuation and recovery reconcile those same records. They do not create a
-parallel scheduler or infer acceptance from a model's final message. Existing
-tasks keep recorded versions unless an explicitly supported lifecycle transition
-changes them.
+Continuation and recovery reconcile those same records. The
+[recovery guide](RECOVERY.md) covers completed sessions, unfinished goals, and
+interrupted attempts. A runtime or role transition records its selected successor
+through that lifecycle.
 
 ## Verification and rollback
 
-The repository includes installed-package and offline lifecycle tests. Native
-client, desktop-host, Windows service, and real-project integration require their
-own environment-specific evidence. Passing fixture tests does not establish those
-integrations or production acceptance.
+The repository includes installed-package and offline lifecycle tests. The
+[examples](../examples/README.md) cover direct native execution, session
+continuation, and coding with independent review. Their executed results are
+recorded in [DEMO.md](DEMO.md). Desktop-host, Windows service, and project
+integration checks use their selected environments and project acceptance criteria.
 
-For new installations, keep an earlier independently qualified virtual
-environment available if rollback is needed. Stop selecting a new installation
-for new work to roll it back. Do not repoint an active task's interpreter or edit
-its journal as a rollback technique.
+For installation rollback, select the earlier verified virtual environment for
+new tasks. Active tasks retain their recorded interpreter and execution records.
 
-## Source publication boundary
+## Repository and task records
 
-This repository starts from a clean source snapshot, with regression identifiers
-anonymized. It does not import the private development Git history, operational
-case notes, project descriptors, installed environments, account files, or actual
-task journals. Native client executables are installed independently.
+The repository contains runtime source, anonymized regression fixtures,
+documentation, and examples. Project descriptors, native sessions, and task
+journals are stored in the selected local project and evidence directories.
+Native client executables are installed independently.

@@ -8,7 +8,7 @@ tests use the standard library.
 
 - Windows, Python 3.13 or newer, and Git.
 - Native Agent Orchestrator installed in the repository's `.venv`, following the
-  [installation instructions](../README.md#install).
+  [installation instructions](../docs/GETTING_STARTED.md#install-from-source).
 - For task execution: the Codex CLI installed, available on `PATH`, and signed in.
   Model execution uses the signed-in account's allowance.
 
@@ -57,9 +57,8 @@ The directory contains:
 The task extends `greet` to trim names and use `world` for empty input. It names
 the two editable files and requires tests for each behavior.
 
-The runtime's Codex execution profile uses `danger-full-access` with approval
-policy `never`. The executor runs under the current user account in the separate
-example workspace.
+The executor uses the runtime's [native execution permissions](../docs/LIMITATIONS.md#execution-permissions)
+in the separate example workspace.
 
 ```powershell
 $ProjectConfig = Join-Path $ExampleRoot 'project.json'
@@ -94,6 +93,9 @@ status reports execution state; the tests and diff establish the task result.
 
 An identical dispatch request returns its recorded outcome. Use a new example
 directory to repeat the demonstration from its original baseline.
+
+For a retained-session workflow, use [checkpoint continuation](CONTINUATION.md).
+For controller-coordinated coding and review, use [coding and review](REVIEW.md).
 
 The descriptor records absolute paths and the selected interpreter. Keep the
 example directory and virtual environment in place while inspecting or continuing

@@ -1,0 +1,104 @@
+# Continuation and recovery
+
+Continuation uses a retained task and native session. Recovery first reconciles
+the recorded execution state, then selects the continuation supported by that
+state. Keep the project descriptor, task order, evidence, and interpreter with
+the task.
+
+## Inspect the task
+
+```powershell
+$TaskStatus = & $RuntimePython -I -m foundry_runtime --foundry-project status `
+  --project-config $ProjectConfig --tag TASK1 | ConvertFrom-Json
+$TaskStatus.runs | Select-Object operation, recorded_state, returncode, session_id
+```
+
+| Recorded state | Operator action |
+| --- | --- |
+| `starting` or `active` | Inspect the retained process and provider observations, then follow `next_action` |
+| `completed` | Read the result and tests; continue its recorded session when more work is required |
+| `unknown` | Inspect recovery commands for the exact intent and reconcile its process and terminal evidence |
+| `not_started` | Follow the recorded retry instruction for that original attempt |
+
+The response includes `errors`, `next_action`, native observations, evidence
+references, and recovery or resume commands when available. Use those bindings
+to select the task rather than choosing a run by directory modification time.
+
+## Continue a completed direct session
+
+Select the session from the intended run, then provide a UTF-8 instruction file:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --project-config $ProjectConfig `
+  --resume $SessionId --worktree $Workspace --tag TASK1 `
+  --launcher exec --prompt-file $PromptFile
+```
+
+Preserve the original tag, workspace, descriptor, interpreter, and transport.
+Ordinary continuation resolves the recorded provider. The dispatcher records
+the new continuation and keeps the same native session.
+
+The [checkpoint example](../examples/CONTINUATION.md) provides a complete
+reproduction: inspect the code, end the first turn at `CHECKPOINT_READY`, then
+resume the same session to implement and test the task.
+
+An identical dispatch or continuation request returns its retained result.
+New work uses new continuation instructions. A fresh demonstration starts from
+a new example directory.
+
+## Recover a goal
+
+Read the exact goal returned by the launch:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --foundry-project status `
+  --status-goal $GoalDirectory
+```
+
+Inspect the retained runtime, context, and native calls before continuing:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --project-config $ProjectConfig `
+  --order $TaskOrder --foundry-goal --recover-goal $GoalDirectory `
+  --recovery-preflight
+```
+
+For unfinished coding that is ready for an operator instruction:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --project-config $ProjectConfig `
+  --order $TaskOrder --foundry-goal --recover-goal $GoalDirectory `
+  --prompt-file $PromptFile
+```
+
+The controller uses retained project and role records. Its response identifies
+the next state and any `continuation_evidence` directory. Retain that directory
+as the binding for the continued goal.
+
+## Reconcile interrupted execution
+
+For an `unknown` direct attempt, project status returns `recovery_commands` when
+the original package and native identities are available. The generated
+`reconcile` command measures the recorded processes and cleanup state. Where
+explicit recovery authorization is required, its `authorize` and `resume`
+commands identify the instruction file and project grant to supply.
+
+Run the commands produced for that exact attempt. Reconciliation, authorization,
+and execution are separate operations recorded by the existing lifecycle.
+`python -m foundry_runtime.recovery --help` lists the recovery-record options.
+
+For a goal, use its recovery entry to reconcile completed coding and return
+control to the goal controller. The goal status and recovery preflight identify
+the relevant checkpoint and native call.
+
+## Runtime and role transitions
+
+Ordinary recovery routes through the recorded interpreter. Runtime upgrades use
+`--upgrade-runtime` at a settled goal boundary. Provider or role transfers use
+`--handoff-provider`, `--handoff-role`, and their retained recovery inputs.
+Inspect `--help` and the exact task's recovery advice for these operations.
+
+Execution and recovery contracts are implemented by
+[`resume_argv` and `status`](../src/foundry_runtime/_project_status.py),
+[`prepare`](../src/foundry_runtime/_foundry_recovery_preflight.py), and
+[`recover_goal`](../src/foundry_runtime/foundry_goal.py).

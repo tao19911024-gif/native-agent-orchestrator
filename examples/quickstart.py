@@ -17,6 +17,8 @@ def run(argv, cwd):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path, help="new directory for the example and local records")
+    parser.add_argument("--scenario", choices=("execution", "continuation", "review"),
+                        default="execution", help="task workflow to copy into the example project")
     args = parser.parse_args()
     root = args.directory.resolve()
     runtime_version = version("foundry-runtime")
@@ -24,6 +26,9 @@ def main():
     workspace = root / "project"
     shutil.copytree(Path(__file__).with_name("hello-project"), workspace,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    if args.scenario != "execution":
+        shutil.copytree(Path(__file__).with_name("scenarios") / args.scenario, workspace,
+                        dirs_exist_ok=True)
     run(["git", "init", "-q", "--initial-branch=main"], workspace)
     run(["git", "add", "."], workspace)
     run(["git", "-c", "user.name=Example Maintainer", "-c",

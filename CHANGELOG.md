@@ -1,5 +1,13 @@
 # Changelog
 
+## Documentation update — 2026-10-22
+
+- Added project use cases, an architecture diagram, and package-name mapping.
+- Added configuration, CLI, recovery, and troubleshooting references.
+- Added runnable checkpoint-continuation and coding-with-review scenarios.
+- Recorded live session continuation and two independent review results.
+- Updated installation and distribution instructions for GitHub release assets.
+
 ## 0.1.0a92 — 2026-10-22
 
 First tagged public release of Native Agent Orchestrator.

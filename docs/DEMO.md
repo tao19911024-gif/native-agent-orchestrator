@@ -90,3 +90,46 @@ OK
 The final diff contained the name-normalization statement and the three new
 test methods. Project preflight and execution records remained under the
 generated descriptor's existing lifecycle.
+
+## Checkpoint continuation
+
+The [continuation workflow](../examples/CONTINUATION.md) was executed on October
+22, 2026, on Windows with Python 3.13 and runtime 0.1.0a92.
+
+The first turn read the project, passed its baseline test, returned
+`CHECKPOINT_READY`, and left the working tree clean. The second invocation used
+`--resume` with the recorded session and `CONTINUE.md`.
+
+| Observation | Result |
+| --- | --- |
+| Initial operation | `dispatch`, `completed`, exit code `0` |
+| Continuation operation | `resume`, `completed`, exit code `0` |
+| Native session | Identical in both execution records |
+| Candidate tests | Four passed |
+| Changed files | `greet.py`, `test_greet.py`; uncommitted |
+
+The implementation trimmed the name and selected `world` for empty input.
+The maintainer ran the complete unittest suite after continuation and inspected
+the diff.
+
+## Coding and independent review
+
+The [review workflow](../examples/REVIEW.md) was executed on the same date and
+environment. The goal used `--provider codex --launcher exec --foundry-goal
+--team-profile none` and an explicitly named goal directory.
+
+| Observation | Result |
+| --- | --- |
+| Controller outcome | `candidate_verified` |
+| Candidate | One commit changing the greeting function and its tests |
+| Review results | Two `PASS` verdicts, each bound to the candidate commit |
+| Review findings | Empty in both results |
+| Model independence | `recorded_coding_assignment_excluded` |
+| Candidate tests | Four passed in the maintainer's post-run verification |
+| Working tree | Clean |
+| Goal recovery preflight | Exit code `0` |
+
+The goal retained its manifest, outcome, coding session, review sessions, and
+usage records. The project acceptance observation was `not_evaluated`; the
+maintainer's post-run check confirmed the four required behaviors, committed
+diff, and review verdicts.

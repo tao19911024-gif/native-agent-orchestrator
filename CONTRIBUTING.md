@@ -1,6 +1,6 @@
 # Contributing
 
-Open an issue with the expected behavior, actual result, Foundry version, Python
+Open an issue with the expected behavior, actual result, runtime version, Python
 version, OS, and a small reproduction. Use synthetic project names and credentials.
 Include the relevant error or receipt fields after removing private paths,
 business content, account identifiers, transcripts, and secrets.
@@ -36,3 +36,6 @@ repository's MIT license. Preserve third-party notices. Do not commit private
 task history, live descriptors, credentials, account files, or runtime evidence.
 Runtime tests and sanitized regression fixtures belong in the source repository;
 business acceptance remains with each target project.
+
+See [troubleshooting](docs/TROUBLESHOOTING.md) for diagnostic commands and
+[configuration](docs/CONFIGURATION.md) for project and native-client settings.

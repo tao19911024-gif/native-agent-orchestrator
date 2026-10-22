@@ -1,73 +1,104 @@
 # Native Agent Orchestrator
 
-Native Agent Orchestrator is a Python runtime for executing long-running development tasks with
-native Codex and Claude clients. It coordinates manager and worker roles, records
-execution evidence and usage, and resumes work through its recorded lifecycle.
+Native Agent Orchestrator runs development tasks through native Codex and Claude
+Code clients, retains their execution records, and continues work in the recorded
+session. It combines project-defined checks with task dispatch, implementation,
+independent review, and recovery.
 
-The runtime owns execution, task and session custody, continuation, and receipts.
-Its existing Python package is `foundry_runtime`, distributed as `foundry-runtime`;
-the `foundry` and `foundry-recovery` commands retain their existing names.
-Each project owns its requirements, preflight, tests, review, acceptance, and
-integration.
+## Use cases
 
-This is an early alpha, version **0.1.0a92**. The public source starts with a
-reviewed snapshot of the existing runtime. Private project histories, operational
-records, credentials, and installed native clients are outside this repository.
+- **Continue work across invocations.** Retain the task, interpreter, provider
+  session, instructions, and execution evidence for the next invocation.
+- **Implement and review a change.** Run a task through coding and independent
+  review, with a committed candidate and review results.
+- **Use one runtime across Git projects.** Register each project's workspace,
+  rules, preflight command, and evidence directory in a project descriptor.
+- **Inspect long-running work.** Read task status, execution logs, result
+  receipts, and usage through the same CLI.
 
-## Install
+Projects supply requirements, tests, and acceptance criteria. The runtime manages
+execution and session custody. Native clients supply model access and provider
+authentication.
 
-Use Python 3.13 or newer and Git. Windows is the primary development environment;
-some lifecycle operations still assume the maintainer's Windows layout.
+## Architecture
+
+```mermaid
+flowchart LR
+    P[Project rules, task and checks] --> C[Public CLI]
+    C --> D[Task dispatcher]
+    C --> G[Goal controller]
+    G --> D
+    G --> R[Independent review]
+    D --> N[Native Codex or Claude client]
+    D --> E[Execution records]
+    G --> E
+    R --> E
+    E -. Status and continuation .-> C
+```
+
+See [architecture and lifecycle](docs/ARCHITECTURE.md) for ownership and record
+relationships.
+
+## Install and run the example
+
+Use Windows, Python 3.13 or newer, and Git:
 
 ```powershell
 git clone https://github.com/tao19911024-gif/native-agent-orchestrator.git
 cd native-agent-orchestrator
 python -m venv .venv
 & .\.venv\Scripts\python.exe -m pip install '.[test]'
-& .\.venv\Scripts\python.exe -m foundry_runtime --help
-& .\.venv\Scripts\python.exe -m foundry_runtime.recovery --help
+$RuntimePython = (Resolve-Path .\.venv\Scripts\python.exe).Path
+$ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-example'
+& $RuntimePython .\examples\quickstart.py $ExampleRoot
 ```
 
-Codex or Claude must be installed and authenticated separately for model-backed
-execution. Foundry does not include a model subscription or API credits. Installing
-and inspecting a project does not require a provider login.
+The example creates a separate Git project, runs its baseline test, and inspects
+the generated configuration. Choose a new directory for `$ExampleRoot`.
 
-## Start with project inspection
+Continue with one of these workflows:
 
-Run the [minimal example](examples/README.md) to create a standalone Python
-project, register it, and inspect its execution configuration. The example also
-includes a task order for a complete Codex execution and verification cycle.
-See the [recorded demonstration](docs/DEMO.md) for commands and results.
+| Workflow | Guide |
+| --- | --- |
+| Execute a task and verify the result | [Greeting example](examples/README.md) |
+| Stop at a checkpoint and continue the same session | [Session continuation](examples/CONTINUATION.md) |
+| Implement, commit, and independently review a task | [Coding and review](examples/REVIEW.md) |
+| Inspect recorded execution results | [Demonstration results](docs/DEMO.md) |
 
-Set `$Workspace` to an existing Git working tree. Keep the descriptor and runtime
-evidence in a local directory outside the public source repository.
+Model-backed execution uses a separately installed and authenticated native
+client and that account's allowance. Installation, project registration, and
+configuration inspection run locally. See [installation and project setup](docs/GETTING_STARTED.md)
+for source and wheel installation, and [operating environment](docs/LIMITATIONS.md)
+for platform and execution settings.
 
-```powershell
-$Python = (Resolve-Path .\.venv\Scripts\python.exe).Path
-$Workspace = 'D:/projects/example'
-$Config = 'D:/foundry-local/example.json'
-& $Python -m foundry_runtime --foundry-project register `
-  --worktree $Workspace --project-config $Config
-& $Python -m foundry_runtime --foundry-project check --project-config $Config
-```
+## Package and command names
 
-Registration and inspection use Git and local files. They do not start a model
-task. See [getting started](docs/GETTING_STARTED.md) before enabling execution.
+| Name | Purpose |
+| --- | --- |
+| Native Agent Orchestrator | Project and repository name |
+| `foundry-runtime` | Python distribution installed by pip |
+| `foundry_runtime` | Python import and module entry point |
+| `foundry` | Main CLI; equivalent to `python -m foundry_runtime` |
+| `foundry-recovery` | Recovery-record CLI; equivalent to `python -m foundry_runtime.recovery` |
 
-## Architecture and boundaries
+## Documentation
 
+- [Project setup](docs/GETTING_STARTED.md)
+- [Configuration reference](docs/CONFIGURATION.md)
+- [Command reference](docs/CLI.md)
+- [Continuation and recovery](docs/RECOVERY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)
-- [Current limitations](docs/LIMITATIONS.md)
-- [Release history](CHANGELOG.md)
-- [Contributing and offline checks](CONTRIBUTING.md)
-- [Dependency and native-client notices](THIRD_PARTY_NOTICES.md)
+- [Operating environment](docs/LIMITATIONS.md)
+- [Release history](CHANGELOG.md) and [downloads](https://github.com/tao19911024-gif/native-agent-orchestrator/releases)
 
-Public entrypoints are `python -m foundry_runtime`, `foundry`, and
-`foundry-recovery`. Underscored Python modules are implementation details.
-Installing this source does not upgrade an already running task; recovery retains
-the runtime and native session recorded by that task.
+## Contributing and support
+
+Report problems and propose changes through [GitHub Issues](https://github.com/tao19911024-gif/native-agent-orchestrator/issues).
+Include reproduction commands, the observed result, and relevant test output.
+Follow the [contribution guide](CONTRIBUTING.md) for development and verification.
 
 ## License
 
-Foundry's source and documentation are available under the [MIT license](LICENSE).
-Third-party dependencies and native clients retain their own licenses and terms.
+Source code and documentation are distributed under the [MIT license](LICENSE).
+Dependency and native-client notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
