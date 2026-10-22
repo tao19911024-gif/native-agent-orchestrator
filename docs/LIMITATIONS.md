@@ -5,7 +5,7 @@
 | Area | Operating details |
 | --- | --- |
 | Platform | Release verification uses Windows and Python 3.13. Requirements and dependencies are declared in `pyproject.toml` |
-| Native clients | Install and authenticate Codex or Claude Code separately. The selected account supplies model access and usage allowance |
+| Native clients | Follow [native client setup](GETTING_STARTED.md#prepare-a-native-client) for Codex or Claude Code. The selected account supplies model access and usage allowance |
 | Distribution | GitHub Releases supplies a wheel, source distribution, and SHA-256 checksums. The source distribution includes documentation and examples |
 | Package identity | Distribution and command names are listed in the [package table](../README.md#package-and-command-names) |
 | Model catalogue | New goal assignments resolve through the installed native clients. `PDCL_MODEL_CATALOGUE=snapshot` selects the retained offline catalogue for tests |

@@ -17,7 +17,8 @@ execution evidence:
 | --- | --- |
 | `No module named foundry_runtime` | Install the source or downloaded wheel with the same interpreter used to run the command. From the source root, run `& $RuntimePython -m pip install .` |
 | `PackageNotFoundError` in quickstart | Install the package in the selected environment before running `examples/quickstart.py` |
-| `codex` or `claude` is unavailable | Install the selected native client, add its executable directory to `PATH`, and confirm it with `Get-Command codex` or `Get-Command claude` in the launch shell |
+| `codex` or `claude` is unavailable | Follow [native client setup](GETTING_STARTED.md#prepare-a-native-client), add its executable directory to `PATH`, and confirm it in the launch shell |
+| A Codex goal requests Claude Code | New Codex-executed goals use a Claude Opus manager. Prepare both clients for [coding and review](../examples/REVIEW.md#requirements); `--team-profile none` selects direct coding and retains the manager |
 | Authentication or account-limit error | Open the selected native client, complete its sign-in or account procedure, and inspect the recorded task before continuing |
 
 Show the installed package and entry points with:
@@ -40,6 +41,8 @@ Show the installed package and entry points with:
 
 The quickstart helper requires a new destination directory. Select another
 directory to create an independent demonstration from the original baseline.
+If the README quickstart already created the project, continue at
+[task execution](../examples/README.md#2-execute-the-task-with-codex).
 
 ## Execution results
 

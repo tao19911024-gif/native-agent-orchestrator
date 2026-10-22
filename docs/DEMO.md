@@ -124,6 +124,8 @@ environment. The goal used `--provider codex --launcher exec --foundry-goal
 | Observation | Result |
 | --- | --- |
 | Controller outcome | `candidate_verified` |
+| Persistent manager | Claude Opus through Claude Code |
+| Coding and review | Codex |
 | Candidate | One commit changing the greeting function and its tests |
 | Review results | Two `PASS` verdicts, each bound to the candidate commit |
 | Review findings | Empty in both results |
@@ -136,3 +138,27 @@ The goal retained its manifest, outcome, coding session, review sessions, and
 usage records. The project acceptance observation was `not_evaluated`; the
 maintainer's post-run check confirmed the four required behaviors, committed
 diff, and review verdicts.
+
+## First-use verification
+
+The source and release installation paths were checked again on October 22,
+2026, using Python 3.13.3 and Codex CLI 0.159.3 on Windows. Source installation
+started from a new public Git clone in a path containing spaces. Release
+installation used the wheel, source archive, and checksum file downloaded from
+the published `v0.1.0a92` release.
+
+| Check | Result |
+| --- | --- |
+| Source installation in a new virtual environment | Package installation and both module and console entry points passed. |
+| Release download and installation | Distribution SHA-256 values matched `SHA256SUMS.txt`; the installed wheel's CLI ran successfully. |
+| Release archive example | The documented extraction and quickstart commands passed the baseline test, registration, and inspection. |
+| Current source archive | All three scenario initializations passed with the release wheel's interpreter. |
+| Installed-package and recovery tests | 29 tests passed: 20 installation/project-launch tests and the nine recovery cases from the development case study. |
+| Direct native task | One completed Codex turn; four result tests passed; only the two task files changed. |
+| Same-session continuation | Checkpoint left the baseline clean; both turns completed in the same session; four result tests passed. |
+| Coding and independent review | `candidate_verified`; two `PASS` verdicts on one candidate commit; four result tests passed; working tree clean. |
+
+Use the [installation guide](GETTING_STARTED.md) for environment selection and
+the individual [example guides](../examples/README.md) for executable commands.
+The [terminal recording](SHOWCASE.md) presents the same continuation lifecycle
+and greeting behaviors.

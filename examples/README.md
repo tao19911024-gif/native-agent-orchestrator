@@ -7,17 +7,22 @@ tests use the standard library.
 ## Requirements
 
 - Windows, Python 3.13 or newer, and Git.
-- Native Agent Orchestrator installed in the repository's `.venv`, following the
-  [installation instructions](../docs/GETTING_STARTED.md#install-from-source).
-- For task execution: the Codex CLI installed, available on `PATH`, and signed in.
+- Native Agent Orchestrator installed following the
+  [installation instructions](../docs/GETTING_STARTED.md), with `$RuntimePython`
+  set to that environment's absolute interpreter path.
+- For task execution: the Codex CLI installed, available on `PATH`, and signed in,
+  following [native client setup](../docs/GETTING_STARTED.md#prepare-a-native-client).
   Model execution uses the signed-in account's allowance.
 
 ## 1. Create and register the project
 
-Run these commands from the Native Agent Orchestrator repository:
+Run these commands from the source checkout or extracted source distribution,
+keeping `$RuntimePython` from the installation steps.
+
+If you created the project with the [README quickstart](../README.md#install-and-run-the-example),
+keep its variables and continue with [task execution](#2-execute-the-task-with-codex).
 
 ```powershell
-$RuntimePython = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-example'
 & $RuntimePython .\examples\quickstart.py $ExampleRoot
 ```
@@ -25,7 +30,8 @@ $ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-example'
 `$ExampleRoot` must name a new directory. The script creates a separate Git
 repository, commits the example baseline with a local example identity, runs its
 test, and calls the installed runtime's `register`, `check`, and `status` commands.
-The generated descriptor configures `python -m unittest -v` as project preflight.
+The generated descriptor uses the selected environment's absolute Python
+interpreter path to run `-m unittest -v` as project preflight.
 This step performs local setup and inspection without invoking a model.
 
 Expected summary:

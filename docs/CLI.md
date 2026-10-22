@@ -56,8 +56,10 @@ binding for the invocation.
 ```
 
 `--foundry-goal` coordinates coding, candidate verification, and independent
-review. `--team-profile none` selects direct coding with review coordinated by
-the goal controller. `adaptive` selects the native team path and manager.
+review. `--team-profile none` selects direct coding while retaining the persistent
+manager. `adaptive` selects the native coding team path. New Codex-executed goals
+use a Claude Opus manager and require both authenticated native clients; see
+[role selection](CONFIGURATION.md#provider-selection).
 `--goal-evidence` names the exact directory retained for this goal.
 
 To inspect staffing before launching the same new goal, add `--print-staffing`.

@@ -1,5 +1,17 @@
 # Changelog
 
+## First-use documentation — 2026-10-22
+
+- Connected the README quickstart directly to task execution, preserving the
+  initialized project and interpreter variables.
+- Aligned all example guides with source and wheel installation environments.
+- Added release extraction steps, checksum verification instructions, and
+  official native-client setup links.
+- Documented the Claude Opus manager required by the Codex coding/review goal
+  and clarified manager selection alongside coding and review providers.
+- Recorded fresh installation, native execution, continuation, and independent
+  review verification results.
+
 ## Project showcase — 2026-10-22
 
 - Added a 24-second terminal demonstration, asciicast replay, and text transcript

@@ -108,6 +108,16 @@ owned by [`validate_project_launch` and `settings`](../src/foundry_runtime/_laun
 For a goal, it applies to coding and review roles. Native clients own their
 authentication and account configuration.
 
+A new Codex-executed goal starts with a persistent Claude Opus manager. Install
+and authenticate both Codex CLI and Claude Code for the
+[coding and review workflow](../examples/REVIEW.md#requirements). Selecting
+`--team-profile none` uses a direct coding worker and retains that manager.
+The initial Opus policy also applies when `--manager-profile astra` is supplied;
+the goal owner transfers coordination after a measured Claude quota refusal.
+Retained goals preserve their recorded manager and transfer history. The policy
+is implemented by [`handle_mode`](../src/foundry_runtime/foundry_entry.py) and
+[`configuration_for`](../src/foundry_runtime/_foundry_manager.py).
+
 `--coding-model` and `--coding-effort` select an explicit coding assignment.
 Codex requires both options together. Claude also accepts a model-only selection.
 Omitting the pair preserves native assignment behavior. Model IDs and availability

@@ -1,6 +1,7 @@
 # Third-party dependencies and native clients
 
-The MIT license in this repository covers Foundry's source and documentation.
+The MIT license in this repository covers Native Agent Orchestrator's source and
+documentation.
 It does not relicense independently installed dependencies or native clients.
 No third-party dependency source, wheel cache, native executable, or model weight
 is bundled in this source repository.
@@ -30,6 +31,6 @@ review rather than relying on this source-only publication.
 - CodeGraph: optional separately installed index integration, currently qualified
   at version 1.6.2.
 
-Foundry does not redistribute any of these executables, supply their credentials,
+Native Agent Orchestrator does not redistribute these executables, supply credentials,
 or grant access to their services. Project and product names identify integrations;
 they do not imply endorsement or an affiliation with their vendors.

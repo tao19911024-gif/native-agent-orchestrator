@@ -7,10 +7,10 @@ configured for the greeting example.
 
 ## Create the project
 
-From the source repository, with the package installed in `.venv`:
+From the source checkout or extracted source distribution, keep `$RuntimePython`
+from the [installation steps](../docs/GETTING_STARTED.md):
 
 ```powershell
-$RuntimePython = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-continuation'
 & $RuntimePython .\examples\quickstart.py $ExampleRoot --scenario continuation
 $Workspace = Join-Path $ExampleRoot 'project'

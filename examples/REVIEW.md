@@ -1,17 +1,23 @@
 # Implement and independently review a task
 
-The goal controller coordinates one coding role and independent review. Coding
-produces a committed candidate; review evaluates that exact candidate against
-the task and project rules. Use the
-[native client environment](../docs/LIMITATIONS.md#installation-and-native-clients)
-configured for the greeting example.
+The goal controller coordinates implementation and independent review. Coding
+produces a committed candidate; review evaluates that candidate against the task
+and project rules.
+
+## Requirements
+
+Install and sign in to both Codex CLI and Claude Code through
+[native client setup](../docs/GETTING_STARTED.md#prepare-a-native-client).
+This workflow uses Codex for coding and review and Claude Opus for the persistent
+manager. Both accounts supply access to their assigned models. Role selection
+is described in the [configuration reference](../docs/CONFIGURATION.md#provider-selection).
 
 ## Create the project
 
-From the source repository, with the package installed in `.venv`:
+From the source checkout or extracted source distribution, keep `$RuntimePython`
+from the [installation steps](../docs/GETTING_STARTED.md):
 
 ```powershell
-$RuntimePython = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-review'
 & $RuntimePython .\examples\quickstart.py $ExampleRoot --scenario review
 $Workspace = Join-Path $ExampleRoot 'project'
@@ -32,9 +38,10 @@ command as preflight.
   --foundry-goal --team-profile none --goal-evidence $GoalDirectory
 ```
 
-`none` selects direct coding. The goal controller selects independent review
-assignments and records their results. To inspect the resolved staffing before
-starting, add `--print-staffing` to the same new-goal command.
+`none` selects direct coding while retaining the goal's manager. The goal
+controller selects independent review assignments and records their results.
+To inspect all assigned roles before starting, add `--print-staffing` to the
+same new-goal command.
 
 ## Inspect the candidate and review
 

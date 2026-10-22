@@ -52,7 +52,7 @@ relationships.
 
 ## Install and run the example
 
-Use Windows, Python 3.13 or newer, and Git:
+Use Windows, Python 3.13 or newer, Git, and PowerShell:
 
 ```powershell
 git clone https://github.com/tao19911024-gif/native-agent-orchestrator.git
@@ -71,9 +71,9 @@ Continue with one of these workflows:
 
 | Workflow | Guide |
 | --- | --- |
-| Execute a task and verify the result | [Greeting example](examples/README.md) |
+| Execute a task in the project just created | [Greeting task execution](examples/README.md#2-execute-the-task-with-codex) |
 | Stop at a checkpoint and continue the same session | [Session continuation](examples/CONTINUATION.md) |
-| Implement, commit, and independently review a task | [Coding and review](examples/REVIEW.md) |
+| Implement, commit, and independently review a task | [Coding and review with Codex and Claude](examples/REVIEW.md) |
 | Inspect recorded execution results | [Demonstration results](docs/DEMO.md) |
 
 Model-backed execution uses a separately installed and authenticated native
