@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-package:
+    name: Windows / Python 3.13
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PDCL_MODEL_CATALOGUE: snapshot
+      PYTHONUTF8: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build tools
+        run: python -m pip install build
+
+      - name: Build wheel and source distribution
+        run: python -m build --outdir dist
+
+      - name: Install wheel in an independent environment
+        run: |
+          $RuntimeEnvironment = Join-Path $env:RUNNER_TEMP 'nao-runtime'
+          python -m venv $RuntimeEnvironment
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $RuntimePython = Join-Path $RuntimeEnvironment 'Scripts/python.exe'
+          $WheelPath = (Get-ChildItem dist -Filter *.whl).FullName
+          & $RuntimePython -m pip install "${WheelPath}[test]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Path ci-results -Force | Out-Null
+
+      - name: Check installed command entry points
+        run: |
+          $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
+          & $RuntimePython -I -m foundry_runtime --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $RuntimePython -I -m foundry_runtime.recovery --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run offline installed-package tests
+        run: |
+          $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
+          & $RuntimePython -m pytest tests/test_installed_runtime.py tests/test_project_launch.py `
+            --junitxml ci-results/pytest.xml -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Initialize example projects
+        run: |
+          $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
+          foreach ($Scenario in @('execution', 'continuation', 'review')) {
+            $ExampleRoot = Join-Path $env:RUNNER_TEMP "nao-example-$Scenario"
+            & $RuntimePython examples/quickstart.py $ExampleRoot --scenario $Scenario
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $ReportDirectory = Join-Path 'ci-results/examples' $Scenario
+            New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
+            Copy-Item -Path "$ExampleRoot/*.json", "$ExampleRoot/baseline-tests.txt" `
+              -Destination $ReportDirectory
+          }
+
+      - name: Upload distributions and test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-python313
+          path: |
+            dist/
+            ci-results/

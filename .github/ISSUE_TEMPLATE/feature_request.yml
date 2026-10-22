@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a workflow improvement with a concrete use case.
+title: '[Feature] '
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Describe the task, current workflow, and problem to solve.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired workflow and how its result would be verified.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current alternatives
+      description: Describe existing commands or approaches considered and their limitations for this use case.

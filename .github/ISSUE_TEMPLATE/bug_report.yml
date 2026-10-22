@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible runtime, installation, or documentation issue.
+title: '[Bug] '
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the runtime version or commit, Python version, operating system, and native client version when relevant.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the commands and minimal project files needed to reproduce the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the expected result for the reproduction.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe the observed result and its effect on the task.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant output
+      description: Include relevant log or receipt excerpts using synthetic paths and identifiers.
+      render: text

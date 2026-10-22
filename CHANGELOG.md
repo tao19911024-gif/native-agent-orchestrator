@@ -1,5 +1,12 @@
 # Changelog
 
+## Contribution infrastructure — 2026-10-22
+
+- Added public Windows/Python CI for package builds, installed-runtime checks,
+  and example initialization, with downloadable reports and distributions.
+- Documented contribution setup, test selection, pull request submission, and review.
+- Added structured bug and feature forms and a pull request template.
+
 ## Documentation update — 2026-10-22
 
 - Added project use cases, an architecture diagram, and package-name mapping.

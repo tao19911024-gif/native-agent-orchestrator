@@ -1,5 +1,7 @@
 # Native Agent Orchestrator
 
+[![CI](https://github.com/tao19911024-gif/native-agent-orchestrator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tao19911024-gif/native-agent-orchestrator/actions/workflows/ci.yml)
+
 Native Agent Orchestrator runs development tasks through native Codex and Claude
 Code clients, retains their execution records, and continues work in the recorded
 session. It combines project-defined checks with task dispatch, implementation,
