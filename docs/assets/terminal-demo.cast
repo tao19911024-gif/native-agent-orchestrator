@@ -1,0 +1,11 @@
+{"version": 2, "width": 108, "height": 25, "duration": 24.0, "title": "Inspect a completed Codex continuation", "env": {"TERM": "xterm-256color", "SHELL": "pwsh"}}
+[0.0, "o", "\u001b[2J\u001b[H1 / Inspect the completed continuation\r\n\r\n"]
+[0.8, "o", "PS> $TaskStatus = & $RuntimePython -I -m foundry_runtime --foundry-project status `\r\n      --project-config $ProjectConfig --tag TASK1 | ConvertFrom-Json\r\n    $TaskStatus.runs | Select-Object operation, recorded_state, returncode\r\n    'Same native session: ' + (@($TaskStatus.runs.session_id | Sort-Object -Unique).Count -eq 1)\r\n\r\n"]
+[2.0, "o", "operation recorded_state returncode\r\n--------- -------------- ----------\r\ndispatch  completed               0\r\nresume    completed               0\r\nSame native session: True\r\n"]
+[8.0, "o", "\u001b[2J\u001b[H2 / Inspect the implementation\r\n\r\n"]
+[8.8, "o", "PS> git -c core.safecrlf=false -C $Workspace diff -- greet.py\r\n\r\n"]
+[10.0, "o", "diff --git a/greet.py b/greet.py\r\nindex dcfb4b0..72a76c8 100644\r\n--- a/greet.py\r\n+++ b/greet.py\r\n@@ -2,6 +2,7 @@\r\n \r\n \r\n def greet(name: str) -> str:\r\n+    name = name.strip() or \"world\"\r\n     return f\"Hello, {name}!\"\r\n"]
+[16.0, "o", "\u001b[2J\u001b[H3 / Verify all four greeting cases\r\n\r\n"]
+[16.8, "o", "PS> Push-Location $Workspace\r\n    try { & $RuntimePython -m unittest -v } finally { Pop-Location }\r\n\r\n"]
+[18.0, "o", "test_empty_name_greeting (test_greet.GreetingTests.test_empty_name_greeting) ... ok\r\ntest_named_greeting (test_greet.GreetingTests.test_named_greeting) ... ok\r\ntest_padded_name_greeting (test_greet.GreetingTests.test_padded_name_greeting) ... ok\r\ntest_whitespace_name_greeting (test_greet.GreetingTests.test_whitespace_name_greeting) ... ok\r\n\r\n----------------------------------------------------------------------\r\nRan 4 tests in 0.000s\r\n\r\nOK\r\n"]
+[24, "o", ""]

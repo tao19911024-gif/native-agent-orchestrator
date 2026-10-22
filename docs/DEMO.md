@@ -1,5 +1,8 @@
 # Greeting task demonstration
 
+The [project showcase](SHOWCASE.md) includes a short terminal recording of the
+completed continuation workflow and a runtime development case.
+
 This demonstration was executed on October 22, 2026, using Native Agent
 Orchestrator 0.1.0a92, Python 3.13, Windows, and the native Codex client. The
 workspace path included spaces. Paths below use `<example-root>` for the directory

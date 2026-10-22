@@ -1,0 +1,44 @@
+Native Agent Orchestrator: completed Codex continuation
+Recorded: 2026-10-22 | Runtime: 0.1.0a92 | Windows | Python 3.13
+Playback: 24 seconds; reading pauses set for presentation.
+Variables refer to the completed continuation example; see ../SHOWCASE.md.
+
+1 / Inspect the completed continuation
+PS> $TaskStatus = & $RuntimePython -I -m foundry_runtime --foundry-project status `
+      --project-config $ProjectConfig --tag TASK1 | ConvertFrom-Json
+    $TaskStatus.runs | Select-Object operation, recorded_state, returncode
+    'Same native session: ' + (@($TaskStatus.runs.session_id | Sort-Object -Unique).Count -eq 1)
+
+operation recorded_state returncode
+--------- -------------- ----------
+dispatch  completed               0
+resume    completed               0
+Same native session: True
+
+2 / Inspect the implementation
+PS> git -c core.safecrlf=false -C $Workspace diff -- greet.py
+
+diff --git a/greet.py b/greet.py
+index dcfb4b0..72a76c8 100644
+--- a/greet.py
++++ b/greet.py
+@@ -2,6 +2,7 @@
+
+
+ def greet(name: str) -> str:
++    name = name.strip() or "world"
+     return f"Hello, {name}!"
+
+3 / Verify all four greeting cases
+PS> Push-Location $Workspace
+    try { & $RuntimePython -m unittest -v } finally { Pop-Location }
+
+test_empty_name_greeting (test_greet.GreetingTests.test_empty_name_greeting) ... ok
+test_named_greeting (test_greet.GreetingTests.test_named_greeting) ... ok
+test_padded_name_greeting (test_greet.GreetingTests.test_padded_name_greeting) ... ok
+test_whitespace_name_greeting (test_greet.GreetingTests.test_whitespace_name_greeting) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK

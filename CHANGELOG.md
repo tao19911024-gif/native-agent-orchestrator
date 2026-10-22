@@ -1,5 +1,14 @@
 # Changelog
 
+## Project showcase — 2026-10-22
+
+- Added a 24-second terminal demonstration, asciicast replay, and text transcript
+  of a completed native Codex continuation and its four result tests.
+- Documented a runtime recovery-routing development case with synthetic project
+  details, public implementation references, and nine passing regression cases.
+- Linked the showcase from the README and included its assets in the source
+  distribution.
+
 ## Contribution infrastructure — 2026-10-22
 
 - Added public Windows/Python CI for package builds, installed-runtime checks,

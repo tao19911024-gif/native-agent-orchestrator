@@ -22,6 +22,15 @@ Projects supply requirements, tests, and acceptance criteria. The runtime manage
 execution and session custody. Native clients supply model access and provider
 authentication.
 
+## Demonstration
+
+![Inspect a completed Codex continuation](docs/assets/terminal-demo.gif)
+
+The 24-second [terminal demonstration](docs/SHOWCASE.md) inspects a completed
+Codex continuation, the resulting code change, and four passing tests.
+The [runtime development case](docs/case-studies/CONTINUATION_RECOVERY.md)
+explains a recovery-routing correction with reproducible regression coverage.
+
 ## Architecture
 
 ```mermaid
@@ -86,6 +95,7 @@ for platform and execution settings.
 ## Documentation
 
 - [Project setup](docs/GETTING_STARTED.md)
+- [Project showcase](docs/SHOWCASE.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Command reference](docs/CLI.md)
 - [Continuation and recovery](docs/RECOVERY.md)
