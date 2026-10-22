@@ -8,8 +8,7 @@ The runtime owns execution, task and session custody, continuation, and receipts
 Its existing Python package is `foundry_runtime`, distributed as `foundry-runtime`;
 the `foundry` and `foundry-recovery` commands retain their existing names.
 Each project owns its requirements, preflight, tests, review, acceptance, and
-integration. A completed model turn does not by itself mean that a project has
-accepted a change.
+integration.
 
 This is an early alpha, version **0.1.0a92**. The public source starts with a
 reviewed snapshot of the existing runtime. Private project histories, operational
@@ -35,6 +34,11 @@ and inspecting a project does not require a provider login.
 
 ## Start with project inspection
 
+Run the [minimal example](examples/README.md) to create a standalone Python
+project, register it, and inspect its execution configuration. The example also
+includes a task order for a complete Codex execution and verification cycle.
+See the [recorded demonstration](docs/DEMO.md) for commands and results.
+
 Set `$Workspace` to an existing Git working tree. Keep the descriptor and runtime
 evidence in a local directory outside the public source repository.
 
@@ -54,6 +58,7 @@ task. See [getting started](docs/GETTING_STARTED.md) before enabling execution.
 
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)
 - [Current limitations](docs/LIMITATIONS.md)
+- [Release history](CHANGELOG.md)
 - [Contributing and offline checks](CONTRIBUTING.md)
 - [Dependency and native-client notices](THIRD_PARTY_NOTICES.md)
 

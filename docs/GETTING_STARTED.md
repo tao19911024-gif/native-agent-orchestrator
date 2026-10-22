@@ -4,6 +4,9 @@ Begin with a separate local virtual environment and an existing Git project, as
 shown in the README. The selected interpreter owns this installation; it does not
 replace any previously installed Foundry release.
 
+For a complete runnable walkthrough, use the [minimal greeting example](../examples/README.md).
+The [recorded demonstration](DEMO.md) shows native execution and result verification.
+
 ## Register a project
 
 `--foundry-project register` records the workspace's Git identity, rule sources,
