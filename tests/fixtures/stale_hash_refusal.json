@@ -1,0 +1,23 @@
+{
+  "source_commit": "9dd80e5c7d1621f5aa08363c6783faf5cde41559",
+  "source_receipt": "private development receipt (path withheld)",
+  "source_sha256": "2931b32a6b90e09948b5f9bcf75d66eefbd1e2e43ded34deca546f873e7c0c46",
+  "recorded_runtime": "0.1.0a55",
+  "stale_hash": "0d478614…8c25",
+  "current_hash": "0822e777bb43a0965b26392c062101c44c12b09d6eecd0269cfef0220ffb95ab",
+  "result": {
+    "goal_premise": {
+      "status": "REFUSE",
+      "statement": "Recorded audit digest differs from the retained fixture audit.",
+      "evidence": [
+        "The retained fixture audit digest differs from the recorded digest.",
+        "A second retained fixture record agrees with the current digest."
+      ]
+    },
+    "acceptance_satisfiability": {
+      "status": "PASS",
+      "criterion": "订单中的实现、测试、性能比较和交接要求。",
+      "reason": "这些要求均可通过源码、运行结果及证据文件衡量；未发现不可能满足或彼此矛盾的验收条件。"
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "source_sha256": "0db5359aaf65d6f812dd04286058ec766cfe6ca879b081dff05a82d64872aaf9",
+  "source_commit": "556a84d5",
+  "sanitization": "business verdict and IDs replaced; terminal/accounting fields preserved",
+  "event": {
+    "duration_api_ms": 361796,
+    "stop_reason": "tool_use",
+    "session_id": "00000000-0000-0000-0000-000000000001",
+    "total_cost_usd": 4.339685,
+    "usage": {
+      "input_tokens": 130,
+      "cache_creation_input_tokens": 228856,
+      "cache_read_input_tokens": 9556585,
+      "output_tokens": 29850,
+      "output_tokens_details": {
+        "thinking_tokens": 17103
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 228856,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "global",
+      "iterations": [],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "modelUsage": {
+      "claude-opus-5-5": {
+        "inputTokens": 130,
+        "outputTokens": 29850,
+        "cacheReadInputTokens": 9556585,
+        "cacheCreationInputTokens": 228856,
+        "webSearchRequests": 0,
+        "costUSD": 4.339685,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 128000,
+        "thinkingTokens": 17103,
+        "canonicalModel": "claude-opus-5-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "fixture-tool-0",
+        "tool_input": {
+          "command": "fixture",
+          "description": "fixture"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "fixture-tool-1",
+        "tool_input": {
+          "command": "fixture",
+          "description": "fixture"
+        }
+      },
+      {
+        "tool_name": "Grep",
+        "tool_use_id": "fixture-tool-2",
+        "tool_input": {
+          "pattern": "fixture",
+          "path": "fixture",
+          "glob": "fixture",
+          "output_mode": "fixture"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subagent_stats": {
+      "spawned": 0,
+      "requested": {
+        "background": 0,
+        "foreground": 0,
+        "unset": 0
+      },
+      "started_in_background": 0,
+      "max_depth": 0,
+      "spawned_by_subagents": 0,
+      "completed": 0,
+      "failed": 0,
+      "killed": {
+        "parent": 0,
+        "user": 0,
+        "system": 0
+      },
+      "refused": {
+        "depth_limit": 0,
+        "concurrency_limit": 0,
+        "budget": 0
+      },
+      "by_type": {}
+    },
+    "safety_stops": 0,
+    "is_error": false,
+    "num_turns": 67,
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "{\"candidate_commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"packet_sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"verdict\": \"PASS\", \"findings\": []}",
+    "structured_output": {
+      "candidate_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "packet_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "verdict": "PASS",
+      "findings": []
+    },
+    "ttft_ms": 2113,
+    "type": "result",
+    "duration_ms": 1562721,
+    "uuid": "00000000-0000-0000-0000-000000000002",
+    "ttft_stream_ms": 1090,
+    "time_to_request_ms": 194,
+    "first_content_frame_ms": 1091,
+    "queued_turn_count": 0,
+    "result_index": 0
+  }
+}

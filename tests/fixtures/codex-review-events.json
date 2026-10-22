@@ -1,0 +1,32 @@
+{
+  "source_sha256": "cc30a08379d1c2386b49dfd8603d9d630bbe3f157ac69fce2be1a26583c940f6",
+  "source_commit": "556a84d5",
+  "sanitization": "selected lifecycle events; business text and IDs replaced",
+  "events": [
+    {
+      "type": "thread.started",
+      "thread_id": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "type": "turn.started"
+    },
+    {
+      "type": "item.completed",
+      "item": {
+        "id": "fixture-final",
+        "type": "agent_message",
+        "text": "{\"verdict\": \"PASS\"}"
+      }
+    },
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 6828826,
+        "cached_input_tokens": 6655360,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 15241,
+        "reasoning_output_tokens": 5695
+      }
+    }
+  ]
+}

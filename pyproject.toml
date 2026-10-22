@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foundry-runtime"
+version = "0.1.0a92"
+description = "Shared native-agent execution and orchestration runtime"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.13"
+dependencies = ["langgraph==1.2.11", "langgraph-checkpoint-sqlite==3.1.1"]
+
+[project.urls]
+Repository = "https://github.com/tao19911024-gif/native-agent-orchestrator"
+Issues = "https://github.com/tao19911024-gif/native-agent-orchestrator/issues"
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[project.scripts]
+foundry = "foundry_runtime.cli:main"
+foundry-recovery = "foundry_runtime.recovery:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+foundry_runtime = ["*.json"]

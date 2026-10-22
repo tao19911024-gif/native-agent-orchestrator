@@ -1,0 +1,238 @@
+{
+  "source_commit": "97a074451d3cb2c7d9b45b1d13d7adaa329be18c",
+  "source_checkout": "private development checkout (path withheld)",
+  "modules": {
+    "_app_server_activity": {
+      "source_sha256": "c031b16b017a3e4a667b627f83a9e96804b6a06c216a26dcfdc1b313a0f6cb73",
+      "relative_import_edits": 0
+    },
+    "_app_server_policy": {
+      "source_sha256": "22a05da07222609a3bc22274b36820296397bab2cc8c44019acbc1bfb0664b0c",
+      "relative_import_edits": 0
+    },
+    "_app_server_terminal": {
+      "source_sha256": "733d8bce69fe0eeab72f05632326fe64d441c921976536b6c64c84f4f92a92cf",
+      "relative_import_edits": 0
+    },
+    "_codex_command": {
+      "source_sha256": "d0cb9914a7332b840c445035804aeb997872c5efe8530e5dbe8d9695f7d329f0",
+      "relative_import_edits": 2
+    },
+    "_command_display": {
+      "source_sha256": "f475d50dd04893b3439d32d343f6872ac36916ddab3c54f84b928d75b84d2fb8",
+      "relative_import_edits": 0
+    },
+    "_compute_selection": {
+      "source_sha256": "40082d7a9afbac4fad28b5bb0250da83269c2e796caed555617f3daded8a03bf",
+      "relative_import_edits": 2
+    },
+    "_dispatch_claude": {
+      "source_sha256": "017c376ab1b729774301675fb15b0045b52ef6a8d48aa92d26683f1eb8d5d688",
+      "relative_import_edits": 5
+    },
+    "_dispatch_package": {
+      "source_sha256": "abc3f94c995e69eb1721d32f2804541df811cd9104373588f95b888eecd71119",
+      "relative_import_edits": 1
+    },
+    "_dispatch_resume": {
+      "source_sha256": "24c91ac5016369d5a541f71d1c917c1821caa0bd367a5da19a7bd4141c33f131",
+      "relative_import_edits": 7
+    },
+    "_execution_bindings": {
+      "source_sha256": "1977e8872bcba9613ae16419856cf5dba76a1dcb53e1138a4f71272b317cc143",
+      "relative_import_edits": 2
+    },
+    "_execution_intent": {
+      "source_sha256": "76a5516a378be3ec01c4665fe0d05052b88ad46c6997296b1ecc5f585925d9e5",
+      "relative_import_edits": 8
+    },
+    "_execution_plan_prompt": {
+      "source_sha256": "d3daf9e56bfae7657886f9430b2a57e16152a66748dc6f6284a6689a247fcdef",
+      "relative_import_edits": 0
+    },
+    "_execution_profile": {
+      "source_sha256": "a4df511a2db0153e7eb8be6613585facd7ad36f5bc29bda75469de6a699565a7",
+      "relative_import_edits": 0
+    },
+    "_execution_usage": {
+      "source_sha256": "3c90d138da24015788757a492635b3bbf73b141c35252ca4be36fe45e2c8a5aa",
+      "relative_import_edits": 3
+    },
+    "_executor_lifecycle": {
+      "source_sha256": "9050aa3ed124f3dc54865dfc353e2e582259961436a2223bc48150b49f2b9530",
+      "relative_import_edits": 0
+    },
+    "_foundry_analysis": {
+      "source_sha256": "bedd03265355ea2b391ed88b15dc1f29b4450293543a56dfec832231ff3c18bc",
+      "relative_import_edits": 4
+    },
+    "_foundry_cli": {
+      "source_sha256": "109a3a90fd91fc868df266d3795ca98676286652145b9d3fcf67ea102ceeb68d",
+      "relative_import_edits": 10
+    },
+    "_foundry_cli_help": {
+      "source_sha256": "297ff2dba2eeefdfc78eca3473252df6d4c760ecb5888c94f86f1e64e4200172",
+      "relative_import_edits": 0
+    },
+    "_foundry_cost": {
+      "source_sha256": "dbedea4c76466d7e109be801d1cd6c1fa98f2d6ea04b9983593ad1f797150ecf",
+      "relative_import_edits": 1
+    },
+    "_foundry_dispatch": {
+      "source_sha256": "6b28fd807c54f383a80974c1d911e7f5c808cd7ac21dd5ee5a119ab9772ea757",
+      "relative_import_edits": 20
+    },
+    "_foundry_evidence": {
+      "source_sha256": "5f2ccb42da92039d2f9e07f0e9d04585698709eda8debb3b8d7b1064893c42de",
+      "relative_import_edits": 0
+    },
+    "_foundry_goal_auto": {
+      "source_sha256": "99a76d1a727de1ca413684d07213478ef05b37112590843b962a67c0ca11f6e0",
+      "relative_import_edits": 4
+    },
+    "_foundry_goal_continuation": {
+      "source_sha256": "4f96c7704453847f6969d98f52998d18f6e70d6296fb0e1f8e3e2176ac814124",
+      "relative_import_edits": 2
+    },
+    "_foundry_goal_delivery": {
+      "source_sha256": "b00d22fdd797342c8dc840b03229b35078e94b9cfc85c64c353bf07130618fe3",
+      "relative_import_edits": 1
+    },
+    "_foundry_goal_execution": {
+      "source_sha256": "968133a4cfe2264d40f8ad7fc9f9b39762fbe7528ac0c8649a9d6d8a946d5fcf",
+      "relative_import_edits": 7
+    },
+    "_foundry_goal_telemetry": {
+      "source_sha256": "ed9449376c8eb5e1f429f2510cd87cad638bfc35a09fc2c54e021b9e80b17aed",
+      "relative_import_edits": 0
+    },
+    "_foundry_goal_usage": {
+      "source_sha256": "60ab40a8fb9c3b661e13d4b237cd94e40b3fa59d6e964d414d5ed67e436d5e9f",
+      "relative_import_edits": 7
+    },
+    "_foundry_manager": {
+      "source_sha256": "951e261b58b7e6982cf11b9e55f9e9b73044413e36817d2d5b0b26749c9a8354",
+      "relative_import_edits": 4
+    },
+    "_foundry_native_request": {
+      "source_sha256": "21ee5664af838eb30ce21df19e8a7c1f0770d64125851d6f9ea5b5cf31a4d5f1",
+      "relative_import_edits": 2
+    },
+    "_foundry_native_transport": {
+      "source_sha256": "6f269032c5f8875a629c350a3eb895f4f8f60033920d932f5c55e652e9ea4f8b",
+      "relative_import_edits": 4
+    },
+    "_foundry_project": {
+      "source_sha256": "d9e28c40cf6ed26d4c6abd3c8f5c0cbfb1b297cecb92ef772eb39e7eaef4bac1",
+      "relative_import_edits": 3
+    },
+    "_foundry_response_contract": {
+      "source_sha256": "9c4732ed6f0f52f958efeda7925e131f7aa95e31459bab3ee632760860749257",
+      "relative_import_edits": 0
+    },
+    "_foundry_review_group": {
+      "source_sha256": "40d6b7d33b2b1b2422a5ec7dbd0f39fb3bb5d8ad740ca798fde947ddd5aa0d1e",
+      "relative_import_edits": 3
+    },
+    "_foundry_team_calibration": {
+      "source_sha256": "da7dcd13f29da32e36d0a4875fb1f5bec23fa7d70fe614c8012d0b4464d238ff",
+      "relative_import_edits": 5
+    },
+    "_model_catalogue": {
+      "source_sha256": "66c2b9bfb20475c67366eb7d1ba63031d2737e5a7784b5d667d216f67c70b60d",
+      "relative_import_edits": 4
+    },
+    "_named_grant": {
+      "source_sha256": "286326ef8fc73b58b47e2696c1c89cb6faadae56a9400e2235bf3628b346a34d",
+      "relative_import_edits": 0
+    },
+    "_native_session": {
+      "source_sha256": "7e1a22ca354ab8b97a98386bc413c639ae9dd53579950a3dbe633c55c62fb9e3",
+      "relative_import_edits": 0
+    },
+    "_project_context": {
+      "source_sha256": "03e300367280f855995512a2de84c45bd8df573f45a83d4643ff36622463f0da",
+      "relative_import_edits": 0
+    },
+    "_project_execution": {
+      "source_sha256": "57e01230906401210e1c6f9a7d0be2bb1cb36e1b2470e7980a286b0ce1a131b4",
+      "relative_import_edits": 9
+    },
+    "_project_hooks": {
+      "source_sha256": "2fe1c13e3f76911c21accc20bf008e9ad2a6338193fc1561edaf53afbf273949",
+      "relative_import_edits": 1
+    },
+    "_project_recovery": {
+      "source_sha256": "66b9b1e072f5a27bdcb57f7afc0b62bb0b4510c4479b09322fd6111db08631e7",
+      "relative_import_edits": 4
+    },
+    "_project_status": {
+      "source_sha256": "334e6192d0ef249708e1bc7cd031913303299060d14d64c6b41ba416fbca39d1",
+      "relative_import_edits": 5
+    },
+    "_recovery_authorization": {
+      "source_sha256": "d64b34f7f87895b3ad5532fdcbeed794efdde7ef21a47d5bfad17d99441fd221",
+      "relative_import_edits": 11
+    },
+    "_recovery_producer": {
+      "source_sha256": "a594cb2b701f2b7b7d624308f9ea2f0a7719013146e855db5195a017d0454ae0",
+      "relative_import_edits": 11
+    },
+    "_recovery_provenance": {
+      "source_sha256": "a38662e301788d554d6eff84abc7dbeb086c2bd572ddcce348d49ed87331a323",
+      "relative_import_edits": 4
+    },
+    "_recovery_reconciliation": {
+      "source_sha256": "b2a8b6d7c0996c74e02ffa272d2ac0a0816b38e167e13b8a82584733ce613b9e",
+      "relative_import_edits": 5
+    },
+    "_repository_observation": {
+      "source_sha256": "8a281e9998ed646dade6579ef3145ba26b90de17c91bf662fe180786dc112213",
+      "relative_import_edits": 0
+    },
+    "_task_identity": {
+      "source_sha256": "2eb47c676041c666036f94dc0078cd68e010e9b5b2f66ab279d618c70755f5cb",
+      "relative_import_edits": 0
+    },
+    "app_server_transport": {
+      "source_sha256": "f9fccaf77ea5f3fb3542350d3d3b80f4a2799c9fb368de1e2731e86c08d2a803",
+      "relative_import_edits": 8
+    },
+    "foundry_claude": {
+      "source_sha256": "1f1b98f6aff13374b986cf494a6b28e828310bc6c2d65e11ef66afdd9ec67d90",
+      "relative_import_edits": 2
+    },
+    "foundry_codex": {
+      "source_sha256": "55a646a413965cd2d4f874e0f59e1ff7fa48f231a961b12359a348f26e48be88",
+      "relative_import_edits": 4
+    },
+    "foundry_collaboration": {
+      "source_sha256": "92807ecb65079bcacf978962c74fa8d81bd3a2d4e403b44572d22d4be2364fb4",
+      "relative_import_edits": 1
+    },
+    "foundry_entry": {
+      "source_sha256": "3a0a85edf31d542064af8f69870a7f6fbaa2d670da1289d1e9a92a761fa90e40",
+      "relative_import_edits": 14
+    },
+    "foundry_goal": {
+      "source_sha256": "f92ac7c2cf0facd73c211bdbeb9c929dbbdd13ebeee6364121c9e0a9df46cce4",
+      "relative_import_edits": 24
+    },
+    "foundry_native": {
+      "source_sha256": "52b74ead9096f3a7fdb2d87d821e1b122916c2be49f1e4a231a849a80e6648d6",
+      "relative_import_edits": 19
+    },
+    "foundry_native_support": {
+      "source_sha256": "238b4c1d0b3e046bfdb04351bfaa15cd308b5d883808b2a35c1815dcd3287c3e",
+      "relative_import_edits": 1
+    },
+    "foundry_shadow": {
+      "source_sha256": "71484387a1f5cd1594bd87b9759cdd722a2115995afdb246369cb4b545c1e400",
+      "relative_import_edits": 0
+    },
+    "result_receipt": {
+      "source_sha256": "4c0725ab616ffac5f2ca128e34ddd7400dbfef256bd7961b6885a65f612ea411",
+      "relative_import_edits": 1
+    }
+  }
+}

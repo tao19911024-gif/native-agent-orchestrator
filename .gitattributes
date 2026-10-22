@@ -1,0 +1,3 @@
+# Native recovery fingerprints bind source bytes; keep rebuilds stable on Windows.
+src/foundry_runtime/*.py text eol=lf
+src/foundry_runtime/*.json text eol=lf

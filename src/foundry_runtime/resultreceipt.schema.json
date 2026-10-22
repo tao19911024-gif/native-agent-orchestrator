@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pdcl-resultreceipt-1",
+  "title": "ResultReceipt",
+  "description": "The machine-readable half of a terminal result, per the GPT WorkOrder v2 prompt section 12. It exists because the layer below it does not judge the run: _execution_intent.py stamps outcome = 'process_completed' if returncode == 0 else 'process_failed', alongside verification = 'not_evaluated'. A CLAUSE 0 stop exits 0, so a run that stopped and a run that finished its work are THE SAME RECORD to every machine consumer today. This object is the first place a task outcome is stated rather than inferred from prose.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "order_id",
+    "status",
+    "report_ref"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "provider_recovery": {
+      "type": "object",
+      "description": "Observed bounded same-session capacity recovery. References existing intents and terminal evidence; never grants execution authority or task acceptance.",
+      "required": ["status", "attempts"],
+      "properties": {
+        "status": {"type": "string"},
+        "attempts": {"type": "array", "items": {"type": "object"}},
+        "automatic_retries": {"type": "integer", "minimum": 0},
+        "resume_argv": {"type": ["array", "null"], "items": {"type": "string"}}
+      }
+    },
+    "coding_usage": {
+      "type": "object",
+      "description": "Existing native usage observation from _execution_usage; its coverage and evidence are not proof of account charges or task acceptance."
+    },
+    "schema_version": {
+      "const": "pdcl-resultreceipt-1"
+    },
+    "order_id": {
+      "type": "string",
+      "description": "The canonical LINE, derived the way _task_authority.normalized_line derives it. NOT a new identifier -- task authority is unchanged and this field must never become a second name for a task."
+    },
+    "execution_intent_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The ExecutionIntent this attempt ran under, when one exists. Null for any dispatch that predates the intent journal -- measured 2026-09-13, journals cover 14 of 210 evidence dirs, so null is the common historical case and is not an error."
+    },
+    "attempt_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "partial",
+        "candidate",
+        "blocked",
+        "unknown"
+      ],
+      "description": "The five states of prompt section 12. THE PROMPT CONTRADICTS ITSELF HERE and this schema resolves it deliberately rather than silently: section 19's criterion 9 lists `upstream interrupted` as the fifth state where section 12's JSON lists `partial`. This schema takes section 12's set, because `status` is what Symphony ROUTES on and an interrupted run and a partial run route identically -- both resume. The distinction is not lost: it survives exactly where section 13 already put it, as the stop_code UPSTREAM_INTERRUPTED. Section 13's code table containing UPSTREAM_INTERRUPTED and no PARTIAL is only consistent under this reading. See PHASE3_RESULT.md section 2. AND THE RULE THAT MAKES THIS WRITEABLE BY A MACHINE, added 2026-09-13: `status` is a TASK verdict, and no layer that cannot judge the task may assert one. When `verification.task_status` is `not_evaluated`, `status` MUST be `unknown`. That is not a formality -- it is the whole defect this object exists against. `_execution_intent.py` records `outcome = process_completed if returncode == 0`, a CLAUSE 0 stop exits 0, and every machine consumer has therefore been reading a stop as a success. Splitting the two axes is what stops the dispatcher inheriting that error at a higher layer."
+    },
+    "execution": {
+      "type": "object",
+      "description": "WHAT THE DISPATCHER KNOWS FOR CERTAIN, and may therefore DECLARE. These come from the ExecutionIntent journal, not from reading prose. They answer 'did the run happen and terminate cleanly', which is a different question from 'did the work get done' -- conflating the two is the error this whole object addresses.",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "not_started",
+            "starting",
+            "active",
+            "completed",
+            "unknown"
+          ],
+          "description": "The ExecutionIntent state, verbatim. NOT a task verdict."
+        },
+        "process_outcome": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "`process_completed` / `process_failed`, or `turn_*` for app-server. Copied from the journal unchanged. `process_completed` means the PROCESS exited 0 and means nothing whatever about the task."
+        },
+        "returncode": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "returncode_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declared_by": {
+          "type": "string",
+          "description": "The module that wrote these facts, e.g. `bin/result_receipt.py`. A declaration names its author; an inference is marked by `derived_by`."
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "Whether anything has actually JUDGED the task, and if so what. The default is `not_evaluated`, mirroring the field `_execution_intent.py` already stamps beside every finish. Making the absence of a verdict explicit is the point: an empty field reads as an oversight, `not_evaluated` with a reason reads as a fact.",
+      "additionalProperties": false,
+      "properties": {
+        "task_status": {
+          "enum": [
+            "not_evaluated",
+            "evaluated"
+          ],
+          "description": "When `not_evaluated`, `status` must be `unknown`."
+        },
+        "evaluated_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Who judged it: an executor's own declared outcome line, a commander, or a reviewer. Null while unevaluated."
+        },
+        "why_not": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "One sentence saying why no verdict is available, so a reader is never left to guess whether the gap is an omission or a limit."
+        }
+      }
+    },
+    "stop_code": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "ORDER_PREMISE_FALSE",
+        "ORDER_CONTRADICTION",
+        "AUTHORITY_MISSING",
+        "WORKTREE_OCCUPIED",
+        "WORKTREE_COLLISION",
+        "BASE_DRIFT",
+        "MECHANISM_MISSING",
+        "ACCEPTANCE_UNPRODUCIBLE",
+        "INFRA_FAILURE",
+        "UPSTREAM_INTERRUPTED",
+        "EXECUTION_UNKNOWN",
+        "EXECUTOR_DISCOVERY",
+        "CANDIDATE_READY",
+        "REVIEW_BLOCKED",
+        "PLANNED_STOP",
+        null
+      ],
+      "description": "Section 13's first-version code list, plus PLANNED_STOP. PLANNED_STOP is the one addition and it is measured, not invented: JOURNEY4 stopped because its own order required stopping before implementation (`BRICK 1 requires stopping before implementation`), which is a CORRECT execution, and none of section 13's 14 codes can say so. Without it such a run can only be filed as some flavour of blocked, which is precisely what section 13 exists to prevent -- its stated purpose is that Symphony must not parse natural language to decide retry / resume / rewrite. A PLANNED_STOP carries status `completed`, never `blocked`."
+    },
+    "stop_category": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "enum": [
+          "REACH",
+          "ENCODING",
+          "CONTRADICTION"
+        ]
+      },
+      "description": "The CLAUSE 0 category the executor declared, unchanged in meaning and unchanged in spelling, from DEFINITION 2 of the shared preamble. Section 13 says 'do not change existing real semantics', so this carries the existing vocabulary rather than replacing it. An array because a real stop may name more than one (measured: 6 of 20 categorised stops do). Null when the stop is not a CLAUSE 0 stop -- a stop taken after work began has no category slot in any existing format."
+    },
+    "remediation_owner": {
+      "enum": [
+        "commander",
+        "executor",
+        "host",
+        "operator",
+        "external",
+        null
+      ],
+      "description": "Section 13's orthogonal axis: who must act next. This is the field that separates 'the order is wrong' from 'the world is wrong', which the three CLAUSE 0 categories cannot express -- measured, CONTRADICTION carries 19 of 20 categorised stops because it is the only bucket that fits order defects, base drift and worktree contention alike."
+    },
+    "candidate_commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "acceptance": {
+      "type": "object",
+      "description": "Per-acceptance-item verdict, keyed by the order's own item id (A1, A2, ...). Deriving this from a historical narrative report is NOT reliable and the deriver does not pretend otherwise; it is populated when a run states it and left empty when it does not.",
+      "additionalProperties": {
+        "enum": [
+          "met",
+          "unmet",
+          "unknown"
+        ]
+      }
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings_batch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "closure_batch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "followup_proposals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "human_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Section 13 stores this beside the stop code: the one sentence a human needs. Carried verbatim from the report, never paraphrased."
+    },
+    "report_ref": {
+      "type": "string",
+      "description": "Path to the human report this receipt accompanies. The receipt NEVER replaces it -- section 12: read the narrative when you need to understand why."
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "derived_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Set when this receipt was DERIVED from historical artifacts rather than written at dispatch time. A derived receipt is evidence about the shape of the schema; it is not a dispatcher's own statement, and nothing should treat the two as equally authoritative."
+    }
+  }
+}

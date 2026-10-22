@@ -1,0 +1,102 @@
+{
+  "source_version": "0.1.0a46",
+  "source_manifest_sha256": "79a05000e2a03e8c555e73091b086b2ab90b8137800e3e2c5b0d29b793a54b18",
+  "scope": "Policy projection of an a46-written retained task manifest; native history is independently verified on the isolated real copy. No completed boundary is claimed for the source task.",
+  "task_staffing": {
+    "admission": {
+      "effort": "high",
+      "model": "claude-sonnet-5-5",
+      "provider": "claude",
+      "source": "kind"
+    },
+    "compute": {
+      "coding_role": "coding",
+      "correction_policy": "fixed",
+      "profile": "sol-claude",
+      "profile_version": 5,
+      "reviewers": [
+        {
+          "backend": "claude",
+          "effort": "high",
+          "model": "claude-opus-5-5"
+        },
+        {
+          "backend": "claude",
+          "effort": "high",
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "roles": {
+        "coding": {
+          "backend": "codex",
+          "effort": "high",
+          "model": "gpt-6.1-sol",
+          "source": "kind"
+        },
+        "correction": {
+          "backend": "codex",
+          "effort": "high",
+          "model": "gpt-6.1-sol",
+          "source": "kind"
+        }
+      },
+      "selection": {
+        "reason": "Task kind supplies omitted role choices; explicit model pairs take precedence. Task kind supplies independent reviewer assignments.",
+        "source": "kind"
+      }
+    },
+    "kind": "cross-module",
+    "manager": {
+      "profile": "opus",
+      "source": "kind"
+    },
+    "review_source_detail": {
+      "backend": "kind",
+      "model": "kind"
+    },
+    "reviewers": [
+      {
+        "backend": "claude",
+        "effort": "high",
+        "model": "claude-opus-5-5"
+      },
+      {
+        "backend": "claude",
+        "effort": "high",
+        "model": "claude-sonnet-5-5"
+      }
+    ],
+    "sources": {
+      "coding": "kind",
+      "correction": "kind",
+      "manager": "kind",
+      "reviewers": "kind",
+      "team": "kind"
+    },
+    "team": {
+      "profile": "adaptive",
+      "source": "kind"
+    },
+    "team_source_detail": {
+      "backend": "kind",
+      "profile": "kind"
+    }
+  },
+  "manager_policy": {
+    "artifact_delivery": true,
+    "backend": "claude",
+    "context_reuse": 1,
+    "design_convergence": 1,
+    "effort": "high",
+    "expert": {
+      "backend": "claude",
+      "effort": "high",
+      "model": "claude-fable-5-1"
+    },
+    "model": "claude-opus-5-5",
+    "profile": "opus",
+    "quota_recovery": 1,
+    "recorded_coding_model": "gpt-6.1-sol",
+    "review_convergence": 1
+  }
+}
