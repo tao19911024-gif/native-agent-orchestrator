@@ -15,6 +15,10 @@ from foundry_runtime import _project_status
 @pytest.fixture
 def capacity_worker(external, tmp_path, monkeypatch):
     tree, scope, order, _ = external
+    from foundry_runtime import foundry_native_support
+    # Continuation refreshes client discovery before dispatch. Both discovery
+    # and execution belong to this synthetic native-process fixture.
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
     home = tmp_path / 'codex'
     sessions = home / 'sessions/2026/10/12'; sessions.mkdir(parents=True)
     (sessions / f'rollout-fixture-{SID}.jsonl').write_text(json.dumps(
