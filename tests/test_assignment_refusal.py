@@ -10,6 +10,13 @@ from foundry_runtime import foundry_goal as goal
 from foundry_runtime._project_execution import ProjectExecution, AdmissionRefused
 
 
+@pytest.fixture(autouse=True)
+def native_fixture_discovery(monkeypatch):
+    from foundry_runtime import foundry_native_support
+    # Recovery refreshes discovery; these tests execute local protocol fixtures.
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
+
+
 @pytest.mark.parametrize('backend', ['claude', 'codex'])
 @pytest.mark.parametrize('repeat', [False, True])
 def test_refused_assignment_returns_to_same_manager(external, manager_io, tmp_path, monkeypatch, backend, repeat):
