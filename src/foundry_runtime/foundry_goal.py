@@ -112,8 +112,13 @@ def _run_lock(folder, *, reuse_owned=False):
 
 
 def _git(tree, *args):
-    result = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *args],
-                            cwd=tree, capture_output=True, timeout=30)
+    from . import _task_deadline as deadline
+    try:
+        deadline.check()
+        result = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *args],
+                                cwd=tree, capture_output=True, timeout=deadline.remaining())
+    except (subprocess.TimeoutExpired, TimeoutError) as exc:
+        raise GoalBlocked("git observation reached task deadline: " + " ".join(args)) from exc
     if result.returncode:
         raise GoalBlocked("git observation failed: " + result.stderr.decode("utf-8", "replace")[:1000])
     return result.stdout
@@ -127,8 +132,20 @@ def _blocking(findings):
     return any(item["severity"] in _BLOCKING_SEVERITIES for item in findings)
 
 
+def _referenced_fields(context):
+    return {field: '/context/' + field for field in
+            ('original_order', 'changed_files', 'project_record', 'execution_decision')
+            if field in context and len(json.dumps(context[field], ensure_ascii=False).encode('utf-8')) > 4096}
+
+
 def _validate_review(value, context, tree, *, retained_only=False):
-    validate_response_shape(value, response_contract("review", correction_routing=context.get("correction_routing") is True))
+    if context.get('review_field_reads') is True:
+        reads = value.get('read_fields', [])
+        for field, pointer in _referenced_fields(context).items():
+            expected = {'pointer': pointer, 'sha256': _sha(_json_bytes(context[field]))}
+            if expected not in reads:
+                raise InvalidReview('review required field unread or digest differs: ' + pointer, 'review_blocked')
+    validate_response_shape(value, response_contract("review", correction_routing=context.get("correction_routing") is True, review_field_reads=context.get("review_field_reads") is True))
     if (value["candidate_commit"] != context["candidate_commit"]
             or value["packet_sha256"] != _sha(_json_bytes(context))):
         raise InvalidReview("review candidate/context identity differs", "review_blocked")
@@ -143,7 +160,8 @@ def _validate_review(value, context, tree, *, retained_only=False):
 def _role_request(run_id, name, packet, *, context_reference=None, read_policy=None):
     request = {"kind": "review", "packet": packet,
             **({"correction_routing": True} if packet.get("correction_routing") is True else {}),
-            "response_contract": response_contract("review", correction_routing=packet.get("correction_routing") is True),
+            "response_contract": response_contract("review", correction_routing=packet.get("correction_routing") is True, review_field_reads=packet.get("review_field_reads") is True),
+            **({"review_field_reads": True} if packet.get("review_field_reads") is True else {}),
             "call_id": _sha((run_id + ":" + name).encode()),
             "packet_sha256": _sha(_json_bytes(packet))}
     if read_policy is not None:
@@ -151,9 +169,7 @@ def _role_request(run_id, name, packet, *, context_reference=None, read_policy=N
     if context_reference is not None:
         # Select presentation at the request boundary so native admission and
         # recovery compare the same envelope. The complete context hash stays.
-        fields = {field: '/context/' + field for field in
-                  ('original_order', 'changed_files', 'project_record', 'execution_decision')
-                  if field in packet and len(json.dumps(packet[field], ensure_ascii=False).encode('utf-8')) > 4096}
+        fields = _referenced_fields(packet)
         if fields:
             request.update(packet={key: value for key, value in packet.items() if key not in fields},
                            context_reference=context_reference, context_fields=fields)
@@ -198,7 +214,7 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
     if len(reviews) != 2:
         raise GoalBlocked("amendment requires the completed pair of reviews")
     for review in reviews:
-        validate_response_shape(review, response_contract("review", correction_routing="correction_guidance" in review))
+        validate_response_shape(review, response_contract("review", correction_routing="correction_guidance" in review, review_field_reads="read_fields" in review))
         if review["candidate_commit"] != head:
             raise GoalBlocked("amendment finding belongs to another candidate")
         if (review["verdict"] == "BLOCK") != _blocking(review["findings"]):

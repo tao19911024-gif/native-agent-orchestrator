@@ -22,14 +22,10 @@ in serialized formats and environment settings. The
 [configuration reference](CONFIGURATION.md) owns descriptor fields and the
 [command reference](CLI.md) owns operator commands.
 
-Project admission judges can use `foundry_runtime._admission_call.run` for the
-native process invocation. The project retains its prompt, schema, PASS/REFUSE
-validation and worker-launch decision. The runtime retries only classified
-capacity, timeout and transport failures, using the first two existing capacity
-delays (60 and 300 seconds). It preserves the model and instructions, records each
-attempt and stops after three calls or the task deadline. It does not retry a
-completed verdict or an unclassified failure. See the
-[admission integration guide](ADMISSION_RECOVERY.md).
+[Source authority](SOURCE_AUTHORITY.md) identifies the release repository and
+historical migration. The release selector owns new-task deployment and records
+the version-bound acceptance receipt. Task provenance continues to own recovery.
+Project admission retries remain in the project adapter's repository.
 
 ## One lifecycle
 

@@ -32,7 +32,7 @@ def add_arguments(ap) -> None:
     ap.add_argument("--provider", choices=("codex", "claude"),
                     help="explicit provider for a new task, including admission, coding and review; no quota check required")
     ap.add_argument("--foundry-usage", nargs="+", metavar="RECORD",
-                    help="read delivery baseline and usage from goal directories, manifests, outcomes or dispatch receipts")
+                    help="read delivery baseline and usage from goal directories, manifests, outcomes or dispatch receipts; no model calls or writes")
     ap.add_argument("--foundry-goal", action="store_true",
                     help="code, test and independently review one order")
     ap.add_argument("--foundry-review", action="store_true",

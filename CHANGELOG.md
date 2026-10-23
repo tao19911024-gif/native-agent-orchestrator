@@ -2,18 +2,19 @@
 
 ## 0.1.0a95 — 2026-10-23
 
-- Add bounded native admission-call recovery for provider capacity, timeout and
-  transport failures: three calls at most, with 60- and 300-second retry delays.
-- Preserve each attempt's native output, including partial timeout output, and
-  report the final unavailable reason separately from a project REFUSE verdict.
-- Recognize the Codex CLI capacity error that omits structured error codes.
-- Restore the recovered-assignment regression's reference to its public,
-  anonymized fixture and include that regression in release CI.
-- Retain the selected model, provider, instructions and project-owned verdict
-  validation. A successful native terminal event takes precedence over earlier
-  transient error messages from the same call.
-- Document adapter integration and historical-runtime behavior. Project adapters
-  must call the admission transport to enable this recovery.
+- Require pointer and value-digest receipts for referenced fields in new review
+  checkpoints. Historical review requests and completed verdicts retain their contracts.
+- Bound legacy assignment reads to 1 MiB and report malformed or unmatched input
+  through the existing manager hand-back outcome.
+- Keep usage reporting available when delivery-baseline projection fails.
+- Apply the task deadline to Git observations and report expiry as a named goal block.
+- Preserve capacity-retry failures without masking their cause or attaching a
+  predecessor package to deadline stops.
+- Restore the 3,000-token output default for workers and managers; retain native
+  output settings for Codex reviewers and preserve explicit or recorded settings.
+- Require a version-bound acceptance receipt for default runtime selection.
+  Document one source authority, clean tagged builds, publication and rollback.
+- Correct the recovered-assignment test's public fixture reference and extend CI.
 
 ## 0.1.0a94 — 2026-10-23
 

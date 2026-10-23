@@ -61,7 +61,7 @@ def validate_project_launch(values):
             raise ValueError("invalid launch setting type: " + key)
 
 
-def settings(backend="codex"):
+def settings(backend="codex", *, root_role='executor'):
     retained = _retained_settings.get()
     if retained is not None:
         return dict(retained)
@@ -70,7 +70,7 @@ def settings(backend="codex"):
             "compact_tokens": int(os.environ.get("FOUNDRY_COMPACT_TOKENS", "0")),
             "compact_percent": int(os.environ.get("FOUNDRY_COMPACT_PERCENT", "90")),
             "bash_chars": int(os.environ.get("FOUNDRY_BASH_CHARS", "12000")),
-            "tool_tokens": int(os.environ.get("FOUNDRY_TOOL_TOKENS", "0" if backend == "codex" else "3000"))}
+            "tool_tokens": int(os.environ.get("FOUNDRY_TOOL_TOKENS", "0" if backend == "codex" and root_role == 'reviewer' else "3000"))}
 
 
 def claude_settings(launch=None):
@@ -90,7 +90,7 @@ def capture(workspace=None, *, enable_index=True, root_role='executor', backend=
     from ._code_index import prepare
     observation = {'status': 'disabled', 'fallback': 'scoped-direct-reads', 'reason': 'review-direct-reads'}
     server = prepare(workspace, observation=observation) if enable_index else None
-    limits = settings(backend)
+    limits = settings(backend, root_role=root_role)
     return {"settings": limits, "server": server,
             "index_policy": "prepare" if enable_index else "review-direct-reads",
             "index_observation": observation,

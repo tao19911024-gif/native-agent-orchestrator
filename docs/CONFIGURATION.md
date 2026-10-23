@@ -80,7 +80,6 @@ candidate; the project observation reports the acceptance decision.
 ```json
 {
   "launch": {
-    "FOUNDRY_TOOL_TOKENS": 0,
     "FOUNDRY_BASH_CHARS": 12000,
     "FOUNDRY_CODEGRAPH_ARGV": []
   }
@@ -90,7 +89,7 @@ candidate; the project observation reports the acceptance decision.
 | Setting group | JSON type and purpose |
 | --- | --- |
 | `FOUNDRY_CONTEXT_TOKENS`, `FOUNDRY_COMPACT_TOKENS`, `FOUNDRY_COMPACT_PERCENT` | Integers configuring native context and compaction inputs |
-| `FOUNDRY_TOOL_TOKENS` | Codex tool-output override in tokens; zero, the default, retains native settings; a positive value selects an explicit limit |
+| `FOUNDRY_TOOL_TOKENS` | Codex tool-output override in tokens; zero retains native settings; omitted defaults to 3,000 for workers/managers and native settings for Codex reviewers; a positive value selects an explicit limit |
 | `FOUNDRY_BASH_CHARS` | Integer configuring the Claude Bash output size and Codex read-accounting inputs |
 | `FOUNDRY_WAIT_INTERVAL_SECONDS` | Integer configuring native wait intervals |
 | `FOUNDRY_CODEX_READ_SINGLE`, `FOUNDRY_CODEX_READ_TURN`, `FOUNDRY_CODEX_READ_INDEX_CHARGE` | Integer read-accounting settings for Codex |

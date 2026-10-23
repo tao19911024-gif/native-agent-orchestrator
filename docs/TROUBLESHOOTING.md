@@ -54,7 +54,6 @@ If the README quickstart already created the project, continue at
 | `task_acceptance: not_evaluated` | The project has no recorded acceptance observation for that result. Run its acceptance checks and record the maintainer's decision, or configure its observation hook |
 | `Foundry code index unavailable` | Execution uses scoped direct reads. Configure `FOUNDRY_CODEGRAPH_ARGV` when the project requires indexed navigation |
 | `automatic_delivery_unavailable` | Follow the retained command handle or read its exact task status. Hosted execution custody and chat delivery are separate host capabilities |
-| `admission judgement unavailable: timeout` or `provider_capacity` | Read `admission-failure.json` and the retained attempt outputs. The bounded judgement retry ended without a verdict; continue through the existing task recovery entry after the reported cause is resolved. See [admission recovery](ADMISSION_RECOVERY.md) |
 
 ## Evidence for a problem report
 

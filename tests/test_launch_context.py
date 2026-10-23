@@ -22,7 +22,7 @@ def test_native_arguments_cover_transports(monkeypatch, tmp_path):
     c = codex_argv(Path("codex"), tmp_path/"schema", workspace=tmp_path)
     for args in (a, b, c):
         assert not any(arg.startswith("model_auto_compact_token_limit=") for arg in args)
-        assert not any(arg.startswith('tool_output_token_limit=') for arg in args)
+        assert 'tool_output_token_limit=3000' in args
         assert not any("mcp_servers." in arg for arg in args)
     for args in (argv("claude", "session", workspace=tmp_path),
                  _claude_argv(Path("claude"), "session", {}, workspace=tmp_path)):
@@ -40,7 +40,7 @@ def test_tool_output_policy_freezes_explicit_and_native_settings(monkeypatch, va
     if value is not None:
         monkeypatch.setenv('FOUNDRY_TOOL_TOKENS', value)
     launch = config.capture(enable_index=False)
-    expected = int(value or 0)
+    expected = int(value) if value is not None else 3000
     assert launch['settings']['tool_tokens'] == expected
     monkeypatch.setenv('FOUNDRY_TOOL_TOKENS', '999')
     with config.retained_settings(launch['settings']):

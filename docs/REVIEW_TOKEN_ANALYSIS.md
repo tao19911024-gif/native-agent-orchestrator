@@ -178,3 +178,14 @@ paths. All 91 packaged runtime files match the tested installation. Public CI
 now includes the launch-context tests. The
 [configuration reference](CONFIGURATION.md#native-launch-settings) documents
 selection and restoration of an explicit output limit.
+
+
+## Worker scope after a94 acceptance
+
+The native-output comparison above measured independent reviews. It contains no
+coding-worker turns and establishes no worker token saving. Release a95 retains
+the 3,000-token default for workers and managers, and uses native settings for
+Codex reviewers. Explicit project settings and historical launch settings retain
+their recorded behavior. A future worker-default change requires paired worker
+runs of the same coding task, including input, cached input, output, tool reads,
+truncation rereads and completed-work reuse.
