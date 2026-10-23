@@ -109,3 +109,7 @@ These selections establish record coverage and traceable continuation order.
 Long invocation wall times include recovery and waiting intervals. Further
 performance comparisons use recorded phase timing and native usage from the
 same workload, alongside its project-owned acceptance result.
+
+The [live delivery validation](LIVE_DELIVERY_VALIDATION.md) connects a real native
+correction chain, its candidate reviews and a separate project-accepted
+verification, with provider token counters and recovery call counts.

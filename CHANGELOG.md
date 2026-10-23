@@ -1,5 +1,14 @@
 # Changelog
 
+## Live delivery validation and stopped-review status — 2026-10-23
+
+- Exposed task, candidate, checkpoint and recorded recovery invocation when a
+  review stops before publishing its outcome.
+- Verified the generated recovery command with real native reviewers and
+  preserved completed review receipts.
+- Published measured token usage, original-session correction and recovery
+  results for the retained conflict-response defect.
+
 ## Review context references — 2026-10-23
 
 - Reused the existing review checkpoint for long task, changed-file, project

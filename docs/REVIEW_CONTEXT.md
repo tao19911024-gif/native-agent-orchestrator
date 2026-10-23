@@ -35,9 +35,10 @@ $GoalStatus = & $RuntimePython -I -m foundry_runtime --foundry-project status `
 $GoalStatus.feedback.artifacts.review_checkpoint
 ```
 
-For an interrupted review before an outcome is available, the goal manifest's
-`review_checkpoint` supplies the same reference. Continue through the existing
-`--recover-goal` command described in [recovery](RECOVERY.md).
+For a stopped review before an outcome is available, status supplies the same
+checkpoint reference and `feedback.continuation.invocation`. Its continuation
+status is `review_completion_required`; the invocation uses the existing
+`--recover-goal` entry described in [recovery](RECOVERY.md).
 
 New checkpoints record `context_delivery: reference-v1`. Existing checkpoints
 retain their original request format. The goal's review request builder selects
@@ -68,3 +69,8 @@ retrieval, full-context verdict binding and unchanged short/legacy requests.
 A local subprocess regression exercises the goal review and recovery owners:
 one reviewer succeeds, the other is interrupted, and recovery calls only the
 unfinished reviewer using the same checkpoint reference.
+
+The [live delivery validation](LIVE_DELIVERY_VALIDATION.md) reports actual
+native token counters, original-session correction and partial-review recovery.
+Its matched review pair recorded a 35.37% initial-byte reduction, a 0.86% input
+token reduction and a 17.38% output-token increase.
