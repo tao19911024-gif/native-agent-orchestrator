@@ -15,8 +15,10 @@ def _matches_manager_assignment(path, record, decision):
     log = path.with_name(path.name.removesuffix('.package.json') + '.log')
     heading = 'Continue the same task from the retained worker result.'
     marker = heading + '\n\nRECORDED EXECUTION DECISION\n'
-    with log.open(encoding='utf-8') as stream:
-        for line in stream:
+    try:
+        with log.open('rb') as stream:
+            lines = stream.read(1024 * 1024).decode('utf-8', 'replace').splitlines()
+        for line in lines:
             # Thread/resume includes old turns. Only this attempt's input binds
             # its assignment; do not parse the accumulated conversation response.
             if not line.startswith('stdout: ') or '"method"' not in line[:100] or '"userMessage"' not in line[:250]:
@@ -35,6 +37,8 @@ def _matches_manager_assignment(path, record, decision):
             source = execution_plan_prompt(heading, retained)
             return (retained == decision and source in text
                     and hashlib.sha256(source.encode('utf-8')).hexdigest() == record['frozen']['order_sha256'])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
     return False
 
 
@@ -98,7 +102,8 @@ def retained_dispatch(owner, folder, manifest):
         if len(selected) == 1:
             candidates = selected
     if len(candidates) != 1:
-        raise owner.GoalBlocked('manager hand-back needs one exact retained dispatch; found ' + str(len(candidates)))
+        raise owner.GoalBlocked('manager hand-back needs one exact retained dispatch; found ' + str(len(candidates))
+                                + '; assignment unmatched')
     path, journal, record = candidates[0]
     return path, journal, record, previous
 

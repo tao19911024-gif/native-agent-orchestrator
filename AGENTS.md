@@ -3,6 +3,11 @@
 Follow [CONTRIBUTING.md](CONTRIBUTING.md) for changes, installed-package checks
 and public pull requests. Keep private task data out of this repository.
 
+This repository is the sole runtime source authority. Follow
+[docs/SOURCE_AUTHORITY.md](docs/SOURCE_AUTHORITY.md) and
+[docs/RELEASING.md](docs/RELEASING.md) for source lineage, tagged builds,
+acceptance and runtime selection. Preserve historical release tags.
+
 ## Storage lifecycle
 
 Follow [docs/STORAGE_RETENTION.md](docs/STORAGE_RETENTION.md) when creating

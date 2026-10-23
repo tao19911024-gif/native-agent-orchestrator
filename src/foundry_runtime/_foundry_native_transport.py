@@ -64,7 +64,8 @@ def invocation(analyst, request, prompt, context, schema, now):
     working_dir = analyst.workspace or folder.resolve()
     launch = analyst.launch_context or capture(working_dir,
         root_role=('expert' if request.get('packet', {}).get('stage') == 'expert_consultation' else
-                   'manager' if request['kind'] == 'coordinate' else 'executor'), backend=analyst.backend,
+                   'manager' if request['kind'] == 'coordinate' else
+                   'reviewer' if request['kind'] == 'review' else 'executor'), backend=analyst.backend,
         coding_model=analyst.recorded_coding_model)
     args = analyst._argv(folder, allocation["attempt_id"], schema, request["kind"],
         resume_session=allocation.get("resume_session"), persistent=allocation.get("persistent_session", False),

@@ -65,6 +65,28 @@ reader share the same envelope. `packet_sha256` continues to identify the full
 checkpoint context, including referenced fields. Reviewers echo that value.
 Successful review results remain reusable when another reviewer is interrupted.
 
+## Field read receipts
+
+Starting with a95, newly created contexts that contain long referenced fields
+record `review_field_reads: true`. Their review response contract requires
+`read_fields`, an array of `{ "pointer": "...", "sha256": "..." }` entries.
+Each entry binds a complete referenced value to its checkpoint JSON pointer.
+The reviewer computes the digest after extracting and reading the value:
+
+```python
+raw = json.dumps(value, ensure_ascii=False, sort_keys=True,
+                 separators=(",", ":"), allow_nan=False).encode("utf-8")
+digest = hashlib.sha256(raw).hexdigest()
+```
+
+The goal review owner checks every required pointer and value digest before
+accepting the verdict. An absent or different digest reports the exact pointer
+as `review required field unread or digest differs`. The receipt establishes
+value retrieval; independent review still evaluates requirements and evidence.
+Short contexts and historical checkpoints without the marker keep their prior
+response contracts. Native allocation records retain the marker so recovery
+uses the same contract and reuses completed review results.
+
 ## Measured retained-record comparison
 
 The comparison uses the retained first-use and development selections from the

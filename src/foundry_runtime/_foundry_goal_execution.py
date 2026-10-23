@@ -742,6 +742,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                       .decode("utf-8").split("\0") if p],
                     "scope": "Focus for follow-up; original base-to-candidate acceptance remains in scope."}
 
+        if owner._referenced_fields(context):
+            context['review_field_reads'] = True
+
         checkpoint = {"schema_version": 1, "context_delivery": "reference-v1", "review_read_policy": 1,
                       "run_id": run_id, "order": manifest["order"],
                       **({'task_deadline_at': task_deadline_at} if task_deadline_at is not None else {}),

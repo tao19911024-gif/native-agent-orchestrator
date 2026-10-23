@@ -250,6 +250,12 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 'those fields as needed; use scoped extraction rather than printing the entire checkpoint. '
                 'All original requirements and the full base-to-candidate range remain in scope. '
                 'packet_sha256 identifies the complete checkpoint context; echo that supplied value.')
+        if kind == 'review' and request.get('review_field_reads') is True:
+            instruction += (
+                ' Return read_fields for every context_fields pointer after reading its complete value. '
+                'Each sha256 hashes the UTF-8 bytes of json.dumps(value, ensure_ascii=False, '
+                'sort_keys=True, separators=(",", ":"), allow_nan=False). '
+                'Compute these digests from the checkpoint values you read.')
         envelope["response_contract"] = contract
         serialized = json.dumps(envelope, ensure_ascii=False, allow_nan=False,
                                 sort_keys=True, separators=(",", ":"))

@@ -218,13 +218,17 @@ def message_recipients_for_request(request: dict) -> list[str]:
     return _recipient_values(["coordinator", *identities])
 
 
-def response_contract(kind: str, message_recipients=None, *, correction_routing=False, artifact_delivery=False, expert_consultation=False, operator_input=False, member_tier_decisions=()) -> dict:
+def response_contract(kind: str, message_recipients=None, *, correction_routing=False, artifact_delivery=False, expert_consultation=False, operator_input=False, member_tier_decisions=(), review_field_reads=False) -> dict:
     """Return a fresh role contract, optionally bound to one graph recipient roster."""
     contracts = {"plan": _PLAN, "analyse": _ANALYSIS, "synthesize": _SYNTHESIS,
                  "solution": _SOLUTION, "review": _REVIEW, "coordinate": _COORDINATE}
     if kind not in contracts:
         raise CollaborationError("unknown model request kind")
     contract = copy.deepcopy(contracts[kind])
+    if kind == 'review' and review_field_reads:
+        contract['properties']['read_fields'] = {'type': 'array', 'items': _contract({
+            'pointer': _STRING, 'sha256': {'type': 'string', 'pattern': '^[0-9a-f]{64}$'}})}
+        contract['required'].append('read_fields')
     if member_tier_decisions:
         if kind != 'coordinate':
             raise CollaborationError('member tier decisions belong to coordination')
@@ -266,6 +270,7 @@ def response_contract(kind: str, message_recipients=None, *, correction_routing=
 def response_contract_for_request(request: dict) -> dict:
     recipients = message_recipients_for_request(request)
     return response_contract(request.get("kind"), recipients if request.get("kind") == "analyse" else None,
+                             review_field_reads=request.get('review_field_reads') is True,
                              correction_routing=request.get("correction_routing") is True,
                              artifact_delivery=request.get("artifact_delivery") is True,
                              expert_consultation=request.get('expert_consultation') is True,
@@ -276,6 +281,7 @@ def response_contract_for_request(request: dict) -> dict:
 def allocation_contract(allocation):
     """Rebuild the response contract from the call's durable allocation."""
     return response_contract(allocation["kind"], allocation["message_recipients"],
+        review_field_reads=allocation.get('review_field_reads') is True,
         correction_routing=allocation.get("correction_routing") is True,
         artifact_delivery=allocation.get("artifact_delivery") is True,
         expert_consultation=allocation.get('expert_consultation') is True,

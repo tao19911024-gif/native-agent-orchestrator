@@ -112,6 +112,9 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
         assert 'original_order' not in request['packet']
         result = {'candidate_commit': head, 'packet_sha256': request['packet_sha256'],
                   'verdict': 'PASS', 'findings': []}
+        retained_context = json.loads(Path(request['context_reference']['path']).read_bytes())['context']
+        result['read_fields'] = [{'pointer': pointer, 'sha256': goal._sha(goal._json_bytes(retained_context[field]))}
+                                 for field, pointer in request['context_fields'].items()]
         sid = f'00000000-0000-4000-8000-{slot + 1:012d}'
         rows = [{'type': 'thread.started', 'thread_id': sid}, {'type': 'turn.started'}]
         if slot == 1 and not recovering:

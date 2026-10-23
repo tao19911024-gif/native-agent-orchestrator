@@ -1,5 +1,6 @@
 """Select or maintain installed releases; never modify a retained run."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -7,7 +8,7 @@ import subprocess
 import tempfile
 
 
-def select(selection, python):
+def select(selection, python, *, receipt):
     """Observe the target interpreter, then atomically replace the shared pointer."""
     probe = (
         "import json,sys; from importlib.metadata import version; "
@@ -18,6 +19,15 @@ def select(selection, python):
         [str(python), "-I", "-c", probe], text=True, encoding="utf-8"
     ))
     target["python"] = str(Path(target["python"]).absolute())
+    receipt = Path(receipt).resolve(strict=True)
+    raw = receipt.read_bytes()
+    accepted = json.loads(raw)
+    if (accepted.get('version') != target['version']
+            or accepted.get('decision') not in ('accepted', 'operator-approved')
+            or not accepted.get('reviewer') or not accepted.get('source_commit')
+            or accepted.get('source_tag') != 'v' + target['version']):
+        raise ValueError('release selection requires an acceptance receipt for the target version')
+    target['acceptance'] = {'path': str(receipt), 'sha256': hashlib.sha256(raw).hexdigest()}
     selection = Path(selection)
     selection.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -39,6 +49,7 @@ def main(argv=None, *, project_adapter=None):
     parser.add_argument("--selection", required=True, help="shared current.json path")
     operation = parser.add_mutually_exclusive_group(required=True)
     operation.add_argument("--python", help="installed versioned interpreter")
+    parser.add_argument('--acceptance-receipt', help='version-bound reviewer or operator acceptance JSON')
     operation.add_argument("--retention-plan", action='store_true', help="read-only runtime dependency inventory")
     operation.add_argument("--prune-release", action='append', help="exact obsolete release directory; refresh inventory for each")
     parser.add_argument('--rollback-python', help='the one qualified rollback interpreter, required for retention')
@@ -48,7 +59,9 @@ def main(argv=None, *, project_adapter=None):
     parser.add_argument('--evidence-review', help='operator-reviewed primary evidence for exact legacy records')
     args = parser.parse_args(argv)
     if args.python:
-        result = select(args.selection, args.python)
+        if not args.acceptance_receipt:
+            parser.error('--acceptance-receipt is required when selecting a runtime')
+        result = select(args.selection, args.python, receipt=args.acceptance_receipt)
     else:
         if not args.rollback_python:
             parser.error('--rollback-python is required for retention')

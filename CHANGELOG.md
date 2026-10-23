@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0a95 — 2026-10-23
+
+- Require pointer and value-digest receipts for referenced fields in new review
+  checkpoints. Historical review requests and completed verdicts retain their contracts.
+- Bound legacy assignment reads to 1 MiB and report malformed or unmatched input
+  through the existing manager hand-back outcome.
+- Keep usage reporting available when delivery-baseline projection fails.
+- Apply the task deadline to Git observations and report expiry as a named goal block.
+- Preserve capacity-retry failures without masking their cause or attaching a
+  predecessor package to deadline stops.
+- Restore the 3,000-token output default for workers and managers; retain native
+  output settings for Codex reviewers and preserve explicit or recorded settings.
+- Require a version-bound acceptance receipt for default runtime selection.
+  Document one source authority, clean tagged builds, publication and rollback.
+- Correct the recovered-assignment test's public fixture reference and extend CI.
+
 ## 0.1.0a94 — 2026-10-23
 
 - Preserve the exact dispatch package when provider-capacity retry admission

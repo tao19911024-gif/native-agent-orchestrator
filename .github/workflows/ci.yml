@@ -66,7 +66,7 @@ jobs:
             tests/test_review_context.py `
             tests/test_launch_context.py `
             tests/test_failed_manager_handback.py tests/test_completed_turn_recovery.py `
-            tests/test_capacity_recovery.py `
+            tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
             --junitxml ci-results/pytest.xml -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

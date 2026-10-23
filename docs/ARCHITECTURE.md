@@ -22,6 +22,11 @@ in serialized formats and environment settings. The
 [configuration reference](CONFIGURATION.md) owns descriptor fields and the
 [command reference](CLI.md) owns operator commands.
 
+[Source authority](SOURCE_AUTHORITY.md) identifies the release repository and
+historical migration. The release selector owns new-task deployment and records
+the version-bound acceptance receipt. Task provenance continues to own recovery.
+Project admission retries remain in the project adapter's repository.
+
 ## One lifecycle
 
 An approved order enters the project's preflight, then the existing dispatch or

@@ -898,7 +898,10 @@ def task_report(paths):
     except Exception as exc:
         report['execution_efficiency'] = _unknown(exc)
     from ._delivery_baseline import build
-    report['delivery_baseline'] = build(report, read)
+    try:
+        report['delivery_baseline'] = build(report, read)
+    except Exception as exc:
+        report['delivery_baseline'] = _unknown(exc)
     return report
 
 
