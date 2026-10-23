@@ -527,3 +527,64 @@ def test_attribute_failure_reports_gap_and_still_reads_later_sibling(estate, mon
     assert list(retention._walk([evidence], gaps)) == [expected]
     assert len(gaps) == 1 and gaps[0]['source'] == Unreadable.path
     assert 'attribute read failed' in gaps[0]['reason']
+
+
+def test_new_registered_root_extends_discovery_and_blocks_its_runtime(estate, monkeypatch):
+    home, selection, versions, evidence = estate
+    added = home / 'new-project'
+    write(added / 'goal-new/manifest.json', {
+        'runtime_provenance': {'python': str(versions[0] / 'Scripts/python.exe')}})
+    calls, walks = [], []
+    def roots(*args):
+        calls.append(1)
+        return ([evidence] if len(calls) == 1 else [evidence, added]), []
+    original = retention._walk
+    def walk(roots, *args, **kwargs):
+        walks.append(list(roots))
+        yield from original(roots, *args, **kwargs)
+    def remove(path, *args):
+        shutil.rmtree(path)
+        return {'exists': False}
+    monkeypatch.setattr(retention, 'known_roots', roots)
+    monkeypatch.setattr(retention, '_walk', walk)
+    monkeypatch.setattr(retention, '_remove_release', remove)
+    result = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2])
+    assert not result['errors']
+    assert result['retained'] == [str(versions[0])]
+    assert result['deleted'] == [str(versions[1])]
+    assert walks == [[evidence], [added]]
+    assert result['inventories'][1]['scan']['added_roots'] == [str(added)]
+
+
+def test_reordering_or_removing_roots_does_not_drop_observed_dependencies(estate, monkeypatch):
+    home, selection, versions, evidence = estate
+    other = home / 'other'
+    other.mkdir()
+    write(evidence / 'goal-held/manifest.json', {
+        'runtime_provenance': {'python': str(versions[0] / 'Scripts/python.exe')}})
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence, other], _discovery=discovery)
+    def unexpected(*args, **kwargs):
+        pytest.fail('unchanged discovery must not restart a tree walk')
+    monkeypatch.setattr(retention, '_walk', unexpected)
+    for roots in ([other, evidence], [other]):
+        report = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                     roots=roots, _discovery=discovery)
+        assert report['candidates'] == [str(versions[1])]
+        assert not report['gaps']
+        assert str(evidence) in report['discovery_roots']
+
+
+def test_new_nested_root_is_scanned_even_if_ancestor_was_scanned(estate):
+    _, selection, versions, evidence = estate
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence], _discovery=discovery)
+    added = evidence / 'registered-later'
+    write(added / 'goal-new/manifest.json', {
+        'runtime_provenance': {'python': str(versions[0] / 'Scripts/python.exe')}})
+    report = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence, added], _discovery=discovery)
+    assert report['candidates'] == [str(versions[1])]
+    assert report['scan']['added_roots'] == [str(added)]

@@ -64,7 +64,12 @@ For an already authorized cleanup, pass all exact obsolete release candidates
 with repeated `--prune-release` arguments in one invocation, along with the
 available `--test-run-record` and `--evidence-review` inputs. The operation
 discovers records once, then rereads them and their current dependencies before
-removal. A separate planning invocation followed by pruning performs two full
+removal. If project registration adds evidence roots during that operation, it
+scans the added roots (including new roots nested under an already scanned root)
+and merges their records before considering removal. Reordered roots do not
+restart discovery; removing a registration does not discard its already
+observed dependencies. This discovery state lives only within the operation.
+A separate planning invocation followed by pruning performs two full
 discoveries; a saved planning report is not a fresh dependency observation.
 
 Discovery reads the entire evidence tree, including nested source and test
