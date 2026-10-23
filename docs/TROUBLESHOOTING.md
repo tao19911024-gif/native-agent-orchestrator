@@ -57,6 +57,28 @@ If the README quickstart already created the project, continue at
 
 ## Evidence for a problem report
 
+### Worker feedback stopped before reaching the manager
+
+Read the goal status with an installed runtime version 0.1.0a94 or later:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --foundry-project status --status-goal $Goal
+```
+
+For a pending handback, `coding_recovery.retained_dispatch` identifies the
+package, intent, attempt, state and return code. `stop_cause` and `provider_error`
+describe a retained failed terminal. The previous manager packet can describe
+an earlier turn already present in the coding checkpoint; recovery selects the
+unconsumed assignment using the recorded package or its bound native input and
+frozen request digest.
+
+Use the reported `manager_recovery` command with an operator answer in
+`--prompt-file`. For an explicitly approved runtime transfer, use its
+`migration_powershell` command with the qualified interpreter. The command
+verifies terminal and cleanup evidence, publishes the original return code,
+and passes the result to the manager before another worker assignment. Keep
+the recorded project descriptor and original task evidence at their paths.
+
 ### A manager decision is taking a long time
 
 Read the existing goal with `--foundry-project status --status-goal <goal>`.

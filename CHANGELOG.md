@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0a94 — 2026-10-23
+
+- Preserve the exact dispatch package when provider-capacity retry admission
+  stops before the goal publishes worker feedback.
+- Resolve ambiguous legacy manager assignments from the bound native input,
+  frozen request digest and retained manager decision. Exclude worker results
+  already recorded in the coding checkpoint.
+- Restore verified failed dispatches with their original return code and return
+  them to the existing manager-feedback path on explicit recovery.
+- Clear consumed pending-dispatch references when publishing a checkpoint.
+- Add installed-package regression coverage for failed handback, historical
+  ambiguity, stale packets and recovery without repeating completed work.
+
 ## 0.1.0a93 — 2026-10-23
 
 This release includes the delivery baseline, retained review feedback, review

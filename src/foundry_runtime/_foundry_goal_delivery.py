@@ -165,6 +165,14 @@ def coding_recovery(folder, manifest):
             report['manager_recovery'] = {'status': 'unavailable', 'reason': str(exc), 'preferred': False}
             report['next_action'] = 'Resolve the retained dispatch selection before requesting manager recovery: ' + str(exc)
         else:
+            report['retained_dispatch'] = {'package': owner._fact(path),
+                'intent_id': record['intent_id'], 'attempt_id': record.get('attempt_id'),
+                'state': record['state'], 'returncode': record.get('returncode')}
+            terminal = (record.get('evidence') or {}).get('terminal')
+            if terminal:
+                value = json.loads(owner.goal_usage._reference(terminal))
+                report['stop_cause'] = stop_cause(value)
+                report['provider_error'] = (((value.get('terminal') or {}).get('params') or {}).get('turn') or {}).get('error')
             try:
                 report['recovery_commands'] = {**command_plan(path, journal, record),
                     'role': 'worker_resume_fallback', 'preferred': False,
