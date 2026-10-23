@@ -78,7 +78,10 @@ review of that candidate. See the [coding and review example](../examples/REVIEW
 | Continue a completed direct session | `--project-config $ProjectConfig --resume $SessionId --worktree $Workspace --tag TASK1 --launcher exec --prompt-file $PromptFile` |
 | Inspect goal recovery | `--project-config $ProjectConfig --order $TaskOrder --foundry-goal --recover-goal $GoalDirectory --recovery-preflight` |
 | Continue an unfinished goal | Use the recorded goal invocation with `--recover-goal` and `--prompt-file` |
-| Read usage records | `--foundry-usage $GoalDirectory` or paths to retained manifests and receipts |
+| Read delivery baseline and usage | `--foundry-usage $GoalDirectory` or paths to retained manifests and receipts |
+
+The [delivery baseline guide](DELIVERY_BASELINE.md) describes task, execution,
+candidate, check and review associations, sample selection and timing fields.
 
 Use the original provider and interpreter for ordinary continuation. The
 [recovery guide](RECOVERY.md) explains retained identity, interrupted execution,

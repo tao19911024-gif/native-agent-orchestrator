@@ -52,3 +52,10 @@ The repository contains runtime source, anonymized regression fixtures,
 documentation, and examples. Project descriptors, native sessions, and task
 journals are stored in the selected local project and evidence directories.
 Native client executables are installed independently.
+
+The task-report reader traverses explicit predecessor and round references and
+deduplicates retained records. Its [delivery baseline](DELIVERY_BASELINE.md)
+projects task, execution, candidate, check and review associations through the
+same reference reader. Outcomes supply verdicts and project acceptance;
+review checkpoints supply candidate context and project-check observations.
+Adjacent manifests and phase telemetry retain their observation provenance.

@@ -98,6 +98,7 @@ for platform and execution settings.
 - [Project showcase](docs/SHOWCASE.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Command reference](docs/CLI.md)
+- [Delivery baseline and record associations](docs/DELIVERY_BASELINE.md)
 - [Continuation and recovery](docs/RECOVERY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)

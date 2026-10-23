@@ -1,5 +1,15 @@
 # Changelog
 
+## Delivery baseline — 2026-10-22
+
+- Extended `--foundry-usage` with task, native execution, candidate commit,
+  check, review and project acceptance associations from retained records.
+- Added invocation counts and recorded status distributions, with separate
+  automatic-container and direct-dispatch counts.
+- Included retained invocation elapsed time and existing phase timing summaries.
+- Added offline coverage for linked records, duplicate selection and partial
+  history to the public installed-package CI.
+
 ## First-use documentation — 2026-10-22
 
 - Connected the README quickstart directly to task execution, preserving the

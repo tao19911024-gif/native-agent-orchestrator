@@ -897,6 +897,8 @@ def task_report(paths):
         report['execution_efficiency'] = execution_efficiency(report, normalized)
     except Exception as exc:
         report['execution_efficiency'] = _unknown(exc)
+    from ._delivery_baseline import build
+    report['delivery_baseline'] = build(report, read)
     return report
 
 
