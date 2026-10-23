@@ -60,6 +60,7 @@ jobs:
         run: |
           $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
           & $RuntimePython -m pytest tests/test_installed_runtime.py tests/test_project_launch.py `
+            tests/test_release_retention.py tests/test_release_selection.py `
             --junitxml ci-results/pytest.xml -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
