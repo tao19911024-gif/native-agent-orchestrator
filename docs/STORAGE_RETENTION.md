@@ -60,6 +60,22 @@ After resolving the reported dependencies, reuse the same command with
 `--retention-plan`. The existing mechanism refreshes its inventory. Do not
 replace it with a version-number, modification-time or blanket-directory delete.
 
+For an already authorized cleanup, pass all exact obsolete release candidates
+with repeated `--prune-release` arguments in one invocation, along with the
+available `--test-run-record` and `--evidence-review` inputs. The operation
+discovers records once, then rereads them and their current dependencies before
+removal. A separate planning invocation followed by pruning performs two full
+discoveries; a saved planning report is not a fresh dependency observation.
+
+Discovery reads the entire evidence tree, including nested source and test
+copies. Four bounded readers perform directory enumeration, attribute reads and
+link resolution; dependency classification stays on the caller thread. A failed
+entry remains a reported gap while other entries are still inspected. There are
+no directory-name exclusions or depth limits. Warm filesystem cache timings do
+not predict the cost of a first scan of a large archive. Keep compact test
+receipts and remove completed disposable copies as part of experiment closeout
+to avoid repeatedly scanning regenerated trees.
+
 ## Scratch cleanup and archive verification
 
 1. Resolve each exact source path and its expected parent. Inspect reparse

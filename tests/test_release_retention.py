@@ -474,3 +474,56 @@ def test_payload_named_external_junction_cannot_silently_skip_dependency(estate)
     report = plan(estate)
     assert not report['candidates']
     assert any('junction leaves' in row['reason'] for row in report['gaps'])
+
+
+def test_directory_attribute_io_overlaps_without_losing_records(estate, monkeypatch):
+    from contextlib import contextmanager
+    from threading import Barrier, current_thread, main_thread
+    _, _, _, evidence = estate
+    expected = {write(evidence / f'branch-{n}/manifest.json', {}) for n in range(4)}
+    original = retention.os.scandir
+    ready = Barrier(4)
+
+    class Entry:
+        def __init__(self, entry):
+            self.path, self.name = entry.path, entry.name
+
+        def is_dir(self, **kwargs):
+            assert current_thread() is not main_thread(), 'attribute I/O serialized on caller'
+            ready.wait(timeout=10)
+            return False
+
+    @contextmanager
+    def observed(directory):
+        with original(directory) as entries:
+            yield entries if Path(directory) == evidence else [Entry(e) for e in entries]
+
+    monkeypatch.setattr(retention.os, 'scandir', observed)
+    gaps = []
+    assert set(retention._walk([evidence], gaps)) == expected
+    assert not gaps
+
+
+def test_attribute_failure_reports_gap_and_still_reads_later_sibling(estate, monkeypatch):
+    from contextlib import contextmanager
+    _, _, _, evidence = estate
+    expected = write(evidence / 'manifest.json', {})
+    original = retention.os.scandir
+
+    class Unreadable:
+        path = str(evidence / 'unreadable')
+        name = 'unreadable'
+
+        def is_dir(self, **kwargs):
+            raise OSError('attribute read failed')
+
+    @contextmanager
+    def observed(directory):
+        with original(directory) as entries:
+            yield [Unreadable(), *entries]
+
+    monkeypatch.setattr(retention.os, 'scandir', observed)
+    gaps = []
+    assert list(retention._walk([evidence], gaps)) == [expected]
+    assert len(gaps) == 1 and gaps[0]['source'] == Unreadable.path
+    assert 'attribute read failed' in gaps[0]['reason']
