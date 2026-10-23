@@ -16,14 +16,13 @@ from foundry_runtime._foundry_goal_usage import task_report
 from test_delivery_baseline import completed, save
 
 
-@pytest.mark.parametrize('seconds', [None, 120])
-def test_sixty_second_git_observation_uses_task_deadline(monkeypatch, tmp_path, seconds):
+def test_sixty_second_git_observation_uses_task_deadline(monkeypatch, tmp_path):
     def git(*args, **kwargs):
         timeout = kwargs['timeout']
-        assert timeout is None or timeout > 60
+        assert timeout > 60
         return SimpleNamespace(returncode=0, stdout=b'clean', stderr=b'')
     monkeypatch.setattr(subprocess, 'run', git)
-    with deadline.scope(None if seconds is None else deadline.time.time() + seconds):
+    with deadline.scope(deadline.time.time() + 120):
         assert goal._git(tmp_path, 'status', '--porcelain') == b'clean'
 
 
@@ -31,8 +30,9 @@ def test_git_timeout_is_named(monkeypatch, tmp_path):
     def git(*args, **kwargs):
         raise subprocess.TimeoutExpired(args[0], 60)
     monkeypatch.setattr(subprocess, 'run', git)
-    with pytest.raises(goal.GoalBlocked, match='git observation reached task deadline: status'):
-        goal._git(tmp_path, 'status')
+    with deadline.scope(deadline.time.time() + 120):
+        with pytest.raises(goal.GoalBlocked, match='git observation reached task deadline: status'):
+            goal._git(tmp_path, 'status')
 
 
 @pytest.mark.parametrize('large', [False, True])
@@ -100,7 +100,7 @@ def test_required_review_field_receipt_and_legacy_context(tmp_path):
     context = {'original_order': 'requirement\n' * 1000, 'candidate_commit': 'a'*40,
                'review_field_reads': True}
     verdict = {'candidate_commit': 'a'*40, 'packet_sha256': goal._sha(goal._json_bytes(context)),
-               'verdict': 'PASS', 'findings': []}
+               'verdict': 'PASS', 'findings': [], 'read_fields': []}
     with pytest.raises(goal.InvalidReview, match='required field unread.*original_order'):
         goal._validate_review(verdict, context, tmp_path, retained_only=True)
     read = {'pointer': '/context/original_order', 'sha256': goal._sha(goal._json_bytes(context['original_order']))}
@@ -111,6 +111,7 @@ def test_required_review_field_receipt_and_legacy_context(tmp_path):
     assert contracts.response_contract_for_request(request) == contracts.allocation_contract(
         {'kind': 'review', 'message_recipients': [], 'review_field_reads': True})
     context.pop('review_field_reads')
+    verdict.pop('read_fields')
     verdict['packet_sha256'] = goal._sha(goal._json_bytes(context))
     goal._validate_review(verdict, context, tmp_path, retained_only=True)
 

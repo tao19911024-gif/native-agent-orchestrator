@@ -151,7 +151,7 @@ class Panel:
             with self.launch_lock:
                 if backend not in self.launch:
                     from ._launch_context import capture
-                    self.launch[backend] = capture(self.workspace, backend=backend)
+                    self.launch[backend] = capture(self.workspace, backend=backend, root_role='reviewer')
             self.members[name] = self.factory(executable, evidence, workspace=self.workspace,
                 max_concurrency=1, timeout_seconds=None, launch_context=self.launch[backend], **options)
         from .foundry_native import NativeSchemaError

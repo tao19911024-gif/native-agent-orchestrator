@@ -1016,10 +1016,10 @@ class NativeAnalyst:
         if self.backend == "codex":
             from .foundry_codex import backend_identity
             identity = backend_identity(self.executable, scope_root=self.workspace or self.evidence_dir)
-            return native_transport.bind_profile(identity, self.execution_profiles, backend=self.backend)
+            return native_transport.bind_profile(identity, self.execution_profiles, backend=self.backend, launch_context=self.launch_context)
         from . import foundry_claude
         return native_transport.bind_profile({"metadata": self._metadata(),
-                "adapter_sha256": hashlib.sha256(Path(foundry_claude.__file__).read_bytes()).hexdigest()}, self.execution_profiles, backend=self.backend)
+                "adapter_sha256": hashlib.sha256(Path(foundry_claude.__file__).read_bytes()).hexdigest()}, self.execution_profiles, backend=self.backend, launch_context=self.launch_context)
 
     def _argv(self, folder, attempt_id, schema, kind=None, *, resume_session=None, persistent=False, launch_context):
         return native_transport.argv(self, _claude_argv, folder, attempt_id, schema, kind,

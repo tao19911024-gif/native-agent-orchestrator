@@ -103,6 +103,11 @@ versioned environments and evidence; updating the shared selection does not
 migrate an existing task. Project recovery wrappers must continue to pass the
 recorded interpreter where required by their recovery interface.
 
+Tasks started on a95 retain a95 or a later explicitly accepted recovery runtime.
+Their review allocations may contain `review_field_reads`, which a94 does not
+accept. Selecting a94 for rollback changes new work only; preserve the a95
+environment for those tasks.
+
 ## Rollback and retention
 
 Select the retained interpreter to roll back new work:

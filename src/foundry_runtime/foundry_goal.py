@@ -111,14 +111,67 @@ def _run_lock(folder, *, reuse_owned=False):
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+_GIT_STALL_SECONDS = 300
+
+
+def _git_without_deadline(command, tree):
+    """Drain both Git pipes; only observed output renews the inactivity interval."""
+    import queue
+    import threading
+    import time
+
+    events = queue.Queue()
+    output = [[], []]
+    def read(stream, index):
+        try:
+            while chunk := stream.read1(65536):
+                events.put((index, chunk))
+        finally:
+            stream.close()
+            events.put((index, None))
+
+    with subprocess.Popen(command, cwd=tree, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+        readers = [threading.Thread(target=read, args=(stream, index))
+                   for index, stream in enumerate((process.stdout, process.stderr))]
+        for reader in readers:
+            reader.start()
+        expires = time.monotonic() + _GIT_STALL_SECONDS
+        try:
+            open_streams = 2
+            while open_streams:
+                index, chunk = events.get(timeout=max(0, expires - time.monotonic()))
+                if chunk is None:
+                    open_streams -= 1
+                else:
+                    output[index].append(chunk)
+                    expires = time.monotonic() + _GIT_STALL_SECONDS
+            process.wait(timeout=max(0, expires - time.monotonic()))
+        except (queue.Empty, subprocess.TimeoutExpired) as exc:
+            process.kill()
+            process.wait()
+            raise subprocess.TimeoutExpired(command, _GIT_STALL_SECONDS) from exc
+        except BaseException:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            for reader in readers:
+                reader.join()
+    return subprocess.CompletedProcess(command, process.returncode, *(b''.join(parts) for parts in output))
+
+
 def _git(tree, *args):
     from . import _task_deadline as deadline
+    timeout = deadline.remaining()
     try:
         deadline.check()
-        result = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *args],
-                                cwd=tree, capture_output=True, timeout=deadline.remaining())
+        command = ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", *args]
+        result = (_git_without_deadline(command, tree) if timeout is None else
+                  subprocess.run(command, cwd=tree, capture_output=True, timeout=deadline.remaining()))
     except (subprocess.TimeoutExpired, TimeoutError) as exc:
-        raise GoalBlocked("git observation reached task deadline: " + " ".join(args)) from exc
+        reason = (f"git observation stalled for {_GIT_STALL_SECONDS:g}s without output: "
+                  if timeout is None else "git observation reached task deadline: ")
+        raise GoalBlocked(reason + " ".join(args)) from exc
     if result.returncode:
         raise GoalBlocked("git observation failed: " + result.stderr.decode("utf-8", "replace")[:1000])
     return result.stdout
@@ -139,13 +192,13 @@ def _referenced_fields(context):
 
 
 def _validate_review(value, context, tree, *, retained_only=False):
+    validate_response_shape(value, response_contract("review", correction_routing=context.get("correction_routing") is True, review_field_reads=context.get("review_field_reads") is True))
     if context.get('review_field_reads') is True:
         reads = value.get('read_fields', [])
         for field, pointer in _referenced_fields(context).items():
             expected = {'pointer': pointer, 'sha256': _sha(_json_bytes(context[field]))}
             if expected not in reads:
                 raise InvalidReview('review required field unread or digest differs: ' + pointer, 'review_blocked')
-    validate_response_shape(value, response_contract("review", correction_routing=context.get("correction_routing") is True, review_field_reads=context.get("review_field_reads") is True))
     if (value["candidate_commit"] != context["candidate_commit"]
             or value["packet_sha256"] != _sha(_json_bytes(context))):
         raise InvalidReview("review candidate/context identity differs", "review_blocked")

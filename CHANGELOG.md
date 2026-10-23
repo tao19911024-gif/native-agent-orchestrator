@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0a96 — 2026-10-23
+
+- Capture the reviewer role for independent review-group members, preserving
+  native Codex output settings and recording the selected settings in backend identity.
+- Bound deadline-free Git observations by 300 seconds without stdout or stderr
+  output; progressing observations continue and stalled calls return a named block.
+- Validate review response shape before inspecting field-read receipts.
+- Restore the recovery test fixture's persisted outcome and include its manager
+  continuation cases in public CI.
+- Clarify assignment-scan bounds, capacity-retry exception ownership and rollback
+  for tasks that retain a95 review contracts.
+
 ## 0.1.0a95 — 2026-10-23
 
 - Require pointer and value-digest receipts for referenced fields in new review

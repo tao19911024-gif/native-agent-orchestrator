@@ -27,9 +27,10 @@ def same_argv(recorded, current):
         return False
 
 
-def bind_profile(identity, profiles, *, backend="codex"):
+def bind_profile(identity, profiles, *, backend="codex", launch_context=None):
     from ._launch_context import settings
-    return {**identity, "launch_context": settings(backend), **({"execution_profiles": profiles} if profiles is not None else {})}
+    return {**identity, "launch_context": launch_context['settings'] if launch_context is not None else settings(backend),
+            **({"execution_profiles": profiles} if profiles is not None else {})}
 
 
 def argv(analyst, claude_argv, folder, attempt_id, schema, kind, *, resume_session=None, persistent=False, launch_context):
