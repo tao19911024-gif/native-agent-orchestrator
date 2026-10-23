@@ -140,12 +140,22 @@ def _validate_review(value, context, tree, *, retained_only=False):
         raise GoalBlocked("candidate changed during independent review", "review_blocked")
 
 
-def _role_request(run_id, name, packet):
-    return {"kind": "review", "packet": packet,
+def _role_request(run_id, name, packet, *, context_reference=None):
+    request = {"kind": "review", "packet": packet,
             **({"correction_routing": True} if packet.get("correction_routing") is True else {}),
             "response_contract": response_contract("review", correction_routing=packet.get("correction_routing") is True),
             "call_id": _sha((run_id + ":" + name).encode()),
             "packet_sha256": _sha(_json_bytes(packet))}
+    if context_reference is not None:
+        # Select presentation at the request boundary so native admission and
+        # recovery compare the same envelope. The complete context hash stays.
+        fields = {field: '/context/' + field for field in
+                  ('original_order', 'changed_files', 'project_record', 'execution_decision')
+                  if field in packet and len(json.dumps(packet[field], ensure_ascii=False).encode('utf-8')) > 4096}
+        if fields:
+            request.update(packet={key: value for key, value in packet.items() if key not in fields},
+                           context_reference=context_reference, context_fields=fields)
+    return request
 
 
 def _runtime_identity():
@@ -693,9 +703,12 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     native, outcome = None, None
     try:
         names = ["review-0", "review-1"]
-        requests = {name: _role_request(checkpoint["run_id"], name, context) for name in names}
-        reviewers = checkpoint.get('reviewers') or [checkpoint['analyst']] * 2
         manifest = json.loads((folder/'manifest.json').read_bytes())
+        reference = (manifest['review_checkpoint']
+                     if checkpoint.get('context_delivery') == 'reference-v1' else None)
+        requests = {name: _role_request(checkpoint["run_id"], name, context, context_reference=reference)
+                    for name in names}
+        reviewers = checkpoint.get('reviewers') or [checkpoint['analyst']] * 2
         transfers = manifest.get('review_transfers', {})
         if context.get("project_record"):
             reviewers = [{**row, "execution_profiles": context["project_record"]["context"]["execution_profiles"]}

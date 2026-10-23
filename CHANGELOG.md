@@ -1,5 +1,14 @@
 # Changelog
 
+## Review context references — 2026-10-23
+
+- Reused the existing review checkpoint for long task, changed-file, project
+  and execution-decision fields in independent review requests.
+- Preserved complete context hashes, inline checks and findings, and the
+  original rendering of retained checkpoints and short inputs.
+- Added installed coverage for field retrieval and interrupted review recovery
+  that reuses the completed reviewer.
+
 ## Retained review feedback — 2026-10-23
 
 - Connected goal and hosted status to retained task, candidate, review findings

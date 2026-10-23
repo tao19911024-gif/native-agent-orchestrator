@@ -157,7 +157,7 @@ class Analyst:
     def __call__(self, request):
         self.calls.append(request); packet = request["packet"]
         return {"candidate_commit": packet["candidate_commit"],
-                "packet_sha256": goal._sha(goal._json_bytes(packet)), "verdict": "PASS", "findings": []}
+                "packet_sha256": request["packet_sha256"], "verdict": "PASS", "findings": []}
     def native_session(self, request):
         return "session-" + request["call_id"][:8]
     def drain(self):

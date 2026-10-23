@@ -65,3 +65,8 @@ projects task, execution, candidate, check and review associations through the
 same reference reader. Outcomes supply verdicts and project acceptance;
 review checkpoints supply candidate context and project-check observations.
 Adjacent manifests and phase telemetry retain their observation provenance.
+
+The review checkpoint also owns the complete review input. For new goals, the
+review request builder [references long context fields](REVIEW_CONTEXT.md)
+before native admission. Rendering and recovery consume the same request;
+verdict validation remains bound to the complete checkpoint context hash.
