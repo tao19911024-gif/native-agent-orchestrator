@@ -62,12 +62,25 @@ def _walk(roots, gaps, metrics=None):
     seen, pending = set(), list(allowed)
 
     def entries_at(directory):
+        children, records, errors = [], [], []
         try:
             with os.scandir(directory) as entries:
-                observed = list(entries)
-            return observed, None
+                for entry in entries:
+                    try:
+                        # Attribute reads and link resolution may perform I/O,
+                        # too. Keep them on the existing bounded reader pool.
+                        if entry.is_dir(follow_symlinks=True):
+                            child = Path(entry.path)
+                            if entry.is_symlink() or entry.is_junction():
+                                child = child.resolve()
+                            children.append(child)
+                        elif entry.name in ('manifest.json', 'request.json'):
+                            records.append(Path(entry.path))
+                    except (OSError, RuntimeError) as exc:
+                        errors.append((entry.path, exc))
         except (OSError, RuntimeError) as exc:
-            return [], exc
+            errors.append((str(directory), exc))
+        return children, records, errors
 
     # Only filesystem reads overlap. Classification and keep-list decisions stay
     # on the caller thread. Bounded batches avoid retaining an entire archive.
@@ -85,22 +98,14 @@ def _walk(roots, gaps, metrics=None):
                                  'add its target explicitly to reconcile, rather than scanning unrelated directories'})
                     continue
                 batch.append(directory)
-            for directory, (entries, error) in zip(batch, readers.map(entries_at, batch)):
-                try:
-                    if error:
-                        raise error
-                    metrics['directories'] += 1
-                    for entry in entries:
-                        if entry.is_dir(follow_symlinks=True):
-                            child = Path(entry.path)
-                            if entry.is_symlink() or entry.is_junction():
-                                child = child.resolve()
-                            pending.append(child)
-                        elif entry.name in ('manifest.json', 'request.json'):
-                            metrics['records'] += 1
-                            yield Path(entry.path)
-                except (OSError, RuntimeError) as exc:
-                    gaps.append({'source': str(directory), 'reason': 'unreadable evidence directory: ' + str(exc)})
+            for children, records, errors in readers.map(entries_at, batch):
+                metrics['directories'] += 1
+                pending.extend(children)
+                for source, error in errors:
+                    gaps.append({'source': str(source), 'reason': 'unreadable evidence directory: ' + str(error)})
+                for path in records:
+                    metrics['records'] += 1
+                    yield path
 
 
 def _powershell(script, value=None):
