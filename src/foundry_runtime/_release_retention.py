@@ -52,14 +52,15 @@ def _reviewed_evidence(path):
     return rows
 
 
-def _walk(roots, gaps, metrics=None):
+def _walk(roots, gaps, metrics=None, *, allowed_roots=None):
     """Unbounded depth, physical-directory deduplication for junctions and cycles."""
     if metrics is None:
         metrics = {'directories': 0, 'records': 0}
     # Canonicalize roots and actual links, not every ordinary descendant. On
     # Windows resolve() opens path handles; repeating it dominated archive I/O.
-    allowed = [Path(p).resolve() for p in roots]
-    seen, pending = set(), list(allowed)
+    pending = [Path(p).resolve() for p in roots]
+    allowed = [Path(p).resolve() for p in allowed_roots] if allowed_roots is not None else list(pending)
+    seen = set()
 
     def entries_at(directory):
         children, records, errors = [], [], []
@@ -330,9 +331,23 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     metrics['discovery'] = 'known-record refresh' if refreshing else 'full tree'
     root_names = [str(p.resolve()) for p in roots]
     if refreshing:
-        if root_names != _discovery['roots']:
-            raise ValueError('evidence roots changed during cleanup; restart discovery')
         paths = _discovery['paths']
+        known = set(map(Path, _discovery['roots']))
+        added = list(dict.fromkeys(Path(p) for p in root_names if Path(p) not in known))
+        if added:
+            # Registration may add projects during a long walk. Extend this
+            # operation's discovery, then reread all records; never discard it
+            # or omit a new root merely because its ancestor was scanned before.
+            _discovery['roots'].extend(map(str, added))
+            observed = set(paths)
+            for path in _walk(added, gaps, metrics, allowed_roots=_discovery['roots']):
+                if path not in observed:
+                    paths.append(path)
+                    observed.add(path)
+            metrics['discovery'] = 'known-record refresh + added roots'
+            metrics['added_roots'] = list(map(str, added))
+        # Reordering is immaterial. Removed registrations do not erase records
+        # already observed by this operation; their dependencies are reread too.
         metrics['records'] = len(paths)
     else:
         paths = _walk(roots, gaps, metrics)
@@ -473,13 +488,14 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     return {'observed_utc': datetime.now(timezone.utc).isoformat(), 'read_only': True, 'scan': metrics,
         'selection': str(Path(selection).resolve()), 'rollback_python': str(rollback_python),
         'evidence_roots': [str(p.absolute()) for p in roots], 'scan_depth': 'unbounded; resolved-directory deduplication',
+        'discovery_roots': list(_discovery['roots']) if _discovery is not None else root_names,
         'unfinished_goals': unfinished, 'hosted_registrations': [r['path'] for r in registered],
         'unknown_provenance': unknown, 'gaps': gaps,
         'classified_history': classified,
         'interpreters_and_dependencies': [{'path': p, 'reasons': reasons} for p, reasons in sorted(keep.items())],
         'keep': [{'release': p, 'reasons': reasons} for p, reasons in sorted(versions.items()) if reasons],
         'candidates': [p for p, reasons in sorted(versions.items()) if not reasons],
-        'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers once, then rereads discovered records and current dependencies before every candidate.'}
+        'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers once, adds newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
 
 
 def _remove_release(path, root, selection):
