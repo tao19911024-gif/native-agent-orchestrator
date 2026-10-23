@@ -99,7 +99,10 @@ def test_two_retained_dispatches_use_explicit_recovery_predecessor(
         'intent_id': target_id, 'attempt_id': 'target-attempt'}})
     fact = goal._fact(decision_path)
     manifest = {'tag': 'TASK1', 'worktree': str(tree), 'order': {'sha256': 'order'},
-                'execution_recovery': fact}
+                'execution_recovery': fact,
+                'execution_decision': {'manager': {'instruction': 'retained assignment'}}}
+    monkeypatch.setattr(continuation, '_matches_manager_assignment',
+        lambda *a: pytest.fail('manager input replaced explicit recovery authorization'))
     records = {}
     # The unrelated earlier predecessor has the lexically later package name.
     # Selection must follow the grant, never filename or timestamp ordering.

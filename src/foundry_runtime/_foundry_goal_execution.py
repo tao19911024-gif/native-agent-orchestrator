@@ -662,6 +662,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         manager_packet['operator_answer'] = manager_answer
                 _write(evidence_dir / "coding-checkpoint.json", checkpoint)
                 manifest["coding_checkpoint"] = _fact(evidence_dir / "coding-checkpoint.json")
+                manifest.pop('pending_dispatch', None)
                 _write(evidence_dir / "manifest.json", manifest)
                 if migrate_recovered_manager and rc == 0:
                     from ._foundry_goal_transitions import manager as transfer_manager
@@ -817,7 +818,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         if getattr(exc, 'dispatch_package', None) and manifest.get('manager_phase') == 'dispatch_pending':
             manifest['pending_dispatch'] = _fact(exc.dispatch_package)
             _write(evidence_dir / 'manifest.json', manifest)
-        if ((manager_state is not None or manifest.get('expert_state')) and manifest.get('manager_phase') == 'dispatch_pending'
+        elif ((manager_state is not None or manifest.get('expert_state')) and manifest.get('manager_phase') == 'dispatch_pending'
                 and isinstance(getattr(exc, 'dispatch_stop', None), DispatchNotStarted)):
             # The dispatcher still owns proof that no child started. Preserve
             # the same decision for an explicit retry after resolving its refusal.

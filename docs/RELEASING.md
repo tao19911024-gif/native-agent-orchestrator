@@ -3,7 +3,7 @@
 The release operator builds an installed distribution from a reviewed commit,
 runs the installed-package checks in [CONTRIBUTING.md](../CONTRIBUTING.md), and
 publishes the wheel, source archive and `SHA256SUMS.txt` under the matching Git
-tag. Python prereleases such as `0.1.0a93` are marked as prereleases on GitHub.
+tag. Python prereleases such as `0.1.0a94` are marked as prereleases on GitHub.
 
 ## Install a versioned runtime
 
@@ -13,7 +13,7 @@ Create a new environment for the new version:
 
 ```powershell
 $RuntimeRoot = 'C:/AgentRuntime'
-$Version = '0.1.0a93'
+$Version = '0.1.0a94'
 $ReleaseRoot = Join-Path $RuntimeRoot "releases/$Version"
 python -m venv $ReleaseRoot
 $RuntimePython = Join-Path $ReleaseRoot 'Scripts/python.exe'

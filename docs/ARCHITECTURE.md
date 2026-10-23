@@ -35,6 +35,14 @@ Continuation and recovery reconcile those same records. The
 interrupted attempts. A runtime or role transition records its selected successor
 through that lifecycle.
 
+The dispatcher owns the terminal and cleanup proof for each attempt. The goal
+owns the pending package reference and consumes it when publishing worker
+feedback. A capacity-retry admission error retains the last completed package;
+a started successor retains its own package. Legacy manager handback resolves
+an ambiguous assignment through its bound native input, frozen request digest
+and current decision. The goal preserves failed return codes and passes settled
+feedback to the manager on explicit recovery before further worker dispatch.
+
 Goal and hosted status expose [review feedback](FEEDBACK_LOOP.md) by reading
 the existing outcome and manifest. The delivery projection reuses the goal's
 finding deduplicator and amendment settings. Recovery and amendment advice

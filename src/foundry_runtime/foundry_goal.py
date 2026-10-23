@@ -1040,7 +1040,8 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
                     and not (folder / 'outcome.json').exists()
                     and ((not manifest.get('coding_checkpoint') and manifest.get('manager_phase') == 'assignment_pending')
                          or (manifest.get('coding_checkpoint') and
-                             json.loads((folder / 'coding-checkpoint.json').read_bytes()).get('returncode') == 0))
+                             (manifest.get('manager_phase') == 'feedback_pending' or
+                              json.loads((folder / 'coding-checkpoint.json').read_bytes()).get('returncode') == 0)))
                     and team_profile is None and target_provider is None and not migrate_runtime):
                 return _recover_manager_feedback(order, folder, manifest, answer=answer)
             from ._compute_selection import missing_manager_profile

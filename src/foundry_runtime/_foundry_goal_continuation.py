@@ -5,6 +5,39 @@ from pathlib import Path
 from ._model_catalogue import model
 
 
+def _matches_manager_assignment(path, record, decision):
+    """Read a legacy assignment from its bound native input and frozen digest."""
+    import hashlib
+    from ._execution_plan_prompt import execution_plan_prompt
+    binding = record.get('turn_binding') or {}
+    if not binding or not decision.get('manager'):
+        return False
+    log = path.with_name(path.name.removesuffix('.package.json') + '.log')
+    heading = 'Continue the same task from the retained worker result.'
+    marker = heading + '\n\nRECORDED EXECUTION DECISION\n'
+    with log.open(encoding='utf-8') as stream:
+        for line in stream:
+            # Thread/resume includes old turns. Only this attempt's input binds
+            # its assignment; do not parse the accumulated conversation response.
+            if not line.startswith('stdout: ') or '"method"' not in line[:100] or '"userMessage"' not in line[:250]:
+                continue
+            row = json.loads(line[8:])
+            params = row.get('params') or {}
+            item = params.get('item') or {}
+            if (row.get('method') != 'item/started' or item.get('type') != 'userMessage'
+                    or params.get('threadId') != binding.get('thread_id')
+                    or params.get('turnId') != binding.get('turn_id')):
+                continue
+            text = ''.join(part['text'] for part in item.get('content', []) if part.get('type') == 'text')
+            if marker not in text:
+                return False
+            retained, _ = json.JSONDecoder().raw_decode(text.split(marker, 1)[1])
+            source = execution_plan_prompt(heading, retained)
+            return (retained == decision and source in text
+                    and hashlib.sha256(source.encode('utf-8')).hexdigest() == record['frozen']['order_sha256'])
+    return False
+
+
 def retained_dispatch(owner, folder, manifest):
     """Read the exact pending dispatch for both status and explicit recovery."""
     from ._project_execution import from_record
@@ -58,6 +91,12 @@ def retained_dispatch(owner, folder, manifest):
                     and row[2].get('recovery_authorization', {}).get('decision_sha256') == fact['sha256']]
         if decision.get('task_key') == manifest['tag'] and len(selected) == 1:
             candidates = selected
+    if (len(candidates) > 1 and not reference and not manifest.get('execution_recovery')
+            and manifest.get('execution_decision', {}).get('manager')):
+        selected = [row for row in candidates
+                    if _matches_manager_assignment(row[0], row[2], manifest['execution_decision'])]
+        if len(selected) == 1:
+            candidates = selected
     if len(candidates) != 1:
         raise owner.GoalBlocked('manager hand-back needs one exact retained dispatch; found ' + str(len(candidates)))
     path, journal, record = candidates[0]
@@ -82,22 +121,24 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
     log = path.with_name(path.name.removesuffix('.package.json') + '.log')
     record = ExecutionIntent.settle_completed_turn(journal.parents[3], manifest['tag'], record['frozen'],
         intent_id=record['intent_id'], log=log)
-    if record['returncode'] != 0:
-        raise owner.GoalBlocked('retained worker did not complete; use its explicit execution recovery')
+    # Completed means the execution owner verified terminal and cleanup. Its
+    # result can be a provider failure and must reach the manager as that failure.
+    rc = record['returncode']
     facts = [v for v in record['evidence'].values() if v is not None]
     session = record['turn_binding']['thread_id']
     checkpoint = {**{k: manifest[k] for k in ('order', 'run_id', 'worktree', 'base_commit')},
         **manifest['manager_start'], 'schema_version': 1, 'coding_session': session,
-        'returncode': 0, 'evidence': [*(previous or {}).get('evidence', []), *facts],
+        'returncode': rc, 'evidence': [*(previous or {}).get('evidence', []), *facts],
         'coding_usage': {'managed_turns': [*((previous or {}).get('coding_usage') or {}).get('managed_turns', []),
                                          owner.goal_usage.capture(log, manifest['tag'])]}}
     checkpoint_path = Path(checkpoint_path) if checkpoint_path is not None else folder / 'coding-checkpoint.json'
     owner._write(checkpoint_path, checkpoint)
     from ._goal_intervention import carry_events
+    manifest.pop('pending_dispatch', None)
     manifest.update(coding_checkpoint=owner._fact(checkpoint_path),
         manager_phase='feedback_pending', manager_packet=carry_events(manifest, {
             'stage': 'worker_returned', 'run_id': manifest['run_id'], 'coding_session': session,
-            'worker_evidence': facts, 'returncode': 0,
+            'worker_evidence': facts, 'returncode': rc,
             'observed_head': owner._git(manifest['worktree'], 'rev-parse', 'HEAD').decode().strip()}))
     if publish:
         owner._write(folder / 'manifest.json', manifest)
