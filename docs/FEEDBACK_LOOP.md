@@ -33,6 +33,8 @@ $Feedback.continuation.status
 File references include their recorded paths and content hashes. Read checks
 and reviews through the review checkpoint and outcome. Hosted status exposes
 the same `feedback` value at the top level and under `execution`.
+The [review context guide](REVIEW_CONTEXT.md) explains how reviewers read long
+task and candidate details through that checkpoint.
 
 ## Continue the correction
 

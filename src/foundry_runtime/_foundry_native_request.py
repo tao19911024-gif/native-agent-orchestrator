@@ -229,6 +229,14 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         # Keep it there: paired independent reviews can send identical input
         # without merging their native sessions or reusing generated verdicts.
         envelope = {key: value for key, value in request.items() if key != "call_id"}
+        if kind == 'review' and request.get('context_fields'):
+            instruction += (
+                ' Long context fields are retained in context_reference, the complete review checkpoint. '
+                'context_fields gives their JSON pointers. Read the complete original_order and any referenced '
+                'execution_decision before judging the candidate. Read the changed-file list and relevant project details from '
+                'those fields as needed; use scoped extraction rather than printing the entire checkpoint. '
+                'All original requirements and the full base-to-candidate range remain in scope. '
+                'packet_sha256 identifies the complete checkpoint context; echo that supplied value.')
         envelope["response_contract"] = contract
         serialized = json.dumps(envelope, ensure_ascii=False, allow_nan=False,
                                 sort_keys=True, separators=(",", ":"))

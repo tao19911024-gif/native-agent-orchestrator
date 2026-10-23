@@ -741,7 +741,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                       .decode("utf-8").split("\0") if p],
                     "scope": "Focus for follow-up; original base-to-candidate acceptance remains in scope."}
 
-        checkpoint = {"schema_version": 1, "run_id": run_id, "order": manifest["order"],
+        checkpoint = {"schema_version": 1, "context_delivery": "reference-v1",
+                      "run_id": run_id, "order": manifest["order"],
                       **({'task_deadline_at': task_deadline_at} if task_deadline_at is not None else {}),
                       "worktree": str(tree), "context": context,
                       "coding": {"returncode": rc, "evidence": coding_evidence},
