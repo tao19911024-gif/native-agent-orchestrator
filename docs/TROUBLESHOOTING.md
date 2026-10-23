@@ -57,6 +57,25 @@ If the README quickstart already created the project, continue at
 
 ## Evidence for a problem report
 
+### A manager decision is taking a long time
+
+Read the existing goal with `--foundry-project status --status-goal <goal>`.
+`manager_wait_observation` distinguishes a reserved call without a published
+process, an observed native process, a native terminal awaiting its receipt,
+and an exited process whose receipt is still pending. A running coordination
+stage without active native evidence is reported separately; it can include
+local preparation and settlement and must not be attributed to the provider.
+
+`coordination_elapsed_seconds` covers the whole live coordination operation.
+Each observed native call has its own `process_observed_utc` and, when recorded,
+`process_elapsed_seconds`. These are different intervals. Existing call
+receipts retain completed native elapsed time. Missing historical timestamps
+remain unknown. Status only reads these records and never cancels or retries.
+Neither a long silent interval nor an existing process proves deadlock or
+progress. An exited process without a receipt still needs cleanup and result
+reconciliation; it is not evidence of a deadlock. Preserve successful native
+terminals and inspect the exact attempt before considering recovery.
+
 Include the reproduction command, installed package version, Python and native
 client versions, operating system, expected result, actual result, and relevant
 receipt fields. Retain full logs locally and provide excerpts with synthetic

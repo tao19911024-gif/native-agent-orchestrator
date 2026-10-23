@@ -3,6 +3,7 @@ import json
 import sys
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 
@@ -17,11 +18,21 @@ def native_call_status(folder, backend, *, now=None, threshold=300, max_bytes=10
         if (folder / 'receipt.json').exists():
             result['activity'] = 'receipt_available'
             return result
-        identity = json.loads((folder / 'process.json').read_bytes())
         allocation = json.loads((folder / 'reservation.json').read_bytes())
+        result['call_id'] = allocation.get('call_id')
+        if not (folder / 'process.json').exists():
+            result['activity'] = 'process_not_observed'
+            result['observation'] = 'Call reserved; process identity not published. Startup or local preparation may still be in progress.'
+            if (folder / 'receipt.json').exists():
+                result['activity'] = 'receipt_available'
+            return result
+        identity = json.loads((folder / 'process.json').read_bytes())
         if identity.get('attempt_id') != allocation.get('attempt_id'):
             raise ValueError('process and allocation identity differ')
         result.update(call_id=allocation.get('call_id'), root_pid=identity['root_pid'])
+        result['process_observed_utc'] = identity.get('observed_utc')
+        if identity.get('observed_utc'):
+            result['process_elapsed_seconds'] = max(0, now - datetime.fromisoformat(identity['observed_utc']).timestamp())
         if os.name == 'nt':
             from ._executor_lifecycle import process_identity_exited
             try:
