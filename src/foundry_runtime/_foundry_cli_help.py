@@ -34,6 +34,19 @@ def _read_manifest(path):
 
 def recovery_invocation(order, folder, manifest, *, python=None, prompt_file=None, extra_args=()):
     """One goal recovery syntax for status and CLI advice; never dispatch here."""
+    return _goal_invocation(order, manifest, ['--recover-goal', str(folder)],
+                            python=python, prompt_file=prompt_file, extra_args=extra_args)
+
+
+def amendment_invocation(order, outcome, session, manifest):
+    """Use the same recorded entry and environment for explicit review correction."""
+    invocation = _goal_invocation(order, manifest,
+        ['--amend-from', str(outcome), '--coding-session', session])
+    invocation['verification'] = 'syntax_only; task and candidate checked by the existing amendment owner'
+    return invocation
+
+
+def _goal_invocation(order, manifest, mode_args, *, python=None, prompt_file=None, extra_args=()):
     provenance = manifest.get('runtime_provenance') or {}
     # Admission and native execution can have different producers. The native
     # interpreter wins for replay; preflight verifies it can read the contract.
@@ -54,7 +67,7 @@ def recovery_invocation(order, folder, manifest, *, python=None, prompt_file=Non
         if adapter.get('module') != '_pdcl_project' or not adapter.get('path'):
             raise ValueError('goal recovery requires the recorded project descriptor or PDCL adapter entry')
         argv = [python, str(Path(adapter['path']).parent / 'dispatch.py')]
-    argv += ['--order', str(order), '--foundry-goal', '--recover-goal', str(folder)]
+    argv += ['--order', str(order), '--foundry-goal', *mode_args]
     if prompt_file is not None:
         argv += ['--prompt-file', prompt_file]
     argv.extend(extra_args)

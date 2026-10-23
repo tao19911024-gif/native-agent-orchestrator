@@ -231,6 +231,11 @@ def _goal_status(folder):
     outcome = json.loads(raw)
     if not isinstance(outcome, dict) or not isinstance(outcome.get('status'), str):
         raise ValueError('goal outcome has no status')
+    from ._foundry_goal_delivery import review_feedback
+    try:
+        report['feedback'] = review_feedback(outcome_path)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        report['errors'].append('review feedback: ' + str(exc))
     return {**report, 'status': 'outcome_available', 'outcome_status': outcome['status'],
             'event_id': hashlib.sha256((run_id + '\0').encode() + raw).hexdigest(),
             'outcome_path': str(outcome_path),

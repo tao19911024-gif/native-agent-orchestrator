@@ -75,6 +75,15 @@ The controller uses retained project and role records. Its response identifies
 the next state and any `continuation_evidence` directory. Retain that directory
 as the binding for the continued goal.
 
+## Correct a reviewed candidate
+
+Goal status includes `feedback`: the original task, reviewed candidate,
+deduplicated findings, artifact references and a recorded-session amendment
+command. Use that command for completed review feedback, then retain the new
+goal directory returned by the correction. The
+[feedback guide](FEEDBACK_LOOP.md) documents the status fields, continuation
+states and a repeated conflict-response correction scenario.
+
 ## Reconcile interrupted execution
 
 For an `unknown` direct attempt, project status returns `recovery_commands` when

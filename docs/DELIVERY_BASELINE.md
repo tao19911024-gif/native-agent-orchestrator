@@ -83,6 +83,10 @@ retain their established usage and cost accounting.
 
 ## Initial retained-record sample
 
+To act on a retained finding, use the [review feedback guide](FEEDBACK_LOOP.md).
+Goal status supplies the original-session amendment command. Its resulting goal
+retains the existing predecessor relation consumed by this baseline.
+
 The 2026-10-22 baseline uses two anonymized selections from existing records.
 Private source paths and native session identifiers remain in local reports.
 
