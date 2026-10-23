@@ -79,7 +79,10 @@ def test_cli_recovery_supplements_only_new_missing_manager(failed_goal, tmp_path
     monkeypatch.setattr(goal.goal_continuation, 'fresh_executables', lambda options: (sys.executable, options))
     def run(order, target, executable, **options):
         observed.append(manager.configuration_for(options, target))
-        return {'status': 'project_handoff'}
+        target.mkdir(exist_ok=True)
+        outcome = {'status': 'project_handoff'}
+        goal._write(target/'outcome.json', outcome)
+        return outcome
     monkeypatch.setattr(goal, '_run', run)
     selected = folder
     if parent:

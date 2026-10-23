@@ -11,6 +11,14 @@ execution evidence:
   --project-config $ProjectConfig --tag TASK1
 ```
 
+## Git observation stops
+
+Git observations use the recorded task deadline. Without a task deadline, a
+continuous 300-second interval without stdout or stderr produces
+`git observation stalled`. Inspect the named Git command and filesystem state,
+then continue through the task's recorded recovery command. Output progress
+renews this interval; it is not a total execution limit.
+
 ## Installation and client discovery
 
 | Symptom | Resolution |

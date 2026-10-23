@@ -103,7 +103,7 @@ def retained_dispatch(owner, folder, manifest):
             candidates = selected
     if len(candidates) != 1:
         raise owner.GoalBlocked('manager hand-back needs one exact retained dispatch; found ' + str(len(candidates))
-                                + '; assignment unmatched')
+                                + '; assignment unmatched within the first 1 MiB of the native log')
     path, journal, record = candidates[0]
     return path, journal, record, previous
 
