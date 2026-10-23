@@ -1,6 +1,16 @@
 # Changelog
 
-## Native Codex tool-output settings — 2026-10-23
+## 0.1.0a93 — 2026-10-23
+
+This release includes the delivery baseline, retained review feedback, review
+context references, evidence-reading policy and native Codex output configuration
+described below. It also includes the expanded examples, terminal demonstration,
+contribution workflow and Windows installed-package CI introduced after 0.1.0a92.
+
+See the [release and upgrade guide](docs/RELEASING.md) for installation, runtime
+selection, project configuration and rollback.
+
+### Native Codex tool-output settings — 2026-10-23
 
 - Default new Codex launches to native tool-output settings through the existing
   launch configuration; preserve explicit limits and frozen historical values.
@@ -9,7 +19,7 @@
 - Added launch-context regressions to public CI and documented zero/default
   selection and explicit-limit restoration.
 
-## Review evidence reading — 2026-10-23
+### Review evidence reading — 2026-10-23
 
 - Added a checkpoint-owned reading policy that groups focused evidence reads
   and reuses inspected content at the same candidate revision.
@@ -18,7 +28,7 @@
 - Published native token and tool-loop measurements from the retained
   conflict-response scenario.
 
-## Live delivery validation and stopped-review status — 2026-10-23
+### Live delivery validation and stopped-review status — 2026-10-23
 
 - Exposed task, candidate, checkpoint and recorded recovery invocation when a
   review stops before publishing its outcome.
@@ -27,7 +37,7 @@
 - Published measured token usage, original-session correction and recovery
   results for the retained conflict-response defect.
 
-## Review context references — 2026-10-23
+### Review context references — 2026-10-23
 
 - Reused the existing review checkpoint for long task, changed-file, project
   and execution-decision fields in independent review requests.
@@ -36,7 +46,7 @@
 - Added installed coverage for field retrieval and interrupted review recovery
   that reuses the completed reviewer.
 
-## Retained review feedback — 2026-10-23
+### Retained review feedback — 2026-10-23
 
 - Connected goal and hosted status to retained task, candidate, review findings
   and artifact references.
@@ -47,7 +57,7 @@
 - Documented feedback states and continuation steps and included the regression
   in public installed-package CI.
 
-## Delivery baseline — 2026-10-22
+### Delivery baseline — 2026-10-22
 
 - Extended `--foundry-usage` with task, native execution, candidate commit,
   check, review and project acceptance associations from retained records.
@@ -57,7 +67,7 @@
 - Added offline coverage for linked records, duplicate selection and partial
   history to the public installed-package CI.
 
-## First-use documentation — 2026-10-22
+### First-use documentation — 2026-10-22
 
 - Connected the README quickstart directly to task execution, preserving the
   initialized project and interpreter variables.
@@ -69,7 +79,7 @@
 - Recorded fresh installation, native execution, continuation, and independent
   review verification results.
 
-## Project showcase — 2026-10-22
+### Project showcase — 2026-10-22
 
 - Added a 24-second terminal demonstration, asciicast replay, and text transcript
   of a completed native Codex continuation and its four result tests.
@@ -78,14 +88,14 @@
 - Linked the showcase from the README and included its assets in the source
   distribution.
 
-## Contribution infrastructure — 2026-10-22
+### Contribution infrastructure — 2026-10-22
 
 - Added public Windows/Python CI for package builds, installed-runtime checks,
   and example initialization, with downloadable reports and distributions.
 - Documented contribution setup, test selection, pull request submission, and review.
 - Added structured bug and feature forms and a pull request template.
 
-## Documentation update — 2026-10-22
+### Documentation update — 2026-10-22
 
 - Added project use cases, an architecture diagram, and package-name mapping.
 - Added configuration, CLI, recovery, and troubleshooting references.
