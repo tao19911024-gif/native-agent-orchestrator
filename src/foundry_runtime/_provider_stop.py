@@ -18,6 +18,10 @@ def reported_stop(event):
         category = category or {'rate_limit_error': 'provider_limit', 'overloaded_error': 'provider_capacity'}.get(code)
     text = event.get('result') or error.get('message') or event.get('message') or ''
     text = text if isinstance(text, str) else ''
+    if (not error.get('codexErrorInfo')
+            and (error or event.get('type') in {'error', 'turn.failed'} or event.get('is_error') is True)
+            and text.strip() == 'Selected model is at capacity. Please try a different model.'):
+        category = category or 'provider_capacity'
     # CLI session-limit messages have no HTTP status. Keep this narrow: token
     # length, budgets and formatter attempt limits are different outcomes.
     if re.search(r"you(?:'|’)ve hit your (?:session|usage|weekly) limit", text, re.I):

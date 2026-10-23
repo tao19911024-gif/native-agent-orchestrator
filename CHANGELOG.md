@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0a95 — 2026-10-23
+
+- Add bounded native admission-call recovery for provider capacity, timeout and
+  transport failures: three calls at most, with 60- and 300-second retry delays.
+- Preserve each attempt's native output, including partial timeout output, and
+  report the final unavailable reason separately from a project REFUSE verdict.
+- Recognize the Codex CLI capacity error that omits structured error codes.
+- Restore the recovered-assignment regression's reference to its public,
+  anonymized fixture and include that regression in release CI.
+- Retain the selected model, provider, instructions and project-owned verdict
+  validation. A successful native terminal event takes precedence over earlier
+  transient error messages from the same call.
+- Document adapter integration and historical-runtime behavior. Project adapters
+  must call the admission transport to enable this recovery.
+
 ## 0.1.0a94 — 2026-10-23
 
 - Preserve the exact dispatch package when provider-capacity retry admission

@@ -68,14 +68,14 @@ def test_retained_unknown_call_diagnostic_is_explicit_and_read_only(tmp_path):
 
 @pytest.mark.parametrize('backend', ['claude', 'codex'])
 @pytest.mark.parametrize('repeat', [False, True])
-def test_recovered_manager_can_correct_sched2m6_stale_hash(external, manager_io, tmp_path, monkeypatch, backend, repeat):
+def test_recovered_manager_can_correct_stale_hash(external, manager_io, tmp_path, monkeypatch, backend, repeat):
     """Replay the retained judgement at admission, never touch the business goal.
 
     Native managers/workers are local protocol fixtures. This verifies the goal
     control flow after a completed refusal, not the model's factual judgement.
     """
     import hashlib
-    fixture_path = Path(__file__).parent / 'fixtures' / 'sched2m6_stale_hash_refusal.json'
+    fixture_path = Path(__file__).parent / 'fixtures' / 'stale_hash_refusal.json'
     specimen = json.loads(fixture_path.read_bytes())
     tree, scope, order, workers = external
     requests, decisions = manager_io
