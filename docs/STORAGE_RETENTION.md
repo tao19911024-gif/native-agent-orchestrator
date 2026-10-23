@@ -81,6 +81,11 @@ not predict the cost of a first scan of a large archive. Keep compact test
 receipts and remove completed disposable copies as part of experiment closeout
 to avoid repeatedly scanning regenerated trees.
 
+Completed pytest receipts classify fixture manifests by their resolved path,
+so those manifest bodies need not be read. Hosted requests still require content
+inspection even inside a fixture tree. Exact operator-reviewed records retain
+their hash checks; a test receipt does not bypass an existing exact review.
+
 ## Scratch cleanup and archive verification
 
 1. Resolve each exact source path and its expected parent. Inspect reparse

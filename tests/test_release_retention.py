@@ -588,3 +588,28 @@ def test_new_nested_root_is_scanned_even_if_ancestor_was_scanned(estate):
                                  roots=[evidence, added], _discovery=discovery)
     assert report['candidates'] == [str(versions[1])]
     assert report['scan']['added_roots'] == [str(added)]
+
+
+def test_receipt_owned_fixture_needs_no_content_read_but_host_request_does(estate, monkeypatch):
+    home, selection, versions, evidence = estate
+    root = evidence / 'completed-tests'
+    manifest = write(root / 'goal-fixture/manifest.json', ['arbitrary fixture content'])
+    request = write(root / 'host/request.json', {'task_name': 'Foundry-pending', 'run_id': 'run',
+                                               'python': str(versions[0] / 'Scripts/python.exe')})
+    receipt = write(home / 'receipt.json', {'schema_version': 'pdcl-test-run-record-1',
+        'run': {'command': {'argv': ['python', '-m', 'pytest', '--basetemp', str(root)]},
+                'exit_code': 0, 'finished_utc': '2026-10-01T00:00:00Z'}})
+    original = Path.read_bytes
+    reads = []
+    def read(path):
+        reads.append(path)
+        if path == manifest:
+            raise OSError('fixture body is unnecessary for receipt-based ownership')
+        return original(path)
+    monkeypatch.setattr(Path, 'read_bytes', read)
+    report = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], test_run_records=[receipt])
+    assert not report['gaps']
+    assert report['candidates'] == [str(versions[1])]
+    assert manifest not in reads and request in reads
+    assert report['classified_history'][0]['reason'] == 'pytest fixture'
