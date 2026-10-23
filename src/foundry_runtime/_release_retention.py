@@ -357,9 +357,12 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
         if _discovery is not None and not refreshing:
             _discovery['paths'].append(path)
         try:
-            raw = path.read_bytes()
             resolved_path = path.resolve()
             observation = observations.get(str(resolved_path))
+            # Exact reviews bind content. Completed pytest ownership instead
+            # binds the resolved fixture path; its arbitrary contents are not
+            # dependency evidence and need not incur an archive read.
+            raw = path.read_bytes() if observation else None
             if observation and hashlib.sha256(raw).hexdigest() != observation['record']['sha256']:
                 raise ValueError('reviewed manifest changed during scan: ' + str(path))
             if observation and observation['kind'] in ('fixture', 'artifact') and path.name == 'manifest.json':
@@ -372,6 +375,8 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
                 classified.append({'source': str(path), 'reason': 'pytest fixture',
                     'receipt': owner['source'], 'receipt_sha256': owner['sha256']})
                 continue
+            if raw is None:
+                raw = path.read_bytes()
             record = json.loads(raw)
             if not isinstance(record, dict):
                 raise ValueError('record is not an object')
