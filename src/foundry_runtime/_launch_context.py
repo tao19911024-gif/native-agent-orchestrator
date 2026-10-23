@@ -70,7 +70,7 @@ def settings(backend="codex"):
             "compact_tokens": int(os.environ.get("FOUNDRY_COMPACT_TOKENS", "0")),
             "compact_percent": int(os.environ.get("FOUNDRY_COMPACT_PERCENT", "90")),
             "bash_chars": int(os.environ.get("FOUNDRY_BASH_CHARS", "12000")),
-            "tool_tokens": int(os.environ.get("FOUNDRY_TOOL_TOKENS", "3000"))}
+            "tool_tokens": int(os.environ.get("FOUNDRY_TOOL_TOKENS", "0" if backend == "codex" else "3000"))}
 
 
 def claude_settings(launch=None):
@@ -141,7 +141,10 @@ def codex_settings(workspace=None, *, launch=None):
     s, server = launch["settings"], launch["server"]
     # Native compaction owns summarization; frozen settings retain their recorded
     # override (or absence). Leave unrelated user codegraph entries untouched.
-    result = ["tool_output_token_limit=" + str(s["tool_tokens"])]
+    # Zero leaves output sizing to the native client and its selected settings.
+    # Retained launches still carry their original explicit override.
+    result = (["tool_output_token_limit=" + str(s["tool_tokens"])]
+              if s["tool_tokens"] > 0 else [])
     if s.get('compact_tokens', 0) > 0:
         result.append('model_auto_compact_token_limit=' + str(s['compact_tokens']))
     if launch.get('tool_discipline'):

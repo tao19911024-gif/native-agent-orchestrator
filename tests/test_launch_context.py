@@ -3,12 +3,14 @@ from pathlib import Path
 import subprocess
 import sys
 import tomllib
+import pytest
 
 from foundry_runtime import _launch_context as config, _code_index as index
 from foundry_runtime import _context_signals as signals
 
 
 def test_native_arguments_cover_transports(monkeypatch, tmp_path):
+    monkeypatch.delenv('FOUNDRY_TOOL_TOKENS', raising=False)
     seen = []
     monkeypatch.setattr(index, "prepare", lambda workspace, **kw: seen.append(workspace))
     from foundry_runtime._codex_command import coding_argv
@@ -20,7 +22,7 @@ def test_native_arguments_cover_transports(monkeypatch, tmp_path):
     c = codex_argv(Path("codex"), tmp_path/"schema", workspace=tmp_path)
     for args in (a, b, c):
         assert not any(arg.startswith("model_auto_compact_token_limit=") for arg in args)
-        assert "tool_output_token_limit=3000" in args
+        assert not any(arg.startswith('tool_output_token_limit=') for arg in args)
         assert not any("mcp_servers." in arg for arg in args)
     for args in (argv("claude", "session", workspace=tmp_path),
                  _claude_argv(Path("claude"), "session", {}, workspace=tmp_path)):
@@ -30,6 +32,26 @@ def test_native_arguments_cover_transports(monkeypatch, tmp_path):
         assert "permissions" not in value
     assert environment()["CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"] == "90"
     assert len(seen) == 5 and all(str(p) == str(tmp_path) for p in seen)
+
+
+@pytest.mark.parametrize('value', [None, '0', '3000', '8000'])
+def test_tool_output_policy_freezes_explicit_and_native_settings(monkeypatch, value):
+    monkeypatch.delenv('FOUNDRY_TOOL_TOKENS', raising=False)
+    if value is not None:
+        monkeypatch.setenv('FOUNDRY_TOOL_TOKENS', value)
+    launch = config.capture(enable_index=False)
+    expected = int(value or 0)
+    assert launch['settings']['tool_tokens'] == expected
+    monkeypatch.setenv('FOUNDRY_TOOL_TOKENS', '999')
+    with config.retained_settings(launch['settings']):
+        resumed = config.capture(enable_index=False)
+    assert resumed['settings'] == launch['settings']
+    for selected in (launch, resumed):
+        args = config.codex_settings(launch=selected)
+        assert [a for a in args if a.startswith('tool_output_token_limit=')] == (
+            [f'tool_output_token_limit={expected}'] if expected else [])
+    historical = {'settings': {'tool_tokens': 3000}, 'server': None}
+    assert config.codex_settings(launch=historical) == ['tool_output_token_limit=3000']
 
 
 def test_launch_overrides_and_mcp_preserve_unrelated_settings(monkeypatch, tmp_path):

@@ -6,6 +6,12 @@ Uncached input fell 12.74% and output fell 11.24%. Eight independent native
 reviews covered the same corrected candidate and complete context: four using
 the prior request and four using the new reading policy. All returned PASS.
 
+A subsequent comparison retained that reading policy and removed the default
+3,000-token Codex tool-output override. Input fell another 29.91% against its
+matched control, and output fell 40.44%; uncached input increased 1.86%. The
+[native output follow-up](#native-tool-output-follow-up) records these separate
+runs and their remaining tradeoff.
+
 ## Sources of context growth
 
 The diagnosis examined the eight review sessions retained by the
@@ -108,3 +114,67 @@ policy. All 91 packaged runtime files match the tested installation.
 New goals select the policy through their checkpoint. Existing tasks keep their
 recorded runtime and request. Source rollback restores the previous default for
 new goals; retained task interpreters preserve recovery behavior.
+
+## Native tool-output follow-up
+
+After the reading-policy change, all four selected-policy traces reused the
+existing test summaries instead of broadly searching execution logs. The
+remaining repeated reads involved requirements and review guidance. The runtime
+still injected `tool_output_token_limit=3000` on every default Codex launch. One
+required guidance read reported 3,658 tokens before other evidence was added.
+The command's `max_output_tokens` and the native outer tool-result setting are
+separate controls. A complete raw command result in the retained transcript does
+not establish that its entire content reached the model.
+
+The selected change uses the existing launch-context owner: new Codex launches
+default `FOUNDRY_TOOL_TOKENS` to zero and omit the native override. The client
+uses its selected settings. Explicit positive values and historical frozen
+settings continue to produce their recorded argument. Claude output controls,
+reading-policy text and evidence formats retain their existing behavior.
+
+The follow-up used the same corrected conflict-response candidate, complete
+checkpoint, model configuration and A-B-B-A arrangement. Both sides used reading
+policy 1. All eight rendered review requests were byte-identical; configuration
+digests matched, and `_launch_context.py` was the only differing installed source
+module. The invocations confirmed `tool_output_token_limit=3000` for A and no
+override for B. All eight independent reviews returned PASS and covered the
+eight contract requirements and both resolved P1 findings.
+
+| Pair | Prior input tokens | Native settings input tokens | Prior model requests | Native settings model requests |
+| --- | ---: | ---: | ---: | ---: |
+| A then B | 307,346 | 244,774 | 9 | 7 |
+| B then A | 386,275 | 241,385 | 11 | 7 |
+
+Aggregate values cover four reviews per representation.
+
+| Measurement | 3,000-token override | Native settings | Change |
+| --- | ---: | ---: | ---: |
+| Initial request bytes | 66,464 | 66,464 | 0% |
+| Input tokens | 693,621 | 486,159 | -29.91% |
+| Cached input tokens | 568,320 | 358,528 | -36.91% |
+| Uncached input tokens | 125,301 | 127,631 | +1.86% |
+| Output tokens | 6,768 | 4,031 | -40.44% |
+| Model requests | 20 | 14 | -30.00% |
+| Tool-result rounds | 16 | 10 | -37.50% |
+| Visible tool-output bytes | 171,381 | 127,737 | -25.47% |
+| Requirement extractions | 8 | 4 | -50.00% |
+| Review-guidance reads | 9 | 4 | -55.56% |
+
+Each selected-policy reviewer extracted the complete requirements and read the
+review guidance once. Every control reviewer extracted requirements twice, and
+all revisited guidance. Broader source and diff inspection still occurred where
+needed for full acceptance coverage. The improvement removes repeated input
+and output across fewer requests; uncached input did not improve in aggregate.
+The percentages describe this paired workload, with cached input included in
+total input.
+
+[Follow-up measurements](validation/native-output-2026-10-23.json) retain each
+review's usage and request counts. Requirement extractions count commands reading
+`context.original_order`; guidance reads include full reads and section lookups.
+Installed regression passed 221 tests with zero failures or skips. Tests cover
+exec, app-server and review argument generation; native and explicit values;
+retained settings under environment changes; and the existing feedback/recovery
+paths. All 91 packaged runtime files match the tested installation. Public CI
+now includes the launch-context tests. The
+[configuration reference](CONFIGURATION.md#native-launch-settings) documents
+selection and restoration of an explicit output limit.
