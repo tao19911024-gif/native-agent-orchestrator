@@ -195,6 +195,19 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         if kind == "review":
             # The packet is frozen before native allocation. Historical packets
             # must render byte-for-byte for recovery's stdin hash comparison.
+            if request.get('review_read_policy') == 1:
+                instruction += (
+                    " Plan evidence reads from the supplied packet before calling tools. Fields already inline "
+                    "are available now; do not search the checkpoint for them or for optional fields absent from "
+                    "both packet and context_fields. Read each required referenced field once, in full. "
+                    "Group independent small reads and candidate identity checks into one tool round. "
+                    "Keep each tool result within the available output size: read long guidance or logs in "
+                    "bounded, non-overlapping sections separately from requirements and source reads. "
+                    "If output is truncated, retrieve only the missing section. After inspecting a file or diff, "
+                    "reuse that observation at the same revision instead of printing the same content again. "
+                    "Use focused reads for uncovered criteria, changed dependencies or contradictory evidence. "
+                    "Once full acceptance coverage is established, record concise coverage and return the verdict "
+                    "without repeating completed reads or checks.")
             if request.get("packet", {}).get("review_evidence_policy") == 1:
                 instruction += (
                     " Start with the candidate handoff's evidence references and coverage: check their source "

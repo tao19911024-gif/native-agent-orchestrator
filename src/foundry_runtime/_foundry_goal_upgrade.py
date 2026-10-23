@@ -292,7 +292,8 @@ def prepare(owner, folder, manifest, request, *, checkpoint_path=None):
         from ._foundry_review_group import Panel
         from .foundry_native import NativeAnalyst
         reference = manifest['review_checkpoint'] if checkpoint.get('context_delivery') == 'reference-v1' else None
-        requests = {name: owner._role_request(checkpoint['run_id'], name, checkpoint['context'], context_reference=reference)
+        requests = {name: owner._role_request(checkpoint['run_id'], name, checkpoint['context'], context_reference=reference,
+                                             read_policy=checkpoint.get('review_read_policy'))
                     for name in ('review-0', 'review-1')}
         settings = checkpoint.get('reviewers') or [checkpoint['analyst']]*2
         for call in (folder/'reviews').rglob('call-*'):

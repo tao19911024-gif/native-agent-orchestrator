@@ -70,3 +70,6 @@ The review checkpoint also owns the complete review input. For new goals, the
 review request builder [references long context fields](REVIEW_CONTEXT.md)
 before native admission. Rendering and recovery consume the same request;
 verdict validation remains bound to the complete checkpoint context hash.
+The checkpoint also retains the native evidence-reading policy. Normal review,
+recovery and upgrade-history readers reconstruct the same request from that
+policy; historical checkpoints preserve their original rendering.

@@ -1,0 +1,232 @@
+{
+  "date": "2026-10-23",
+  "scenario": "Retained conflict-response correction, anonymized replay",
+  "design": "A-B-B-A; two independent reviewers per group; same corrected candidate and complete context",
+  "configured_model": "gpt-6-astra",
+  "effort": "high",
+  "same_candidate_and_context": true,
+  "same_native_adapter_and_review_owner": true,
+  "same_user_config_digest": true,
+  "distinct_native_sessions": 8,
+  "historical_diagnosis": {
+    "reviews": 8,
+    "provider_requests": 44,
+    "input_tokens": 1502870,
+    "first_request_input_tokens": 224014,
+    "later_request_input_tokens": 1278856,
+    "truncated_tool_rounds": 2
+  },
+  "reviews": [
+    {
+      "phase": "control",
+      "reviewer": 0,
+      "input_bytes": 15673,
+      "input_tokens": 217880,
+      "cached_input_tokens": 176128,
+      "uncached_input_tokens": 41752,
+      "output_tokens": 1613,
+      "provider_requests": 6,
+      "tool_rounds": 5,
+      "visible_tool_output_bytes": 48210,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        28955,
+        32369,
+        36109,
+        39343,
+        40247,
+        40857
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control",
+      "reviewer": 1,
+      "input_bytes": 15673,
+      "input_tokens": 223007,
+      "cached_input_tokens": 180992,
+      "uncached_input_tokens": 42015,
+      "output_tokens": 2053,
+      "provider_requests": 6,
+      "tool_rounds": 5,
+      "visible_tool_output_bytes": 62961,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        28955,
+        32386,
+        36455,
+        40292,
+        42062,
+        42857
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized",
+      "reviewer": 0,
+      "input_bytes": 16616,
+      "input_tokens": 176537,
+      "cached_input_tokens": 137088,
+      "uncached_input_tokens": 39449,
+      "output_tokens": 1493,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 45962,
+      "truncated_tool_rounds": 1,
+      "request_input_tokens": [
+        29576,
+        33292,
+        36472,
+        38267,
+        38930
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized",
+      "reviewer": 1,
+      "input_bytes": 16616,
+      "input_tokens": 177742,
+      "cached_input_tokens": 137728,
+      "uncached_input_tokens": 40014,
+      "output_tokens": 1841,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 47502,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        29576,
+        33335,
+        36920,
+        38604,
+        39307
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized-repeat",
+      "reviewer": 0,
+      "input_bytes": 16616,
+      "input_tokens": 136456,
+      "cached_input_tokens": 97536,
+      "uncached_input_tokens": 38920,
+      "output_tokens": 1157,
+      "provider_requests": 4,
+      "tool_rounds": 3,
+      "visible_tool_output_bytes": 41205,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        29576,
+        33303,
+        35124,
+        38453
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized-repeat",
+      "reviewer": 1,
+      "input_bytes": 16616,
+      "input_tokens": 175414,
+      "cached_input_tokens": 148992,
+      "uncached_input_tokens": 26422,
+      "output_tokens": 1887,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 40055,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        29576,
+        33192,
+        35149,
+        38289,
+        39208
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control-repeat",
+      "reviewer": 0,
+      "input_bytes": 15673,
+      "input_tokens": 217312,
+      "cached_input_tokens": 176384,
+      "uncached_input_tokens": 40928,
+      "output_tokens": 1882,
+      "provider_requests": 6,
+      "tool_rounds": 5,
+      "visible_tool_output_bytes": 47722,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        29413,
+        33103,
+        36707,
+        38619,
+        39633,
+        39837
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control-repeat",
+      "reviewer": 1,
+      "input_bytes": 15673,
+      "input_tokens": 179106,
+      "cached_input_tokens": 137856,
+      "uncached_input_tokens": 41250,
+      "output_tokens": 1638,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 52153,
+      "truncated_tool_rounds": 0,
+      "request_input_tokens": [
+        29413,
+        32799,
+        36914,
+        39430,
+        40550
+      ],
+      "verdict": "PASS"
+    }
+  ],
+  "aggregate": {
+    "control": {
+      "input_bytes": 62692,
+      "input_tokens": 837305,
+      "cached_input_tokens": 671360,
+      "uncached_input_tokens": 165945,
+      "output_tokens": 7186,
+      "provider_requests": 23,
+      "tool_rounds": 19,
+      "visible_tool_output_bytes": 211046,
+      "truncated_tool_rounds": 0
+    },
+    "optimized": {
+      "input_bytes": 66464,
+      "input_tokens": 666149,
+      "cached_input_tokens": 521344,
+      "uncached_input_tokens": 144805,
+      "output_tokens": 6378,
+      "provider_requests": 19,
+      "tool_rounds": 15,
+      "visible_tool_output_bytes": 174724,
+      "truncated_tool_rounds": 1
+    }
+  },
+  "change_percent": {
+    "input_bytes": 6.0167,
+    "input_tokens": -20.4413,
+    "cached_input_tokens": -22.3451,
+    "uncached_input_tokens": -12.7392,
+    "output_tokens": -11.2441,
+    "provider_requests": -17.3913,
+    "tool_rounds": -21.0526,
+    "visible_tool_output_bytes": -17.2105
+  },
+  "verification": {
+    "installed_tests_passed": 154,
+    "failed": 0,
+    "skipped": 0,
+    "matched_wheel_files": 91
+  },
+  "measurement": "Native Codex counters; cached input is included in input. Provider requests come from per-request token events. Tool rounds count returned tool messages, not individual commands. Byte counts are UTF-8 observations and are not token estimates."
+}

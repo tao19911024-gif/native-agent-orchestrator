@@ -25,6 +25,24 @@ list from their indicated fields. Extract those fields from the JSON document
 instead of printing the whole checkpoint and its coding usage observations.
 The original base-to-candidate review scope remains in effect.
 
+## Evidence reading policy
+
+New review checkpoints record `review_read_policy: 1`. The native request uses
+that policy to plan evidence reads before tool execution:
+
+- Use fields already supplied inline and extract complete required references.
+- Group independent small reads and candidate checks within the tool output size.
+- Read long guidance and logs in bounded sections, retrieving missing sections
+  when an output is truncated.
+- Reuse inspected content at the same revision; read further for uncovered
+  criteria, changed dependencies or conflicting observations.
+
+The existing checkpoint supplies the policy to normal review, recovery and
+runtime-upgrade history. Checkpoints without it retain their original prompt.
+The policy changes reading guidance; complete context hashes, review coverage
+and response contracts retain their existing meaning. Actual token and tool-loop
+measurements are recorded in [review token analysis](REVIEW_TOKEN_ANALYSIS.md).
+
 ## Status and recovery
 
 Use the existing goal status command to locate the checkpoint:

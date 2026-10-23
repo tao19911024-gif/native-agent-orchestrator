@@ -1,5 +1,6 @@
 """Long review inputs use the existing checkpoint without losing context identity."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -10,9 +11,31 @@ from foundry_runtime import foundry_goal as goal
 from foundry_runtime._foundry_native_request import build_prompt
 from test_installed_runtime import external, offline, git
 
+LEGACY_REVIEW_HASH = '9f46fd345eea63cd6d71c570079cf8ea90b3ba0d6e5e2ceedb2cc1072a1af29a'
+
 
 @pytest.mark.parametrize('backend', ['codex', 'claude'])
-def test_long_fields_are_readable_from_the_retained_checkpoint(tmp_path, backend):
+def test_read_policy_preserves_legacy_requests_and_complete_context(tmp_path, backend):
+    context = {'original_order': 'Review the response.',
+               'candidate_commit': 'b' * 40, 'base_commit': 'a' * 40}
+    legacy = goal._role_request('run', 'review-0', context)
+    old_prompt = build_prompt(legacy, backend, ValueError)
+    # Captured from the installed runtime before read-policy support.
+    assert hashlib.sha256(old_prompt).hexdigest() == LEGACY_REVIEW_HASH
+    selected = goal._role_request('run', 'review-0', context, read_policy=1)
+    raw = build_prompt(selected, backend, ValueError)
+    envelope = json.loads(raw.rsplit(b'\n\n', 1)[-1])
+    assert envelope['packet'] == context
+    assert envelope['packet_sha256'] == legacy['packet_sha256']
+    assert envelope['response_contract'] == legacy['response_contract']
+    assert envelope['review_read_policy'] == 1
+    assert b'Plan evidence reads' in raw and b'Plan evidence reads' not in old_prompt
+    assert b'in full' in raw and b'uncovered criteria' in raw
+
+
+@pytest.mark.parametrize('backend', ['codex', 'claude'])
+@pytest.mark.parametrize('read_policy', [None, 1])
+def test_long_fields_are_readable_from_the_retained_checkpoint(tmp_path, backend, read_policy):
     context = {'original_order': '完整要求和验收条件\n' * 1000,
         'changed_files': [f'src/module_{n}/implementation.py' for n in range(500)],
         'project_record': {'context': {'rules': 'project rule\n' * 600}},
@@ -24,7 +47,7 @@ def test_long_fields_are_readable_from_the_retained_checkpoint(tmp_path, backend
     goal._write(path, {'context': context})
     reference = goal._fact(path)
     before = path.read_bytes()
-    request = goal._role_request('run', 'review-0', context, context_reference=reference)
+    request = goal._role_request('run', 'review-0', context, context_reference=reference, read_policy=read_policy)
     original = copy.deepcopy(request)
     raw = build_prompt(request, backend, ValueError)
     envelope = json.loads(raw.rsplit(b'\n\n', 1)[-1])
@@ -84,6 +107,7 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
         request = json.loads(source.read().rsplit(b'\n\n', 1)[-1]); source.seek(0)
         slot = 1 if 'review-1' in str(source.name) else 0
         calls.append((slot, request))
+        assert request['review_read_policy'] == 1
         assert request['context_fields']['original_order'] == '/context/original_order'
         assert 'original_order' not in request['packet']
         result = {'candidate_commit': head, 'packet_sha256': request['packet_sha256'],
@@ -113,6 +137,7 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
     checkpoint = folder / 'review-checkpoint.json'
     before = checkpoint.read_bytes()
     assert json.loads(before)['context_delivery'] == 'reference-v1'
+    assert json.loads(before)['review_read_policy'] == 1
     completed = {p: p.read_bytes() for p in (folder / 'reviews/review-0').rglob('*') if p.is_file()}
     assert sorted(slot for slot, _ in calls) == [0, 1], str(interrupted.value)
     from foundry_runtime import _followup, cli
