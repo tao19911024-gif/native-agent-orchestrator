@@ -68,6 +68,11 @@ Select additional tests for the changed contracts. Native-client, desktop-host,
 Windows service, and real-project integration checks use their selected
 environments. Record each command, result, and the behavior verified.
 
+Complete the [storage disposition](docs/STORAGE_RETENTION.md) for environments
+and outputs created by the work. Retain verification and failure evidence;
+remove finished disposable environments and duplicate generated artifacts.
+Record any retained dependency and its removal condition.
+
 To verify distribution changes, build the wheel and source archive:
 
 ```powershell
