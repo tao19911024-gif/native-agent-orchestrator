@@ -80,7 +80,7 @@ candidate; the project observation reports the acceptance decision.
 ```json
 {
   "launch": {
-    "FOUNDRY_TOOL_TOKENS": 3000,
+    "FOUNDRY_TOOL_TOKENS": 0,
     "FOUNDRY_BASH_CHARS": 12000,
     "FOUNDRY_CODEGRAPH_ARGV": []
   }
@@ -90,7 +90,8 @@ candidate; the project observation reports the acceptance decision.
 | Setting group | JSON type and purpose |
 | --- | --- |
 | `FOUNDRY_CONTEXT_TOKENS`, `FOUNDRY_COMPACT_TOKENS`, `FOUNDRY_COMPACT_PERCENT` | Integers configuring native context and compaction inputs |
-| `FOUNDRY_TOOL_TOKENS`, `FOUNDRY_BASH_CHARS` | Integers configuring tool-output limits |
+| `FOUNDRY_TOOL_TOKENS` | Codex tool-output override in tokens; zero, the default, retains native settings; a positive value selects an explicit limit |
+| `FOUNDRY_BASH_CHARS` | Integer configuring the Claude Bash output size and Codex read-accounting inputs |
 | `FOUNDRY_WAIT_INTERVAL_SECONDS` | Integer configuring native wait intervals |
 | `FOUNDRY_CODEX_READ_SINGLE`, `FOUNDRY_CODEX_READ_TURN`, `FOUNDRY_CODEX_READ_INDEX_CHARGE` | Integer read-accounting settings for Codex |
 | `FOUNDRY_CLAUDE_READ_SINGLE`, `FOUNDRY_CLAUDE_READ_TURN`, `FOUNDRY_CLAUDE_READ_INDEX_CHARGE` | Integer read-accounting settings for Claude |
@@ -101,6 +102,15 @@ For a new call, descriptor `launch` values override the process environment.
 Omitted values use the environment and then the runtime defaults. Continuations
 use the recorded launch settings. Supported keys and default resolution are
 owned by [`validate_project_launch` and `settings`](../src/foundry_runtime/_launch_context.py).
+
+For Codex, zero omits `tool_output_token_limit` from native arguments and keeps
+the client's selected configuration. A per-command `max_output_tokens` value
+does not necessarily replace the client's outer tool-result limit. With several
+reads in one tool call, the combined output can exceed that outer limit even
+when each command completes successfully. Use focused results and retrieve only
+missing sections after truncation. Existing launches retain their recorded
+positive limit, including the earlier default of 3,000 tokens. Set
+`FOUNDRY_TOOL_TOKENS` to `3000` to select that limit for a new project call.
 
 ## Provider selection
 

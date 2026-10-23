@@ -1,0 +1,237 @@
+{
+  "date": "2026-10-23",
+  "scenario": "Corrected conflict-response candidate, anonymized replay",
+  "design": "A-B-B-A; two independent reviews per group; read policy 1 throughout",
+  "configured_model": "gpt-6-astra",
+  "effort": "high",
+  "same_candidate_and_complete_context": true,
+  "identical_rendered_requests": true,
+  "same_user_config_digest": true,
+  "distinct_native_sessions": 8,
+  "changed_runtime_module": "_launch_context.py",
+  "reviews": [
+    {
+      "phase": "control",
+      "reviewer": 0,
+      "tool_tokens": 3000,
+      "input_bytes": 16616,
+      "input_tokens": 136221,
+      "cached_input_tokens": 97792,
+      "uncached_input_tokens": 38429,
+      "output_tokens": 1158,
+      "provider_requests": 4,
+      "tool_rounds": 3,
+      "visible_tool_output_bytes": 46587,
+      "requirement_extractions": 2,
+      "guidance_reads": 2,
+      "request_input_tokens": [
+        29118,
+        32916,
+        36234,
+        37953
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control",
+      "reviewer": 1,
+      "tool_tokens": 3000,
+      "input_bytes": 16616,
+      "input_tokens": 171125,
+      "cached_input_tokens": 132224,
+      "uncached_input_tokens": 38901,
+      "output_tokens": 1783,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 39743,
+      "requirement_extractions": 2,
+      "guidance_reads": 2,
+      "request_input_tokens": [
+        29118,
+        32538,
+        34053,
+        37178,
+        38238
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized",
+      "reviewer": 0,
+      "tool_tokens": 0,
+      "input_bytes": 16616,
+      "input_tokens": 101646,
+      "cached_input_tokens": 63744,
+      "uncached_input_tokens": 37902,
+      "output_tokens": 841,
+      "provider_requests": 3,
+      "tool_rounds": 2,
+      "visible_tool_output_bytes": 31876,
+      "requirement_extractions": 1,
+      "guidance_reads": 1,
+      "request_input_tokens": [
+        29576,
+        34446,
+        37624
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized",
+      "reviewer": 1,
+      "tool_tokens": 0,
+      "input_bytes": 16616,
+      "input_tokens": 143128,
+      "cached_input_tokens": 104960,
+      "uncached_input_tokens": 38168,
+      "output_tokens": 1371,
+      "provider_requests": 4,
+      "tool_rounds": 3,
+      "visible_tool_output_bytes": 32917,
+      "requirement_extractions": 1,
+      "guidance_reads": 1,
+      "request_input_tokens": [
+        29576,
+        36537,
+        38184,
+        38831
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized-repeat",
+      "reviewer": 0,
+      "tool_tokens": 0,
+      "input_bytes": 16616,
+      "input_tokens": 101013,
+      "cached_input_tokens": 88064,
+      "uncached_input_tokens": 12949,
+      "output_tokens": 821,
+      "provider_requests": 3,
+      "tool_rounds": 2,
+      "visible_tool_output_bytes": 30634,
+      "requirement_extractions": 1,
+      "guidance_reads": 1,
+      "request_input_tokens": [
+        29576,
+        34359,
+        37078
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "optimized-repeat",
+      "reviewer": 1,
+      "tool_tokens": 0,
+      "input_bytes": 16616,
+      "input_tokens": 140372,
+      "cached_input_tokens": 101760,
+      "uncached_input_tokens": 38612,
+      "output_tokens": 998,
+      "provider_requests": 4,
+      "tool_rounds": 3,
+      "visible_tool_output_bytes": 32310,
+      "requirement_extractions": 1,
+      "guidance_reads": 1,
+      "request_input_tokens": [
+        29576,
+        34735,
+        37875,
+        38186
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control-repeat",
+      "reviewer": 0,
+      "tool_tokens": 3000,
+      "input_bytes": 16616,
+      "input_tokens": 172949,
+      "cached_input_tokens": 135680,
+      "uncached_input_tokens": 37269,
+      "output_tokens": 1893,
+      "provider_requests": 5,
+      "tool_rounds": 4,
+      "visible_tool_output_bytes": 38477,
+      "requirement_extractions": 2,
+      "guidance_reads": 2,
+      "request_input_tokens": [
+        29576,
+        32986,
+        34733,
+        37309,
+        38345
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "phase": "control-repeat",
+      "reviewer": 1,
+      "tool_tokens": 3000,
+      "input_bytes": 16616,
+      "input_tokens": 213326,
+      "cached_input_tokens": 202624,
+      "uncached_input_tokens": 10702,
+      "output_tokens": 1934,
+      "provider_requests": 6,
+      "tool_rounds": 5,
+      "visible_tool_output_bytes": 46574,
+      "requirement_extractions": 2,
+      "guidance_reads": 3,
+      "request_input_tokens": [
+        29576,
+        33224,
+        34968,
+        37731,
+        38563,
+        39264
+      ],
+      "verdict": "PASS"
+    }
+  ],
+  "aggregate": {
+    "control": {
+      "input_bytes": 66464,
+      "input_tokens": 693621,
+      "cached_input_tokens": 568320,
+      "uncached_input_tokens": 125301,
+      "output_tokens": 6768,
+      "provider_requests": 20,
+      "tool_rounds": 16,
+      "visible_tool_output_bytes": 171381,
+      "requirement_extractions": 8,
+      "guidance_reads": 9
+    },
+    "optimized": {
+      "input_bytes": 66464,
+      "input_tokens": 486159,
+      "cached_input_tokens": 358528,
+      "uncached_input_tokens": 127631,
+      "output_tokens": 4031,
+      "provider_requests": 14,
+      "tool_rounds": 10,
+      "visible_tool_output_bytes": 127737,
+      "requirement_extractions": 4,
+      "guidance_reads": 4
+    }
+  },
+  "change_percent": {
+    "input_bytes": 0.0,
+    "input_tokens": -29.91,
+    "cached_input_tokens": -36.9144,
+    "uncached_input_tokens": 1.8595,
+    "output_tokens": -40.4403,
+    "provider_requests": -30.0,
+    "tool_rounds": -37.5,
+    "visible_tool_output_bytes": -25.4661,
+    "requirement_extractions": -50.0,
+    "guidance_reads": -55.5556
+  },
+  "verification": {
+    "installed_tests_passed": 221,
+    "failed": 0,
+    "skipped": 0,
+    "matched_wheel_files": 91
+  },
+  "measurement": "Native Codex counters; cached input is included in input. Provider requests come from token events. Tool rounds count returned tool messages. Requirement extractions count commands reading context.original_order; guidance reads count commands referencing the review skill. Raw tool results are retained observations, not proof that every byte reached the model."
+}

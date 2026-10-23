@@ -1,5 +1,14 @@
 # Changelog
 
+## Native Codex tool-output settings — 2026-10-23
+
+- Default new Codex launches to native tool-output settings through the existing
+  launch configuration; preserve explicit limits and frozen historical values.
+- Verified reduced requirement and guidance rereads with byte-identical native
+  review requests, and published the actual token comparison.
+- Added launch-context regressions to public CI and documented zero/default
+  selection and explicit-limit restoration.
+
 ## Review evidence reading — 2026-10-23
 
 - Added a checkpoint-owned reading policy that groups focused evidence reads
