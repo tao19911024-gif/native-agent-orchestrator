@@ -109,6 +109,56 @@ def test_status_projects_unanswered_age_and_active_call_read_only(tmp_path,monke
     assert (root/'manifest.json').read_bytes()==before
 
 
+@pytest.mark.parametrize('backend', ['claude', 'codex'])
+def test_reserved_call_and_process_elapsed_are_separate_from_coordination(tmp_path, monkeypatch, backend):
+    folder = call(tmp_path, monkeypatch, [])
+    identity = json.loads((folder/'process.json').read_bytes())
+    (folder/'process.json').unlink()
+    before = {p: p.read_bytes() for p in folder.iterdir()}
+    reserved = activity.native_call_status(folder, backend, now=5000)
+    assert reserved['activity'] == 'process_not_observed'
+    assert reserved['call_id'] == 'full-id'
+    assert reserved['process_state'] == 'unknown'
+    assert {p: p.read_bytes() for p in folder.iterdir()} == before
+    identity['observed_utc'] = '1970-01-01T01:23:00+00:00'
+    (folder/'process.json').write_text(json.dumps(identity))
+    running = activity.native_call_status(folder, backend, now=5000)
+    assert running['process_elapsed_seconds'] == 20
+    live = {'state': 'running', 'stage': 'coordinate', 'observed_elapsed_seconds': 1400}
+    observed = _followup._manager_wait(live, [{'role': 'manager', **running}])
+    assert observed['coordination_elapsed_seconds'] == 1400
+    assert observed['native_calls'][0]['process_elapsed_seconds'] == 20
+    assert observed['deadlock'] == 'not_established'
+
+
+@pytest.mark.parametrize('rows,expected', [
+    ([], 'coordination_without_active_native_evidence'),
+    ([{'activity': 'process_not_observed'}], 'reserved_process_not_observed'),
+    ([{'process_state': 'unknown'}], 'native_call_unconfirmed'),
+    ([{'process_state': 'exists', 'no_output_seconds': 99999}], 'native_call_in_flight'),
+    ([{'process_state': 'exists', 'activity': 'terminal_observed'}], 'native_terminal_receipt_pending'),
+    ([{'process_state': 'exited'}], 'process_exited_receipt_pending'),
+    ([{'activity': 'receipt_available'}], 'coordination_without_active_native_evidence'),
+])
+def test_manager_wait_does_not_turn_silence_or_terminal_into_deadlock(rows, expected):
+    rows = [{'role': 'manager', **row} for row in rows]
+    result = _followup._manager_wait({'state': 'running'}, rows)
+    assert result['state'] == expected
+    assert result['deadlock'] == 'not_established'
+    assert _followup._manager_wait({'state': 'decision_available'}, [])['state'] == 'no_active_call_observed'
+
+
+def test_goal_status_includes_wait_projection(tmp_path, monkeypatch):
+    root = tmp_path/'goal'; root.mkdir()
+    goal._write(root/'manifest.json', {'run_id': 'r', 'live_manager_call': {
+        'state': 'running', 'started_at': 1000, 'stage': 'coordinate', 'soft_warning_seconds': 120}})
+    before = (root/'manifest.json').read_bytes()
+    report = _followup.status(root)
+    assert report['manager_wait_observation']['state'] == 'coordination_without_active_native_evidence'
+    assert report['live_manager_call']['soft_warning']
+    assert (root/'manifest.json').read_bytes() == before
+
+
 def test_coalesce_only_identical_unanswered_messages_then_allow_new_ruling():
     started,release=Event(),Event();seen=[]
     def decide(rows):

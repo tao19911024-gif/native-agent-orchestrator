@@ -58,6 +58,33 @@ def status(folder, *, plan=False):
                            'status', '--status-goal', report['goal']], plan=plan)
 
 
+def _manager_wait(live_call, native_calls):
+    """Project existing observations; never infer deadlock from silence or age."""
+    calls = [row for row in native_calls if row.get('role') in ('manager', 'expert')]
+    pending = [row for row in calls if row.get('activity') != 'receipt_available']
+    live_call = live_call or {}
+    if any(row.get('process_state') == 'exited' for row in pending):
+        state = 'process_exited_receipt_pending'
+    elif any(row.get('activity') == 'terminal_observed' for row in pending):
+        state = 'native_terminal_receipt_pending'
+    elif any(row.get('process_state') == 'exists' for row in pending):
+        state = 'native_call_in_flight'
+    elif any(row.get('activity') == 'process_not_observed' for row in pending):
+        state = 'reserved_process_not_observed'
+    elif pending:
+        state = 'native_call_unconfirmed'
+    elif live_call.get('state') == 'running':
+        state = 'coordination_without_active_native_evidence'
+    else:
+        state = 'no_active_call_observed'
+    return {'state': state, 'coordination_stage': live_call.get('stage'),
+            'coordination_elapsed_seconds': live_call.get('observed_elapsed_seconds'),
+            'native_calls': calls, 'deadlock': 'not_established',
+            'note': 'Coordination includes local preparation, native calls and settlement. '
+                    'It is not provider response time. Process existence and output silence '
+                    'do not establish progress or deadlock; inspect evidence before recovery.'}
+
+
 def _goal_status(folder):
     folder = Path(folder).resolve(strict=True)
     manifest = json.loads((folder / 'manifest.json').read_bytes())
@@ -138,6 +165,8 @@ def _goal_status(folder):
                 'observed_elapsed_seconds': elapsed,
                 'soft_warning': isinstance(warning_at, (int, float)) and elapsed >= warning_at,
                 'liveness': 'not_proven_by_elapsed_time'}
+        report['manager_wait_observation'] = _manager_wait(
+            report['live_manager_call'], report['active_native_calls'])
         report['candidate_closure'] = active.get('candidate_closure')
         coding_reference = active.get('coding_checkpoint')
         if coding_reference:
