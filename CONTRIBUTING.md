@@ -44,14 +44,16 @@ Run the offline checks from the repository root after installation:
 $PreviousCatalogue = $env:PDCL_MODEL_CATALOGUE
 try {
     $env:PDCL_MODEL_CATALOGUE = 'snapshot'
-    & $RuntimePython -m pytest tests/test_installed_runtime.py tests/test_project_launch.py
+  & $RuntimePython -m pytest tests/test_installed_runtime.py tests/test_project_launch.py `
+    tests/test_release_retention.py tests/test_release_selection.py
 } finally {
     $env:PDCL_MODEL_CATALOGUE = $PreviousCatalogue
 }
 ```
 
 These checks cover installed imports, CLI entry points, project configuration,
-and descriptor-based execution with synthetic native processes. Imports from
+descriptor-based execution with synthetic native processes, and release
+selection/retention with synthetic dependencies. Imports from
 the installed distribution are part of their contract.
 
 For changes to example setup, run each scenario with a new destination:
