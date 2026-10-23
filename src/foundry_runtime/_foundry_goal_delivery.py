@@ -17,6 +17,51 @@ STOP_OUTCOMES = {'input_required': ('coding needs an operator answer', 'awaiting
 from ._provider_stop import reported_stop
 
 
+def review_feedback(outcome_path):
+    """Read a candidate's feedback and present its existing correction entry."""
+    from . import foundry_goal as owner
+    from ._foundry_cli_help import amendment_invocation
+
+    path = Path(outcome_path)
+    outcome = json.loads(path.read_bytes())
+    manifest_path = path.with_name('manifest.json')
+    manifest = json.loads(manifest_path.read_bytes())
+    source = owner._fact(path)
+    prior = {'prior_outcome': source, 'prior_manifest': owner._fact(manifest_path),
+             'base_commit': manifest.get('base_commit'), 'candidate_commit': outcome.get('candidate_commit'),
+             'reviews': outcome.get('reviews', []), 'host_findings': outcome.get('host_findings', [])}
+    focus = owner._review_focus(prior)
+    view = {'task': {key: manifest.get(key) for key in ('order', 'run_id')},
+            'candidate_commit': outcome.get('candidate_commit'), 'outcome_status': outcome['status'],
+            'findings': focus['findings'],
+            'predecessor': (manifest.get('amendment') or {}).get('prior_outcome') or
+                ((outcome.get('delivery_report') or {}).get('delivery', {}).get('context') or {}).get('continues'),
+            'artifacts': {'outcome': source, 'manifest': prior['prior_manifest'],
+                          'coding': (outcome.get('coding') or {}).get('evidence', []),
+                          'review_checkpoint': manifest.get('review_checkpoint'),
+                          'rounds': manifest.get('rounds', []),
+                          'usage': outcome.get('task_usage'), 'delivered': outcome.get('artifacts', [])},
+            'continuation': {'status': 'no_recorded_findings'}}
+    if not focus['findings']:
+        return view
+    if outcome['status'] not in {'review_blocked', 'candidate_verified'} or len(prior['reviews']) != 2:
+        view['continuation'] = {'status': 'review_completion_required'}
+        return view
+    session = outcome.get('coding_session')
+    if not session:
+        view['continuation'] = {'status': 'coding_session_required'}
+        return view
+    try:
+        # The amendment owner selects the final round's retained settings.
+        settings = owner.amendment_manifest(path, session)
+        view['artifacts']['review_checkpoint'] = settings.get('review_checkpoint')
+        view['continuation'] = {'status': 'available', 'coding_session': session,
+            'invocation': amendment_invocation(settings['order']['path'], path, session, settings)}
+    except (OSError, ValueError, KeyError, TypeError, owner.GoalBlocked) as exc:
+        view['continuation'] = {'status': 'unavailable', 'reason': str(exc)}
+    return view
+
+
 def candidate(owner, tree, base=None):
     """Observe a committed handoff without refreshing the index or rewriting files.
 

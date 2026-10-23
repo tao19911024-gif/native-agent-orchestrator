@@ -99,6 +99,7 @@ for platform and execution settings.
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Command reference](docs/CLI.md)
 - [Delivery baseline and record associations](docs/DELIVERY_BASELINE.md)
+- [Review feedback and correction](docs/FEEDBACK_LOOP.md)
 - [Continuation and recovery](docs/RECOVERY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)

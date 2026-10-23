@@ -35,6 +35,12 @@ Continuation and recovery reconcile those same records. The
 interrupted attempts. A runtime or role transition records its selected successor
 through that lifecycle.
 
+Goal and hosted status expose [review feedback](FEEDBACK_LOOP.md) by reading
+the existing outcome and manifest. The delivery projection reuses the goal's
+finding deduplicator and amendment settings. Recovery and amendment advice
+share the recorded-entry command formatter; the existing amendment controller
+resumes the coding session and records the successor candidate and reviews.
+
 ## Verification and rollback
 
 The repository includes installed-package and offline lifecycle tests. The

@@ -1,5 +1,16 @@
 # Changelog
 
+## Retained review feedback — 2026-10-23
+
+- Connected goal and hosted status to retained task, candidate, review findings
+  and artifact references.
+- Added the existing recorded-session amendment command to feedback status,
+  using the shared interpreter, project-entry and environment formatter.
+- Added an anonymized conflict-response correction regression covering PASS
+  and BLOCK findings, candidate checks and linked successor results.
+- Documented feedback states and continuation steps and included the regression
+  in public installed-package CI.
+
 ## Delivery baseline — 2026-10-22
 
 - Extended `--foundry-usage` with task, native execution, candidate commit,

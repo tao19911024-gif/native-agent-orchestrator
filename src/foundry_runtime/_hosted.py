@@ -96,7 +96,7 @@ def status(directory, *, plan=False):
                 raise ValueError('Hosted execution identity changed')
             report['execution'] = observed
             for key in ('status', 'event_id', 'outcome_path', 'outcome_status', 'result_path',
-                        'returncode', 'evidence', 'reason', 'next_action', 'project_action', 'coding_recovery', 'input_request'):
+                        'returncode', 'evidence', 'reason', 'next_action', 'project_action', 'coding_recovery', 'input_request', 'feedback'):
                 if key in observed:
                     report[key] = observed[key]
         if (directory / 'finished.json').exists():

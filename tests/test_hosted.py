@@ -79,6 +79,8 @@ def test_goal_receipt_is_projection_not_another_notification(tmp_path, service, 
     report = hosted.status(directory, plan=True)
     assert report['status'] == 'outcome_available'
     assert report['execution']['run_id'] == 'goal-run'
+    assert report['feedback'] == report['execution']['feedback']
+    assert report['feedback']['artifacts']['outcome']['path'] == str(goal / 'outcome.json')
     assert report['run_id'] != 'goal-run'
     assert '"hosted":' in report['registration_request']['prompt']
 
