@@ -20,28 +20,39 @@ from ._provider_stop import reported_stop
 def review_feedback(outcome_path):
     """Read a candidate's feedback and present its existing correction entry."""
     from . import foundry_goal as owner
-    from ._foundry_cli_help import amendment_invocation
+    from ._foundry_cli_help import amendment_invocation, recovery_invocation
 
     path = Path(outcome_path)
-    outcome = json.loads(path.read_bytes())
     manifest_path = path.with_name('manifest.json')
     manifest = json.loads(manifest_path.read_bytes())
-    source = owner._fact(path)
+    outcome = json.loads(path.read_bytes()) if path.is_file() else {}
+    checkpoint = (json.loads(owner.goal_usage._reference(manifest['review_checkpoint']))
+                  if not outcome else {})
+    candidate = outcome.get('candidate_commit') or checkpoint.get('context', {}).get('candidate_commit')
+    source = owner._fact(path) if outcome else None
     prior = {'prior_outcome': source, 'prior_manifest': owner._fact(manifest_path),
-             'base_commit': manifest.get('base_commit'), 'candidate_commit': outcome.get('candidate_commit'),
+             'base_commit': manifest.get('base_commit'), 'candidate_commit': candidate,
              'reviews': outcome.get('reviews', []), 'host_findings': outcome.get('host_findings', [])}
     focus = owner._review_focus(prior)
     view = {'task': {key: manifest.get(key) for key in ('order', 'run_id')},
-            'candidate_commit': outcome.get('candidate_commit'), 'outcome_status': outcome['status'],
+            'candidate_commit': candidate, 'outcome_status': outcome.get('status'),
             'findings': focus['findings'],
             'predecessor': (manifest.get('amendment') or {}).get('prior_outcome') or
                 ((outcome.get('delivery_report') or {}).get('delivery', {}).get('context') or {}).get('continues'),
             'artifacts': {'outcome': source, 'manifest': prior['prior_manifest'],
-                          'coding': (outcome.get('coding') or {}).get('evidence', []),
+                          'coding': ((outcome or checkpoint).get('coding') or {}).get('evidence', []),
                           'review_checkpoint': manifest.get('review_checkpoint'),
                           'rounds': manifest.get('rounds', []),
                           'usage': outcome.get('task_usage'), 'delivered': outcome.get('artifacts', [])},
             'continuation': {'status': 'no_recorded_findings'}}
+    if not outcome:
+        view['continuation'] = {'status': 'review_completion_required'}
+        try:
+            view['continuation']['invocation'] = recovery_invocation(
+                manifest['order']['path'], path.parent, manifest)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            view['continuation']['reason'] = str(exc)
+        return view
     if not focus['findings']:
         return view
     if outcome['status'] not in {'review_blocked', 'candidate_verified'} or len(prior['reviews']) != 2:

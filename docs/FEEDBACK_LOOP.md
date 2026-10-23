@@ -42,7 +42,7 @@ task and candidate details through that checkpoint.
 | --- | --- |
 | `available` | Inspect the findings and run the supplied amendment command |
 | `no_recorded_findings` | Read the completed result; new requirements use explicit operator instructions |
-| `review_completion_required` | Complete the retained review through goal recovery |
+| `review_completion_required` | Complete the retained review through goal recovery; a stopped review without an outcome supplies the recovery invocation |
 | `coding_session_required` | Identify the original coding session from retained execution evidence |
 | `unavailable` | Resolve the reported missing record or runtime configuration |
 
@@ -67,6 +67,13 @@ the command, then inspect its status with the command above. Its `predecessor`
 connects the result to the original outcome. The
 [delivery baseline](DELIVERY_BASELINE.md) traverses this existing relation to
 report both candidates, their checks and reviews.
+
+When review stops before outcome publication, the same feedback view supplies
+the task, candidate and checkpoint. `outcome_status` and `artifacts.outcome` are
+`null`. Use `continuation.invocation` to complete that review; feedback findings
+are populated from the published outcome. The
+[live validation report](LIVE_DELIVERY_VALIDATION.md) records this path with real
+native review calls and an original-session correction.
 
 ## Repeated development scenario
 

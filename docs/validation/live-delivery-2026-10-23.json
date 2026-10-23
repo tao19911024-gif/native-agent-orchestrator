@@ -1,0 +1,154 @@
+{
+  "date": "2026-10-23",
+  "scenario": "Retained conflict-response defect, anonymized replay",
+  "comparison": {
+    "inline": {
+      "input_bytes": 27612,
+      "input_tokens": 366897,
+      "cached_input_tokens": 292224,
+      "uncached_input_tokens": 74673,
+      "output_tokens": 2854
+    },
+    "referenced": {
+      "input_bytes": 17846,
+      "input_tokens": 363730,
+      "cached_input_tokens": 290048,
+      "uncached_input_tokens": 73682,
+      "output_tokens": 3350
+    }
+  },
+  "change_percent": {
+    "input_bytes": -35.3687,
+    "input_tokens": -0.8632,
+    "cached_input_tokens": -0.7446,
+    "uncached_input_tokens": -1.3271,
+    "output_tokens": 17.3791
+  },
+  "same_candidate_and_context": true,
+  "codex_stages": [
+    {
+      "stage": "Initial review",
+      "backend": "codex",
+      "configured_model": "gpt-6-astra",
+      "native_invocations": 2,
+      "input_bytes": 17846,
+      "input_tokens": 363730,
+      "cached_input_tokens": 290048,
+      "uncached_input_tokens": 73682,
+      "output_tokens": 3350
+    },
+    {
+      "stage": "Corrected candidate review",
+      "backend": "codex",
+      "configured_model": "gpt-6-astra",
+      "native_invocations": 2,
+      "input_bytes": 31346,
+      "input_tokens": 438706,
+      "cached_input_tokens": 356480,
+      "uncached_input_tokens": 82226,
+      "output_tokens": 3701
+    },
+    {
+      "stage": "Recovery-command verification",
+      "backend": "codex",
+      "configured_model": "gpt-6-astra",
+      "native_invocations": 2,
+      "input_bytes": 17184,
+      "input_tokens": 333537,
+      "cached_input_tokens": 260096,
+      "uncached_input_tokens": 73441,
+      "output_tokens": 3488
+    },
+    {
+      "stage": "Inline comparison",
+      "backend": "codex",
+      "configured_model": "gpt-6-astra",
+      "native_invocations": 2,
+      "input_bytes": 27612,
+      "input_tokens": 366897,
+      "cached_input_tokens": 292224,
+      "uncached_input_tokens": 74673,
+      "output_tokens": 2854
+    },
+    {
+      "stage": "Baseline preparation",
+      "backend": "codex",
+      "configured_model": "gpt-6.1-sol",
+      "native_invocations": 1,
+      "input_tokens": 255411,
+      "cached_input_tokens": 204288,
+      "output_tokens": 1748,
+      "uncached_input_tokens": 51123
+    },
+    {
+      "stage": "Original-session correction",
+      "backend": "codex",
+      "configured_model": "gpt-6.1-sol",
+      "native_invocations": 1,
+      "input_tokens": 288057,
+      "cached_input_tokens": 268544,
+      "output_tokens": 2245,
+      "uncached_input_tokens": 19513
+    }
+  ],
+  "claude_coordination": {
+    "stage": "Correction coordination",
+    "backend": "claude",
+    "configured_model": "claude-opus-5-5",
+    "native_invocations": 2,
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 36928,
+    "cache_read_input_tokens": 139290,
+    "output_tokens": 2980
+  },
+  "recovery": {
+    "completed_reviewer_files": 10,
+    "changed_completed_reviewer_files": 0,
+    "calls_after_recovery": 2,
+    "calls_after_completed_replay": 2,
+    "changed_files_after_completed_replay": 0,
+    "outcome": "candidate_verified",
+    "acceptance": "accepted",
+    "generated_command_source": "feedback.continuation.invocation"
+  },
+  "feedback": {
+    "same_coding_session": true,
+    "initial_record_files": 26,
+    "changed_initial_record_files": 0,
+    "final_tests_passed": 5,
+    "initial_verdicts": [
+      "BLOCK",
+      "BLOCK"
+    ],
+    "corrected_verdicts": [
+      "PASS",
+      "PASS"
+    ]
+  },
+  "delivery_summary": {
+    "container_count": 0,
+    "elapsed_observation_count": 3,
+    "invocation_count": 3,
+    "project_acceptance_counts": {
+      "accepted": 1,
+      "not_evaluated": 2
+    },
+    "review_verdict_counts": {
+      "BLOCK": 2,
+      "PASS": 4
+    },
+    "selected_dispatch_count": 0,
+    "status_counts": {
+      "candidate_verified": 2,
+      "review_blocked": 1
+    }
+  },
+  "scope": {
+    "comparison": "One candidate; two independent native review invocations per representation.",
+    "codex": "Cached input is included in input_tokens. Input and output are native usage counters across tool-loop requests.",
+    "claude": "Input, cache creation and cache read counters are separate provider fields.",
+    "interruption": "Controlled before review-1 native admission; all completed model results are real.",
+    "calls": "Native invocations, not individual provider requests.",
+    "cost": "Provider token observations; account charges not measured."
+  }
+}

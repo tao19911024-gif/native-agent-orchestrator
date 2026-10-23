@@ -214,6 +214,12 @@ def _goal_status(folder):
             latest = json.loads((folder/'manifest.json').read_bytes())
             if outcome_path.is_file() and not (latest.get('runtime_upgrades') and latest.get('state') != 'completed'):
                 return _goal_status(folder)
+            if active.get('review_checkpoint') and not (active_folder / 'outcome.json').is_file():
+                from ._foundry_goal_delivery import review_feedback
+                try:
+                    report['feedback'] = review_feedback(active_folder / 'outcome.json')
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    report['errors'].append('review feedback: ' + str(exc))
             recovered = report.get('coding_recovery') or {}
             settled = recovered.get('status') == 'explicit_continuation_available'
             return {**report, 'status': 'execution_stopped', 'controller_observation': controller,
