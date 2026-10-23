@@ -44,6 +44,10 @@ def test_completed_turns_visible_before_final_outcome_and_deduplicated(pending):
     assert row['kind'] == 'unfinished_invocation'
     assert row['usage_reference'] == manifest['coding_checkpoint']
     assert row['checkpoint_usage_observation']['manager_phase'] == 'dispatch_pending'
+    baseline = report['delivery_baseline']['invocations'][0]
+    assert baseline['task']['run_id'] == 'run'
+    assert {execution['turn_id'] for execution in baseline['coding']['executions']} == {'one', 'two'}
+    assert baseline['coding']['usage_reference'] == manifest['coding_checkpoint']
     assert any(g['kind'] == 'missing_outcome' for g in report['gaps'])
     assert report['actual_account_charge'] == 'unknown'
     efficiency = report['execution_efficiency']

@@ -104,6 +104,12 @@ def test_installed_dispatch_resume_and_replay(external, monkeypatch):
     replay = dispatch.resume_order("original-session", tree, "TASK1", "Fix own work", project=scope)
     assert replay == result and replay.replayed and not result.replayed
     assert len(launches) == 2
+    from foundry_runtime._foundry_goal_usage import task_report
+    selected = task_report([first[1].with_suffix('.receipt.json'), result[1].with_suffix('.receipt.json')])
+    baseline = selected['delivery_baseline']
+    assert baseline['summary']['selected_dispatch_count'] == 2
+    assert baseline['summary']['invocation_count'] == 0
+    assert all(row['execution']['receipt'] == row['reference'] for row in baseline['selected_dispatches'])
     observed = project_status.status(scope.path, "TASK1")
     assert len(observed["runs"]) == 2
     for row in observed["runs"]:
