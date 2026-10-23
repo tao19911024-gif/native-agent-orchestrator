@@ -10,6 +10,10 @@ The run also exposed a status gap before outcome publication. A stopped review
 now exposes its candidate, checkpoint and recorded recovery invocation through
 the existing feedback view.
 
+The subsequent [review token analysis](REVIEW_TOKEN_ANALYSIS.md) examines these
+native traces and compares a focused reading policy against the same corrected
+candidate. It reports separate matched runs and retains the measurements below.
+
 ## Workload and comparison
 
 The historical finding concerned a conflict response that omitted `commandKey`

@@ -102,6 +102,7 @@ for platform and execution settings.
 - [Review feedback and correction](docs/FEEDBACK_LOOP.md)
 - [Review context references](docs/REVIEW_CONTEXT.md)
 - [Live token, feedback and recovery validation](docs/LIVE_DELIVERY_VALIDATION.md)
+- [Review token analysis and evidence reading](docs/REVIEW_TOKEN_ANALYSIS.md)
 - [Continuation and recovery](docs/RECOVERY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)

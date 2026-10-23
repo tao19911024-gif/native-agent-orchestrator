@@ -1,5 +1,14 @@
 # Changelog
 
+## Review evidence reading — 2026-10-23
+
+- Added a checkpoint-owned reading policy that groups focused evidence reads
+  and reuses inspected content at the same candidate revision.
+- Preserved historical request rendering, complete requirement coverage and
+  request identity through review recovery and runtime-upgrade history.
+- Published native token and tool-loop measurements from the retained
+  conflict-response scenario.
+
 ## Live delivery validation and stopped-review status — 2026-10-23
 
 - Exposed task, candidate, checkpoint and recorded recovery invocation when a
