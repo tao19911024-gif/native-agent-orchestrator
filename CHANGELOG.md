@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a99 — 2026-10-24
 
 - Complete owned-process cleanup when a native root exits, then drain buffered
   output before closing pipe handles. Descendants retaining inherited output
