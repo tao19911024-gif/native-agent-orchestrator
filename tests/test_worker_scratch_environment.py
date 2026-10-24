@@ -194,6 +194,8 @@ def test_each_amendment_gets_its_own_scratch(external, tmp_path, monkeypatch, mo
 
 
 def test_artifact_answer_gets_new_scratch_after_parent_reclaimed(external, manager_io, tmp_path, monkeypatch):
+    from foundry_runtime import foundry_native_support
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
     _, scope, order, _ = external
     _, decisions = manager_io
     ambient = tmp_path/'ambient'; ambient.mkdir()
