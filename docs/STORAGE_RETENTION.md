@@ -6,6 +6,39 @@ test or research output owns its disposition. These owners use existing release
 selection, task provenance and evidence records; there is no second cleanup
 scheduler or task-state store.
 
+## Maintenance sequence
+
+Use this order for experiment closeout and release maintenance:
+
+1. Start with the creating operation's output list, completed test receipts and
+   existing dependency observations. Inspect those exact paths first. Remove
+   finished, reproducible test copies and build environments after preserving
+   commands, source revisions, results and original failures. A receipt proves
+   that its test run ended; resolve any current task or recovery references
+   before removing its temporary root.
+2. Complete storage disposition in the same operation that created the output.
+   Record each created environment or output root when it is created. At
+   closeout, record `keep`, `remove` or `archive`, the actual result, and any
+   retained dependency's owner and removal condition. Keep these records with
+   the existing experiment or release evidence. For new goals, use the existing
+   disposable-scratch declaration described below.
+3. For authorized release deletion, reuse the complete, previously verified
+   invocation: interpreter, project adapter, selection, qualified rollback,
+   evidence roots, test receipts and reviewed evidence. Confirm that its inputs
+   still describe the current operation. Save the exact invocation and pass all
+   obsolete candidates in one prune operation. Use planning separately when
+   dependencies or deletion scope still need investigation.
+4. Use that operation's scan statistics to locate remaining traversal cost.
+   Compare directory counts and timings with the prior result. Do not start
+   another archive-wide scan solely to obtain a size breakdown. Investigate the
+   largest reported root using its recorded ownership and completion evidence.
+
+Keep the native operation handle until completion and inspect its saved output.
+After an error, reconcile the previous outcome and correct the reported input
+before retrying. Do not resubmit an unchanged operation while its first instance
+is running. If the host denies deletion, record the exact path and denial; do
+not retry through another shell, executable or a directory move.
+
 ## Keep, remove, or archive
 
 | Material | Disposition |
@@ -42,7 +75,8 @@ archives containing another copy of an unchanged environment.
 
 ## Existing release maintenance command
 
-Use a selected, installed interpreter and explicit paths:
+Use a selected, installed interpreter and explicit paths. For a dependency
+investigation, run the planner:
 
 ```powershell
 & $RuntimePython -m foundry_runtime.release_selection `
@@ -55,7 +89,8 @@ closed. Add `--evidence-root` for task records outside the discovered roots.
 Use `--test-run-record` for completed pytest evidence, or `--evidence-review`
 for reviewed legacy records, as described by the command's `--help`.
 
-After resolving the reported dependencies, reuse the same command with
+After resolving the reported dependencies and authorizing deletion, reuse the
+complete invocation with
 `--prune-release <exact-obsolete-release-directory>` instead of
 `--retention-plan`. The existing mechanism refreshes its inventory. Do not
 replace it with a version-number, modification-time or blanket-directory delete.
@@ -78,7 +113,11 @@ rather than unreadable. A recreated directory is discovered on a later refresh.
 Permission errors and missing native dependencies of a record that still exists
 remain reported gaps.
 A separate planning invocation followed by pruning performs two initial full
-discoveries; a saved planning report is not a fresh dependency observation.
+discoveries; use direct pruning when the deletion scope is already authorized.
+A saved planning report is not a fresh dependency observation. Save the command
+and structured result outside the source repository. Restore all required
+evidence-root options when reusing an earlier command, including explicit
+targets of junctions that leave the registered evidence roots.
 
 Discovery reads the entire evidence tree, including nested source and test
 copies. Four bounded readers perform directory enumeration, attribute reads and
@@ -88,6 +127,14 @@ no directory-name exclusions or depth limits. Warm filesystem cache timings do
 not predict the cost of a first scan of a large archive. Keep compact test
 receipts and remove completed disposable copies as part of experiment closeout
 to avoid repeatedly scanning regenerated trees.
+
+The structured result's `scan.roots` rows report enumerated directories,
+discovered records and cumulative reader seconds for each physical evidence
+root. Aliases share one row; nested roots receive their own subtree's counts.
+Reader seconds sum work across concurrent readers and are not wall-clock time.
+During refresh, these rows describe directory enumeration; `scan.records`
+includes all known records reread by the operation, and `scan.seconds` also
+includes directory-stamp checks and dependency classification.
 
 Completed pytest receipts classify fixture manifests by their resolved path,
 so those manifest bodies need not be read. Hosted requests still require content

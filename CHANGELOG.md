@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Report directory counts, discovered records and cumulative reader time by
+  physical evidence root in release-retention results.
+- Establish an ordered storage closeout procedure: dispose of completed
+  generated output, retain primary evidence, reuse the full maintenance
+  invocation and prune authorized candidates in one operation.
+
 ## 0.1.0a100 — 2026-10-24
 
 - Allow an explicit coding-provider handoff in a managed goal while retaining

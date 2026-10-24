@@ -74,6 +74,9 @@ Complete the [storage disposition](docs/STORAGE_RETENTION.md) for environments
 and outputs created by the work. Retain verification and failure evidence;
 remove finished disposable environments and duplicate generated artifacts.
 Record any retained dependency and its removal condition.
+Record output roots as they are created and complete their disposition before
+release-retention discovery. Keep private commands, inventories and cleanup
+results with the creating operation's evidence.
 
 To verify distribution changes, build the wheel and source archive:
 

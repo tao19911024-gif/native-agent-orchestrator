@@ -60,9 +60,16 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
     # Windows resolve() opens path handles; repeating it dominated archive I/O.
     pending = [Path(p).resolve() for p in roots]
     allowed = [Path(p).resolve() for p in allowed_roots] if allowed_roots is not None else list(pending)
+    # Attribute overlapping roots to the most specific physical root. Aliases
+    # share one row, just as they share directory discovery.
+    allowed = sorted(set(allowed), key=lambda p: (-len(p.parts), str(p)))
+    root_metrics = {p: {'root': str(p), 'directories': 0, 'discovered_records': 0,
+                        'reader_seconds': 0.0} for p in allowed}
+    metrics['roots'] = list(root_metrics.values())
     seen = set()
 
     def entries_at(directory):
+        started = perf_counter()
         children, records, errors = [], [], []
         stamp = None
         try:
@@ -88,7 +95,7 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
         except (OSError, RuntimeError) as exc:
             if not (refresh and isinstance(exc, FileNotFoundError)):
                 errors.append((str(directory), exc))
-        return directory, stamp, children, records, errors
+        return directory, stamp, children, records, errors, perf_counter() - started
 
     # Only filesystem reads overlap. Classification and keep-list decisions stay
     # on the caller thread. Bounded batches avoid retaining an entire archive.
@@ -101,13 +108,19 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
                 if identity in seen:
                     continue
                 seen.add(identity)
-                if not any(directory.is_relative_to(root) for root in allowed):
+                owner = next((root for root in allowed if directory.is_relative_to(root)), None)
+                if owner is None:
                     gaps.append({'source': str(directory), 'reason': 'junction leaves known evidence roots; '
                                  'add its target explicitly to reconcile, rather than scanning unrelated directories'})
                     continue
-                batch.append(directory)
-            for directory, stamp, children, records, errors in readers.map(entries_at, batch):
+                batch.append((directory, owner))
+            for (_, owner), result in zip(batch, readers.map(entries_at, (p for p, _ in batch))):
+                directory, stamp, children, records, errors, seconds = result
                 metrics['directories'] += 1
+                cost = root_metrics[owner]
+                cost['directories'] += 1
+                cost['discovered_records'] += len(records)
+                cost['reader_seconds'] += seconds
                 # Changed known directories are separate refresh roots. Only
                 # new child trees need recursive discovery from this directory.
                 pending.extend(child for child in children if not refresh or
@@ -119,6 +132,8 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
                 for path in records:
                     metrics['records'] += 1
                     yield path
+    for row in root_metrics.values():
+        row['reader_seconds'] = round(row['reader_seconds'], 6)
 
 
 def _powershell(script, value=None):
