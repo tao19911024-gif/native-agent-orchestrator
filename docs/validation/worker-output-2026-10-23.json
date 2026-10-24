@@ -1,0 +1,329 @@
+{
+  "date": "2026-10-23",
+  "design": "A-B-B-A independent coding sessions; same task and base tree",
+  "source_tag": "v0.1.0a95",
+  "source_commit": "3abb2f21f3f6008a81c20ef0f343759fc5cd6bd0",
+  "task_sha256": "7e670c51621b29f1501445eb7b37f650fa3f03901f44c2d29313f7709b2a56c7",
+  "configured_model": "gpt-6.1-sol",
+  "effort": "high",
+  "client_version": "0.159.3",
+  "native_model_truncation_policy": {
+    "mode": "tokens",
+    "limit": 10000
+  },
+  "default_configuration_changed": false,
+  "common_independent_checks_per_run": 46,
+  "measurements": [
+    {
+      "run": "A1",
+      "tool_tokens": 3000,
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 2889344,
+      "input_tokens": 2987080,
+      "output_tokens": 15127,
+      "reasoning_output_tokens": 4632,
+      "total_tokens": 3002207,
+      "uncached_input_tokens": 97736,
+      "model_requests": 39,
+      "tool_rounds": 38,
+      "first_request_usage": {
+        "input_tokens": 29401,
+        "cached_input_tokens": 13440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 226,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 29627
+      },
+      "retained_truncation_marker_rounds": 4,
+      "initial_read_requests": 42,
+      "overlapping_initial_read_requests": 15,
+      "initial_overlap_rounds": 6,
+      "overlapping_reads_after_a_retained_truncation_marker": 12,
+      "before_first_edit": {
+        "response_count": 16,
+        "usage": {
+          "input_tokens": 868525,
+          "cached_input_tokens": 802944,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2901,
+          "reasoning_output_tokens": 926,
+          "total_tokens": 871426
+        }
+      },
+      "independent_tests_passed": 90,
+      "matched_installed_files": 91,
+      "candidate_patch_sha256": "821abd3c86c9b7b945d34f949de2bfedd7be9587e4d9e0b8f2b2d1bcc5da3473",
+      "native_session_sha256": "64d74cdb3c18d7f709c61c77b31725ac745e4a2bddcc961c1240ac96fbc32f34",
+      "read_audit_unclassified": [],
+      "before_closeout": {
+        "boundary_tool": 31,
+        "model_requests": 30,
+        "usage": {
+          "input_tokens": 2079709,
+          "cached_input_tokens": 1992960,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 9608,
+          "reasoning_output_tokens": 2811,
+          "total_tokens": 2089317
+        }
+      }
+    },
+    {
+      "run": "B1",
+      "tool_tokens": 0,
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 1732992,
+      "input_tokens": 1831799,
+      "output_tokens": 14152,
+      "reasoning_output_tokens": 4425,
+      "total_tokens": 1845951,
+      "uncached_input_tokens": 98807,
+      "model_requests": 22,
+      "tool_rounds": 21,
+      "first_request_usage": {
+        "input_tokens": 29401,
+        "cached_input_tokens": 13440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 178,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 29579
+      },
+      "retained_truncation_marker_rounds": 7,
+      "initial_read_requests": 32,
+      "overlapping_initial_read_requests": 5,
+      "initial_overlap_rounds": 3,
+      "overlapping_reads_after_a_retained_truncation_marker": 5,
+      "before_first_edit": {
+        "response_count": 6,
+        "usage": {
+          "input_tokens": 305574,
+          "cached_input_tokens": 244736,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1605,
+          "reasoning_output_tokens": 378,
+          "total_tokens": 307179
+        }
+      },
+      "independent_tests_passed": 72,
+      "matched_installed_files": 91,
+      "candidate_patch_sha256": "340ef542bfa75ae59f594ea41d43c5d081df1e60e4050be249736b221b81348c",
+      "native_session_sha256": "79e0dc7e45490d1971516c15cb75642ad3ba8037a603b6ace7bcc3629ed850a4",
+      "read_audit_unclassified": [],
+      "before_closeout": {
+        "boundary_tool": 15,
+        "model_requests": 14,
+        "usage": {
+          "input_tokens": 999512,
+          "cached_input_tokens": 915712,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 7550,
+          "reasoning_output_tokens": 2323,
+          "total_tokens": 1007062
+        }
+      }
+    },
+    {
+      "run": "B2",
+      "tool_tokens": 0,
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 1996032,
+      "input_tokens": 2082609,
+      "output_tokens": 14097,
+      "reasoning_output_tokens": 4646,
+      "total_tokens": 2096706,
+      "uncached_input_tokens": 86577,
+      "model_requests": 25,
+      "tool_rounds": 24,
+      "first_request_usage": {
+        "input_tokens": 29403,
+        "cached_input_tokens": 13440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 143,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 29546
+      },
+      "retained_truncation_marker_rounds": 6,
+      "initial_read_requests": 30,
+      "overlapping_initial_read_requests": 5,
+      "initial_overlap_rounds": 3,
+      "overlapping_reads_after_a_retained_truncation_marker": 3,
+      "before_first_edit": {
+        "response_count": 8,
+        "usage": {
+          "input_tokens": 427992,
+          "cached_input_tokens": 360064,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2554,
+          "reasoning_output_tokens": 1071,
+          "total_tokens": 430546
+        }
+      },
+      "independent_tests_passed": 74,
+      "matched_installed_files": 91,
+      "candidate_patch_sha256": "e77a0a162ef7ec8017b78abcc1965a09c4132a9cd9757fb445ac1413643465aa",
+      "native_session_sha256": "0ce1cbcbf0c4abbec536901aa19cf735b5f1bc2a6e141b77a9dca6a2c8d95f50",
+      "read_audit_unclassified": [],
+      "before_closeout": {
+        "boundary_tool": 19,
+        "model_requests": 18,
+        "usage": {
+          "input_tokens": 1336468,
+          "cached_input_tokens": 1255424,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 9005,
+          "reasoning_output_tokens": 2679,
+          "total_tokens": 1345473
+        }
+      }
+    },
+    {
+      "run": "A2",
+      "tool_tokens": 3000,
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 1755008,
+      "input_tokens": 1839460,
+      "output_tokens": 12345,
+      "reasoning_output_tokens": 3417,
+      "total_tokens": 1851805,
+      "uncached_input_tokens": 84452,
+      "model_requests": 27,
+      "tool_rounds": 26,
+      "first_request_usage": {
+        "input_tokens": 29408,
+        "cached_input_tokens": 13440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 146,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 29554
+      },
+      "retained_truncation_marker_rounds": 4,
+      "initial_read_requests": 52,
+      "overlapping_initial_read_requests": 22,
+      "initial_overlap_rounds": 10,
+      "overlapping_reads_after_a_retained_truncation_marker": 16,
+      "before_first_edit": {
+        "response_count": 13,
+        "usage": {
+          "input_tokens": 658471,
+          "cached_input_tokens": 598400,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3111,
+          "reasoning_output_tokens": 874,
+          "total_tokens": 661582
+        }
+      },
+      "independent_tests_passed": 64,
+      "matched_installed_files": 91,
+      "candidate_patch_sha256": "54a0b903b6b354e55928dc4b51c588a11fab83f289c4513a924a0b68afae254b",
+      "native_session_sha256": "87dc718eee2cc7a3b9b733626d811a1b7b6cfdeaf65445966c5484b53048be42",
+      "read_audit_unclassified": [],
+      "before_closeout": {
+        "boundary_tool": 22,
+        "model_requests": 21,
+        "usage": {
+          "input_tokens": 1295580,
+          "cached_input_tokens": 1218816,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 8766,
+          "reasoning_output_tokens": 2460,
+          "total_tokens": 1304346
+        }
+      }
+    }
+  ],
+  "aggregates": {
+    "3000": {
+      "input_tokens": 4826540,
+      "cached_input_tokens": 4644352,
+      "uncached_input_tokens": 182188,
+      "output_tokens": 27472,
+      "reasoning_output_tokens": 8049,
+      "total_tokens": 4854012,
+      "model_requests": 66,
+      "tool_rounds": 64,
+      "initial_read_requests": 94,
+      "overlapping_initial_read_requests": 37,
+      "initial_overlap_rounds": 16,
+      "retained_truncation_marker_rounds": 8,
+      "overlapping_reads_after_a_retained_truncation_marker": 28
+    },
+    "native": {
+      "input_tokens": 3914408,
+      "cached_input_tokens": 3729024,
+      "uncached_input_tokens": 185384,
+      "output_tokens": 28249,
+      "reasoning_output_tokens": 9071,
+      "total_tokens": 3942657,
+      "model_requests": 47,
+      "tool_rounds": 45,
+      "initial_read_requests": 62,
+      "overlapping_initial_read_requests": 10,
+      "initial_overlap_rounds": 6,
+      "retained_truncation_marker_rounds": 13,
+      "overlapping_reads_after_a_retained_truncation_marker": 8
+    }
+  },
+  "native_change_percent": {
+    "input_tokens": -18.8983,
+    "cached_input_tokens": -19.7084,
+    "uncached_input_tokens": 1.7542,
+    "output_tokens": 2.8283,
+    "reasoning_output_tokens": 12.6972,
+    "total_tokens": -18.7753,
+    "model_requests": -28.7879,
+    "tool_rounds": -29.6875,
+    "initial_read_requests": -34.0426,
+    "overlapping_initial_read_requests": -72.973,
+    "initial_overlap_rounds": -62.5,
+    "retained_truncation_marker_rounds": 62.5,
+    "overlapping_reads_after_a_retained_truncation_marker": -71.4286
+  },
+  "metric_definitions": {
+    "total_tokens": "Native input_tokens + output_tokens; cached input is included once within input.",
+    "reasoning_output_tokens": "A subset of output_tokens; not added a second time.",
+    "overlapping_initial_read_requests": "Get-Content requests for overlapping unchanged file ranges before the first edit; post-edit verification, searches and log reads excluded.",
+    "retained_truncation_marker_rounds": "Tool rounds with a marker in retained output. This does not enumerate later native history clipping.",
+    "overlapping_reads_after_a_retained_truncation_marker": "Overlap with an earlier requested range whose retained tool result carries a truncation marker; temporal association, not a count of model-visible lost ranges.",
+    "before_first_edit": "Actual native responses completed before the first edit request.",
+    "before_closeout": "Actual responses before the first storage-disposition command; secondary phase comparison."
+  },
+  "decision": "Retain the a96 worker default of 3000; preserve explicit project and historical settings.",
+  "comparability": {
+    "normalization": "Only unique project ID and run directory label; task text, rule contents and environment instructions retained.",
+    "normalized_user_messages_sha256": "4b7b618f74f928719abdd90bf202d626ee375f1c91b012638f01d06f6b67b3d4",
+    "dependencies_sha256": "190a71a5bc9aad60d6a092bf5b81f69fe0ba8e76c84126866ede7ec81a405046",
+    "rendered_task_bytes": 3043,
+    "base_tree": "c5fa13afdb07edeaa283743c0bca1751abd68985",
+    "other_settings": {
+      "bash_chars": 12000,
+      "compact_percent": 90,
+      "compact_tokens": 0,
+      "context_tokens": 300000
+    }
+  },
+  "common_independent_checks": {
+    "existing": 39,
+    "held_out": 7,
+    "per_run": 46,
+    "baseline_held_out_failures": 7,
+    "accepted_a96_held_out_passes": 7
+  },
+  "phase_boundary_tools": {
+    "A1": {
+      "first_edit": 17,
+      "storage": 31
+    },
+    "B1": {
+      "first_edit": 7,
+      "storage": 15
+    },
+    "B2": {
+      "first_edit": 9,
+      "storage": 19
+    },
+    "A2": {
+      "first_edit": 14,
+      "storage": 22
+    }
+  }
+}
