@@ -7,16 +7,24 @@ def register(folder, manifest):
     root = Path(folder).resolve() / 'disposable'
     root.mkdir()  # A pre-existing directory has no new disposal declaration.
     manifest['disposable_scratch'] = {'path': str(root), 'owner': manifest['run_id']}
+    temporary, pytest = root / 'tmp', root / 'pytest'
+    temporary.mkdir(); pytest.mkdir()
+    return {'TMPDIR': str(temporary), 'TMP': str(temporary), 'TEMP': str(temporary),
+            'PYTEST_DEBUG_TEMPROOT': str(pytest)}
 
 
 def prompt(body, manifest):
     scratch = manifest.get('disposable_scratch')
     if scratch is None:
         return body
+    environment = (manifest.get('launch_context') or {}).get('worker_environment')
+    hint = ('Workers inherit TMPDIR/TMP/TEMP and the default pytest temporary parent here. '
+            'Keep any explicit pytest --basetemp under this directory. ' if environment else
+            'Set TMP/TEMP and pytest --basetemp in your test commands to child directories here. ')
     return (body + '\n\nDISPOSABLE TASK STORAGE\n'
             f"Directory: {scratch['path']}\n"
             'Use this directory for reproducible test, build and database scratch. '
-            'Set TMP/TEMP and pytest --basetemp in your test commands to child directories here. '
+            + hint +
             'Keep reports, original failure logs, deliverables and recovery inputs outside this directory. '
             'Move any required evidence out before requesting review or delivering artifacts. '
             'The goal owner removes this directory after candidate verification or artifact delivery. '

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.0a99 — 2026-10-24
+
+- Complete owned-process cleanup when a native root exits, then drain buffered
+  output before closing pipe handles. Descendants retaining inherited output
+  handles no longer hold manager or execution completion open.
+- Preserve the prior coding checkpoint before publishing its replacement in
+  normal execution and recovery. Interrupted multi-turn publication can recover
+  completed worker feedback without replaying the worker.
+- Preserve declared review-author exclusions during standalone review recovery
+  and provider handoff.
+- Apply the existing explicit task deadline to project review and acceptance
+  hooks, including admission and owned-process cleanup.
+- Discover new goal and hosted-request records in changed evidence directories
+  during release pruning, while reusing unchanged directory discovery.
+- Retain an explicit native wait interval across hosted scheduler submission.
+- Resolve new-goal provider and disposable-storage defaults through the same
+  project contract for descriptors and adapters. Explicit role selections and
+  retained task configuration preserve their precedence.
+- Pass registered temporary directories to Codex exec, Codex app-server and
+  Claude coding workers through the frozen launch context. Standard temporary
+  files and pytest's default temporary directories use the owning goal's storage.
+
 ## 0.1.0a98 — 2026-10-23
 
 - Add opt-in disposable storage for new goals, retained through review and

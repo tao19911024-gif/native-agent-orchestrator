@@ -10,6 +10,7 @@ from pathlib import Path
 import time
 import uuid
 from ._executor_lifecycle import OwnedProcess
+from . import _task_deadline
 
 
 def command_references(argv, workspace):
@@ -45,9 +46,11 @@ def observe(selected, operation, folder, *, task, subject, env):
             raise ValueError("project hook argv must be a nonempty argv list")
         with request_path.open("rb") as stdin, response_path.open("xb") as stdout, (folder / "stderr.txt").open("xb") as stderr:
             try:
+                _task_deadline.check()
                 process = OwnedProcess.spawn(argv, cwd=str(selected.workspace), stdin=stdin, stdout=stdout,
                     stderr=stderr, attempt_id=invocation, env=env)
                 while (rc := process.poll()) is None:
+                    _task_deadline.check()
                     time.sleep(.05)
             finally:
                 if process is not None:

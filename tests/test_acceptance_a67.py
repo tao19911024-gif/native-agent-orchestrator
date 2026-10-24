@@ -65,7 +65,8 @@ def test_failed_closure_recovery_retries_only_review(external, tmp_path, monkeyp
 
 
 @pytest.mark.parametrize('linked', [False, True, 'failed_closure'])
-def test_standalone_review_amendment_staffing(external, tmp_path, monkeypatch, capsys, linked):
+@pytest.mark.parametrize('declared_scratch', [False, True])
+def test_standalone_review_amendment_staffing(external, tmp_path, monkeypatch, capsys, linked, declared_scratch):
     tree, scope, order, _ = external
     head = git(tree, 'rev-parse', 'HEAD')
     review = tmp_path/'review-only'; review.mkdir()
@@ -82,8 +83,15 @@ def test_standalone_review_amendment_staffing(external, tmp_path, monkeypatch, c
     goal._write(unrelated/'outcome.json', {'candidate_commit': head, 'coding_session': 'another-session'})
     if linked:
         prior = tmp_path/'goal-original'; prior.mkdir()
-        goal._write(prior/'manifest.json', {**manifest, 'delivery_context': {'mode': 'goal'},
-                    'manager_state': state, 'native_team': team, 'coding_launcher': 'app-server'})
+        source = {**manifest, 'delivery_context': {'mode': 'goal'},
+                  'manager_state': state, 'native_team': team, 'coding_launcher': 'app-server'}
+        if declared_scratch:
+            from foundry_runtime import _goal_scratch, _launch_context
+            source['run_id'] = 'fixture-original'
+            environment = _goal_scratch.register(prior, source)
+            source['launch_context'] = {**_launch_context.capture(enable_index=False),
+                                        'worker_environment': environment}
+        goal._write(prior/'manifest.json', source)
         result = {'candidate_commit': head, 'coding_session': 'fixture-session'}
         if linked == 'failed_closure':
             result.pop('candidate_commit')
@@ -102,9 +110,13 @@ def test_standalone_review_amendment_staffing(external, tmp_path, monkeypatch, c
         assert options['manager_state'] == state
         assert options['native_team'] == team
         assert options['execution_decision']['staffing_goal']['path'].endswith('manifest.json')
+        if declared_scratch:
+            assert options['launch_context'] == source['launch_context']
     else:
         assert options['manager_profile'] == 'opus'
         assert options['task_staffing']['kind'] == 'small'
+    if not linked or not declared_scratch:
+        assert 'worker_environment' not in (options.get('launch_context') or {})
     rows = [json.loads(line.split(': ', 1)[1]) for line in capsys.readouterr().err.splitlines()
             if line.startswith('FOUNDRY COMPUTE: ')]
     assert rows[0]['manager']['model'] == 'claude-opus-5-5'

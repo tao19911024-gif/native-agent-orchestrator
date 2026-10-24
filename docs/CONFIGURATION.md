@@ -17,6 +17,7 @@ execution before starting a task, and inspect it with `--foundry-project check`.
 | `execution` | Execution owner, preflight command, and optional project observation hooks |
 | `launch` | Per-project native launch settings |
 | `default_provider` | Optional `claude` or `codex` coding default for new Foundry goals |
+| `default_disposable_scratch` | Optional boolean enabling registered disposable storage for new goals; omitted defaults to `false` |
 | `history_roots` | Optional directory references used by historical recovery discovery |
 
 Registration selects `AGENTS.md` when present. Repeat `--project-rule` to choose
@@ -39,11 +40,13 @@ selects Claude coding and an adaptive Claude team, and reports `project` as the
 coding/correction source and team backend source. `--provider codex` overrides
 the project setting. Without `default_provider`, task-kind behavior is unchanged.
 
-This default applies to new descriptor-based goals. Direct dispatch, standalone
-review, amendments and recovery retain their existing selection paths. Create a
-separate descriptor for a changed new-work policy; preserve the descriptor bytes
-and settings referenced by existing tasks. Project adapters continue to own their
-own entry policy.
+Descriptors and project adapters expose the same optional `default_provider`
+and `default_disposable_scratch` fields through `ProjectExecution` and
+`goal_defaults`. Adapters without those attributes retain the existing defaults.
+These defaults apply only to new goals. Direct dispatch, standalone review,
+amendments, recovery and runtime boundary continuations retain their recorded
+configuration. Preserve descriptor bytes and settings referenced by existing tasks
+when changing the policy for new work.
 
 The project execution prompt directs workers to read rule entries once, reuse
 unchanged material already in context, and locate task-relevant sections in
@@ -98,6 +101,12 @@ or `not_evaluated`. Each invocation retains its request, response, stderr,
 process cleanup, and observation. The hook contract is defined by
 [`observe`](../src/foundry_runtime/_project_hooks.py).
 
+An explicit task deadline also applies to these hooks. A deadline reached before
+admission prevents the hook from starting; a deadline reached while it runs
+triggers the existing owned-process cleanup and records a `not_evaluated`
+observation with the deadline error. Omitting a task deadline leaves hook duration
+unbounded by a task clock.
+
 Hooks observe produced evidence. The coding role runs tests and creates the
 candidate; the project observation reports the acceptance decision.
 
@@ -141,9 +150,11 @@ positive limit, including the earlier default of 3,000 tokens. Set
 
 ## Provider selection
 
-New goals can opt into managed disposable storage with `--disposable-scratch`.
-The runtime registers a fresh directory under that goal's evidence directory
-and supplies it in worker instructions. See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals)
+New goals can opt into managed disposable storage with `--disposable-scratch`
+or the project's `default_disposable_scratch: true`. The runtime registers a fresh
+directory under that goal's evidence directory, supplies it in worker instructions
+and records the worker's temporary-directory environment in its launch context.
+See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals)
 for completion, recovery, report retention and cleanup accounting.
 
 `--provider codex` or `--provider claude` selects the provider for a new task.

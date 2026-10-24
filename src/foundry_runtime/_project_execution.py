@@ -50,6 +50,14 @@ class ProjectExecution:
         from ._project_context import ProjectContext
         return ProjectContext.descriptor_context(self)
 
+    @property
+    def default_provider(self):
+        return self.project.get('default_provider')
+
+    @property
+    def default_disposable_scratch(self):
+        return self.project.get('default_disposable_scratch', False)
+
     def execution_profile(self, provider):
         return self.context.record()["execution_profiles"][provider]
 
@@ -189,6 +197,12 @@ class ProjectExecution:
             "stderr": result.stderr}, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
         if result.returncode:
             raise ValueError("project preflight did not pass; see " + str(receipt))
+
+
+def goal_defaults(project):
+    """Read new-goal defaults from descriptors or their project-owned adapters."""
+    return {'provider': getattr(project, 'default_provider', None),
+            'disposable_scratch': getattr(project, 'default_disposable_scratch', False)}
 
 
 def validate_execution(project):

@@ -61,6 +61,8 @@ def load(path):
         validate_project_launch(value["launch"])
     if 'default_provider' in value and value['default_provider'] not in ('codex', 'claude'):
         raise ValueError('default_provider must be codex or claude')
+    if 'default_disposable_scratch' in value and type(value['default_disposable_scratch']) is not bool:
+        raise ValueError('default_disposable_scratch must be a boolean')
     return value
 
 

@@ -63,6 +63,20 @@ def held_exit(self, *args):
 ExecutionIntent.__exit__ = held_exit
 ''' % str(release) + script
         script = 'try:\n    exec(' + repr(script) + ')\nfinally:\n    import time; time.sleep(60)\n'
+    # Observe the published active boundary, not the directory created before
+    # its first journal event. The controller owns journal publication.
+    ready = tmp_path / 'controller-active'
+    script = '''
+from pathlib import Path
+from foundry_runtime._execution_intent import ExecutionIntent
+original_append = ExecutionIntent._append
+def observed_append(self, *args, **kwargs):
+    result = original_append(self, *args, **kwargs)
+    if self.state == 'active' and (%r != 'app-server' or self._record.get('turn_binding')):
+        Path(%r).touch()
+    return result
+ExecutionIntent._append = observed_append
+''' % (backend, str(ready)) + script
     with (tmp_path / 'controller.log').open('wb') as log:
         controller_python = os.environ.get('FOUNDRY_TEST_STOP_PYTHON', sys.executable)
         isolation = ['-I'] if os.environ.get('FOUNDRY_TEST_STOP_PYTHON') else []
@@ -73,6 +87,10 @@ ExecutionIntent.__exit__ = held_exit
             deadline = time.monotonic() + 15
             row = None
             while time.monotonic() < deadline:
+                if not ready.exists():
+                    assert proc.poll() is None, (tmp_path/'controller.log').read_text(errors='replace')
+                    time.sleep(.1)
+                    continue
                 for folder in intents.glob('*'):
                     row, _, _ = ExecutionIntent.read_history(folder, task_key='TASK1')
                     if row['state'] == 'active' and (backend != 'app-server' or row.get('turn_binding')):

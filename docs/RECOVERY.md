@@ -100,12 +100,28 @@ For a goal, use its recovery entry to reconcile completed coding and return
 control to the goal controller. The goal status and recovery preflight identify
 the relevant checkpoint and native call.
 
+Worker checkpoint replacement preserves the preceding bytes by their recorded
+hash until the new manifest reference is durable. Recovery after an interrupted
+publication reconciles the completed worker from its dispatch evidence and
+returns its feedback to the retained manager without launching that worker again.
+
+Registered worker temporary directories are retained in the launch context and
+reused when continuing within the same goal. A continuation or amendment that
+creates a new goal directory inherits the recorded storage policy and binds its
+own directory when the predecessor has `worker_environment`; a new opt-in flag
+is not required. Recovery does not apply current project defaults to an existing
+goal. Historical contexts without a worker environment keep their recorded behavior.
+
 ## Runtime and role transitions
 
 Ordinary recovery routes through the recorded interpreter. Runtime upgrades use
 `--upgrade-runtime` at a settled goal boundary. Provider or role transfers use
 `--handoff-provider`, `--handoff-role`, and their retained recovery inputs.
 Inspect `--help` and the exact task's recovery advice for these operations.
+
+Standalone review keeps its declared author-model exclusions when reviewers
+resume or transfer providers. Select a reviewer outside those recorded authors;
+the same independence rule applies before issuing the resumed review request.
 
 Execution and recovery contracts are implemented by
 [`resume_argv` and `status`](../src/foundry_runtime/_project_status.py),

@@ -1004,19 +1004,28 @@ released. A completed model turn is never proof of process cleanup.
     done, expired, stopped = threading.Event(), threading.Event(), threading.Event()
     watcher = None
 
+    def drain_output():
+        if app is not None:
+            deadline = time.monotonic() + 2
+            for thread in (app._stdout_thread, app._stderr_thread):
+                if thread.ident is not None:
+                    thread.join(timeout=max(0, deadline - time.monotonic()))
+
     def stop_owned():
         nonlocal receipt, cleanup_elapsed
         with cleanup_lock:
             if receipt is None:
                 started = time.monotonic()
                 try:
-                    receipt = process.stop_and_verify(drain_seconds=0, kill_seconds=2)
+                    receipt = process.stop_and_verify(drain_seconds=0, kill_seconds=2,
+                                                      drain_output=drain_output)
                     if (not receipt.cleanup_verified and receipt.job_active_processes == 0
                             and not receipt.root_exited):
                         # Windows Job accounting can reach zero before the root
                         # handle signals exit. Keep custody while that exit settles;
                         # this is cleanup observation, not a model-call timeout.
-                        receipt = process.stop_and_verify(drain_seconds=30, kill_seconds=0)
+                        receipt = process.stop_and_verify(drain_seconds=30, kill_seconds=0,
+                                                          drain_output=drain_output)
                 except BaseException as error:
                     receipt = CleanupReceipt(
                         lease.attempt_id, process.pid, process.creation_time,
@@ -1029,6 +1038,15 @@ released. A completed model turn is never proof of process cleanup.
     def watch(deadline):
         try:
             while not done.is_set():
+                if (app is not None and app._stdout_thread.ident is not None
+                        and app._stderr_thread.ident is not None):
+                    # The root can exit during any startup RPC or admitted turn.
+                    # Reader EOF may still depend on ending its owned descendants.
+                    with cleanup_lock:
+                        root_exited = process.poll() is not None
+                    if root_exited:
+                        stop_owned()
+                        return
                 cause = app.expiration() if app is not None else (
                     'overall' if deadline is not None and time.monotonic() >= deadline else None)
                 if cause:
@@ -1064,12 +1082,13 @@ released. A completed model turn is never proof of process cleanup.
         log_handle.flush()
         os.fsync(log_handle.fileno())
         from ._task_deadline import check
+        from ._launch_context import worker_environment
         check()
         process = process_factory(
             coding_argv(codex, "app-server", workspace=worktree, **selection, **team_kwargs(native_team), execution_policy=execution_policy, launch_context=launch_context), cwd=str(worktree),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cleanup_path=log.with_suffix('.cleanup.json'),
-            attempt_id=lease.attempt_id, env=codex_env(codex),
+            attempt_id=lease.attempt_id, env=worker_environment(codex_env(codex), launch_context),
         )
         app = AppServer(process, log_handle, deadline=deadline, policy=policy)
         app.process_completion_wait = (native_team or {}).get('process_completion_wait') == 1
@@ -1209,8 +1228,8 @@ released. A completed model turn is never proof of process cleanup.
         raise failure
     if cleanup_errors:
         raise cleanup_errors[0]
-    # Recheck the notifications actually observed before reader exit. Owned
-    # cleanup closes streams before join; this does not prove buffered-byte drain.
+    # Recheck the notifications observed while owned cleanup drained the readers;
+    # root exit alone never establishes a native terminal result.
     terminal = app.terminal_observation()
     rc = 0 if terminal["params"]["turn"]["status"] == "completed" else 1
     _write_handle(log.with_suffix(".terminal.json"), {

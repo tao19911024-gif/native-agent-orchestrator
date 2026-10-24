@@ -112,17 +112,6 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
     """Close a transport-cleanup race and restore the existing manager boundary."""
     from ._execution_intent import ExecutionIntent
     path, journal, record, previous = retained_dispatch(owner, folder, manifest)
-    prior = manifest.get('coding_checkpoint')
-    if prior and publish:
-        archived = folder / ('coding-checkpoint-' + prior['sha256'] + '.json')
-        if not archived.exists():
-            import os
-            raw = owner.goal_usage._reference(prior)
-            temporary = archived.with_suffix('.tmp')
-            with temporary.open('wb') as stream:
-                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
-            os.replace(temporary, archived)
-        owner.goal_usage._reference({**prior, 'path': str(archived)})
     log = path.with_name(path.name.removesuffix('.package.json') + '.log')
     record = ExecutionIntent.settle_completed_turn(journal.parents[3], manifest['tag'], record['frozen'],
         intent_id=record['intent_id'], log=log)
@@ -136,17 +125,12 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
         'returncode': rc, 'evidence': [*(previous or {}).get('evidence', []), *facts],
         'coding_usage': {'managed_turns': [*((previous or {}).get('coding_usage') or {}).get('managed_turns', []),
                                          owner.goal_usage.capture(log, manifest['tag'])]}}
-    checkpoint_path = Path(checkpoint_path) if checkpoint_path is not None else folder / 'coding-checkpoint.json'
-    owner._write(checkpoint_path, checkpoint)
     from ._goal_intervention import carry_events
-    manifest.pop('pending_dispatch', None)
-    manifest.update(coding_checkpoint=owner._fact(checkpoint_path),
-        manager_phase='feedback_pending', manager_packet=carry_events(manifest, {
+    manifest.update(manager_phase='feedback_pending', manager_packet=carry_events(manifest, {
             'stage': 'worker_returned', 'run_id': manifest['run_id'], 'coding_session': session,
             'worker_evidence': facts, 'returncode': rc,
             'observed_head': owner._git(manifest['worktree'], 'rev-parse', 'HEAD').decode().strip()}))
-    if publish:
-        owner._write(folder / 'manifest.json', manifest)
+    owner._publish_coding_checkpoint(folder, manifest, checkpoint, checkpoint_path=checkpoint_path, publish=publish)
     return manifest
 
 
