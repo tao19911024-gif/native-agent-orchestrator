@@ -201,8 +201,13 @@ class ProjectExecution:
 
 def goal_defaults(project):
     """Read new-goal defaults from descriptors or their project-owned adapters."""
-    return {'provider': getattr(project, 'default_provider', None),
-            'disposable_scratch': getattr(project, 'default_disposable_scratch', False)}
+    provider = getattr(project, 'default_provider', None)
+    scratch = getattr(project, 'default_disposable_scratch', False)
+    if provider not in (None, 'codex', 'claude'):
+        raise ValueError('default_provider must be codex or claude')
+    if type(scratch) is not bool:
+        raise ValueError('default_disposable_scratch must be a boolean')
+    return {'provider': provider, 'disposable_scratch': scratch}
 
 
 def validate_execution(project):

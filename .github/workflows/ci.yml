@@ -71,6 +71,7 @@ jobs:
             tests/test_goal_checkpoint_publication.py tests/test_review_authorship_recovery.py `
             tests/test_project_hooks_deadline.py tests/test_root_exit_cleanup.py `
             tests/test_worker_scratch_environment.py `
+            tests/test_managed_coding_handoff.py tests/test_artifact_directories.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
             tests/test_acceptance_a96.py tests/test_acceptance_a69.py tests/test_acceptance_a67.py `
             --junitxml ci-results/pytest.xml -q

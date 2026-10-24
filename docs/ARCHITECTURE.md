@@ -62,6 +62,12 @@ an ambiguous assignment through its bound native input, frozen request digest
 and current decision. The goal preserves failed return codes and passes settled
 feedback to the manager on explicit recovery before further worker dispatch.
 
+An explicit coding-provider transfer uses the existing answer continuation and
+retained manager input. Pending transfer options survive interruption before
+dispatch. Normal return and completed-dispatch recovery both consume those
+options when publishing the replacement worker's session; later assignments
+resume that session through the same manager.
+
 An exited native root initiates cleanup of its owned process group. The existing
 output readers drain buffered bytes after owned writers exit and before their
 handles close. Process exit, protocol terminal and verified cleanup remain

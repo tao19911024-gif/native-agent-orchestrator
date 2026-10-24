@@ -73,6 +73,10 @@ added roots (including new roots nested under an already scanned root) and merge
 their records before considering removal. Reordered roots do not
 restart discovery; removing a registration does not discard its already
 observed dependencies. This discovery state lives only within the operation.
+An already observed directory or record removed between refreshes is absent,
+rather than unreadable. A recreated directory is discovered on a later refresh.
+Permission errors and missing native dependencies of a record that still exists
+remain reported gaps.
 A separate planning invocation followed by pruning performs two initial full
 discoveries; a saved planning report is not a fresh dependency observation.
 
@@ -100,6 +104,10 @@ project descriptor or adapter's `default_disposable_scratch` to `true`, to regis
 directory; it does not adopt an existing directory. The option applies to the
 new goal only. Recovery uses the recorded declaration, and historical goals
 without that declaration retain their existing storage behavior.
+
+Use `--no-disposable-scratch` on a new goal to override a project's enabled
+default for that invocation. Both explicit storage flags apply only to new
+goals; recovery and amendment preserve their recorded policy.
 
 The worker receives the exact directory in its execution instructions. New
 registrations create `tmp` and `pytest` children and freeze `TMPDIR`, `TMP` and

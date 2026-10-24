@@ -126,6 +126,7 @@ def main(argv=None, *, project_adapter=None) -> int:
 def _selected_main(owner, a, ap, project, project_adapter):
     from .foundry_entry import handle_mode
     a.launcher_explicit = a.launcher is not None
+    a.disposable_scratch_explicit = a.disposable_scratch is not None
     # Only new goal coding inherits project defaults. Explicit selectors
     # and all recorded continuations keep their existing resolution path.
     from ._project_execution import goal_defaults
@@ -133,7 +134,8 @@ def _selected_main(owner, a, ap, project, project_adapter):
         if a.foundry_goal and not (a.amend_from or a.recover_goal or getattr(a, '_boundary_continuation', None)) else {})
     a.project_default_provider = (defaults.get('provider')
         if not any((a.provider, a.launcher, a.compute_profile, a.coding_model, a.auto_amend_model)) else None)
-    a.disposable_scratch = a.disposable_scratch or defaults.get('disposable_scratch', False)
+    if a.disposable_scratch is None:
+        a.disposable_scratch = defaults.get('disposable_scratch', False)
     if a.provider == "codex" and a.launcher == "claude":
         ap.error("--provider codex cannot use --launcher claude")
     if a.launcher == "claude" and a.provider is None:

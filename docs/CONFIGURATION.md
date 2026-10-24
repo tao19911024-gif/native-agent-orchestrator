@@ -43,6 +43,9 @@ the project setting. Without `default_provider`, task-kind behavior is unchanged
 Descriptors and project adapters expose the same optional `default_provider`
 and `default_disposable_scratch` fields through `ProjectExecution` and
 `goal_defaults`. Adapters without those attributes retain the existing defaults.
+Adapter values follow the same provider and boolean contracts; invalid values
+are reported during new-goal configuration. Use `--no-disposable-scratch` to
+override an enabled project storage default for one new goal.
 These defaults apply only to new goals. Direct dispatch, standalone review,
 amendments, recovery and runtime boundary continuations retain their recorded
 configuration. Preserve descriptor bytes and settings referenced by existing tasks

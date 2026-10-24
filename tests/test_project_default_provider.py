@@ -19,6 +19,19 @@ def adapter_for(scope, tmp_path, **defaults):
         **defaults)
 
 
+@pytest.mark.parametrize('defaults,field', [
+    ({'default_provider': 'Claude'}, 'default_provider'),
+    ({'default_provider': lambda: 'claude'}, 'default_provider'),
+    ({'default_disposable_scratch': 'false'}, 'default_disposable_scratch'),
+    ({'default_disposable_scratch': 1}, 'default_disposable_scratch'),
+])
+def test_adapter_defaults_reject_invalid_contract_values(defaults, field):
+    from types import SimpleNamespace
+    from foundry_runtime._project_execution import goal_defaults
+    with pytest.raises(ValueError, match=field):
+        goal_defaults(SimpleNamespace(**defaults))
+
+
 @pytest.mark.parametrize('default,flags,kind,backend,source', [
     ('claude', [], 'cross-module', 'claude', 'project'),
     ('claude', ['--provider', 'codex'], 'cross-module', 'codex', 'explicit'),
@@ -110,6 +123,7 @@ def test_adapter_goal_staffing_uses_project_default(external, tmp_path, capsys, 
 
 @pytest.mark.parametrize('adapter_mode', [False, True])
 @pytest.mark.parametrize('default,flags,enabled', [(True, [], True), (False, [], False),
+                                                 (True, ['--no-disposable-scratch'], False),
                                                  (False, ['--disposable-scratch'], True)])
 def test_new_goal_inherits_project_disposable_scratch(external, tmp_path, monkeypatch,
                                                      adapter_mode, default, flags, enabled):

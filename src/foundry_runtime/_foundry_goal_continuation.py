@@ -120,8 +120,12 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
     rc = record['returncode']
     facts = [v for v in record['evidence'].values() if v is not None]
     session = record['turn_binding']['thread_id']
+    options = dict(manifest['manager_start']['options'])
+    # The settled dispatch is the replacement worker. Its next turn resumes
+    # this session even if publication stopped before consuming the transfer.
+    options.pop('handover', None)
     checkpoint = {**{k: manifest[k] for k in ('order', 'run_id', 'worktree', 'base_commit')},
-        **manifest['manager_start'], 'schema_version': 1, 'coding_session': session,
+        **manifest['manager_start'], 'options': options, 'schema_version': 1, 'coding_session': session,
         'returncode': rc, 'evidence': [*(previous or {}).get('evidence', []), *facts],
         'coding_usage': {'managed_turns': [*((previous or {}).get('coding_usage') or {}).get('managed_turns', []),
                                          owner.goal_usage.capture(log, manifest['tag'])]}}
@@ -255,7 +259,7 @@ def continue_coding(owner, order, folder, manifest, answer, *, team_profile=None
     options = dict(checkpoint["options"])
     if manifest.get('task_staffing'):
         options['task_staffing'] = dict(manifest['task_staffing'])
-    if manager_input:
+    if manager_input or (target_provider and manifest.get('manager_state') is not None):
         continuation['manager_input'] = owner._fact(folder / 'manifest.json')
         options.update(manager_state=manifest['manager_state'], execution_decision=manifest['execution_decision'])
     if (manifest.get('project_record') is not None
@@ -435,8 +439,6 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
     source = "claude" if options.get("coding_launcher") == "claude" else "codex"
     if source == provider and not migrate_runtime:
         raise ValueError("handoff target is the current provider; omit --handoff-provider to resume")
-    if options.get("manager_state") is not None or manifest.get("manager_state") is not None:
-        raise ValueError("this handoff changes the coding worker only; retain the recorded manager recovery path")
     cleanup = [json.loads(Path(f["path"]).read_bytes()) for f in checkpoint["evidence"]
                if f["path"].endswith(".cleanup.json")]
     if not cleanup or not all(c.get("cleanup_verified") is True and c.get("root_exited") is True

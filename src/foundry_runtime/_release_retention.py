@@ -83,9 +83,11 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
                         elif entry.name in ('manifest.json', 'request.json'):
                             records.append(Path(entry.path))
                     except (OSError, RuntimeError) as exc:
-                        errors.append((entry.path, exc))
+                        if not (refresh and isinstance(exc, FileNotFoundError)):
+                            errors.append((entry.path, exc))
         except (OSError, RuntimeError) as exc:
-            errors.append((str(directory), exc))
+            if not (refresh and isinstance(exc, FileNotFoundError)):
+                errors.append((str(directory), exc))
         return directory, stamp, children, records, errors
 
     # Only filesystem reads overlap. Classification and keep-list decisions stay
@@ -349,6 +351,10 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
             name, before = item
             try:
                 return name, Path(name).stat().st_mtime_ns != before, None
+            except FileNotFoundError:
+                # Retain the prior stamp so recreation is observed on the next
+                # refresh; removed evidence has no present directory to read.
+                return name, False, None
             except OSError as exc:
                 return name, False, str(exc)
 
@@ -467,7 +473,9 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
                 unknown.append({'source': str(path), 'reason': 'unfinished goal lacks authoritative runtime provenance; '
                     'no trustworthy activation/lifetime interval, so every installed release is a possible dependency'})
         except (OSError, ValueError, TypeError, AttributeError) as exc:
-            gaps.append({'source': str(path), 'reason': 'unreadable evidence: ' + str(exc)})
+            if not (refreshing and isinstance(exc, FileNotFoundError)
+                    and exc.filename is not None and Path(exc.filename) == path):
+                gaps.append({'source': str(path), 'reason': 'unreadable evidence: ' + str(exc)})
 
     # A long archive scan must not carry a retired registration across a reopen.
     if project_adapter is not None:

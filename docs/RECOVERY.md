@@ -119,6 +119,16 @@ Ordinary recovery routes through the recorded interpreter. Runtime upgrades use
 `--handoff-provider`, `--handoff-role`, and their retained recovery inputs.
 Inspect `--help` and the exact task's recovery advice for these operations.
 
+A settled failed coding turn in a managed goal can transfer with
+`--handoff-provider claude --handoff-role coding --prompt-file <answer>`
+through the goal's existing `--recover-goal` entry. The answer continuation
+retains the manager's native session and presents the failed worker's evidence
+before its next decision. The replacement coding provider starts a new native
+worker session; subsequent assignments resume that session. The original goal
+and its evidence remain unchanged. The prepared transfer is recorded in the
+existing execution options and consumed when the replacement dispatch settles,
+including recovery after interrupted checkpoint publication.
+
 Standalone review keeps its declared author-model exclusions when reviewers
 resume or transfer providers. Select a reviewer outside those recorded authors;
 the same independence rule applies before issuing the resumed review request.
