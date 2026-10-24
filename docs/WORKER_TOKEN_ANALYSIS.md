@@ -130,6 +130,8 @@ Retain the a96 worker default of 3,000 and preserve existing explicit project
 values. The two paired totals disagree, while the reduction in initial rereads
 is consistent. The next bounded optimization target is the task's initial
 guidance and source-reading scope, using the existing reading instructions.
+The [scoped-reading follow-up](WORKER_READING_ANALYSIS.md) implements that target
+through the existing project prompt and records two further same-task runs.
 The evidence does not support a universal worker switch based on this task.
 
 Reviewer defaults retain their separately measured native setting. Manager

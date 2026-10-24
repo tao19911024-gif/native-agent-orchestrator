@@ -141,7 +141,15 @@ class ProjectExecution:
         return (text + "\n\nPROJECT EXECUTION CONTEXT\n" + json.dumps({
             "project_id": self.project["project_id"], "workspace": str(self.workspace),
             "rule_sources": references}, ensure_ascii=False) +
-            "\nRead the project rule entries and follow their references before editing. "
+            "\nRead the project rule entries before editing, reusing unchanged entries already "
+            "present in context. Follow referenced guidance for the current task: locate relevant "
+            "headings or symbols first, then read the required sections and source ranges. Expand "
+            "when evidence is missing or the project requires full coverage. Keep the combined "
+            "returned text of each tool call within its output budget; separate per-command limits "
+            "do not enlarge the enclosing call's budget. Avoid bundling whole documents and source "
+            "files into one response. Preserve large results in task evidence and return the needed "
+            "excerpts with their paths and ranges. After truncation, retrieve only the missing "
+            "ranges needed for the task; reuse portions already received until they change. "
             "The order defines this task; the project's own rules define tests, review, "
             "handoff and integration. Do not substitute the tool repository's policies. "
             "Report evidence and remaining work; process completion is not project acceptance.\n")

@@ -1,0 +1,321 @@
+{
+  "runs": [
+    {
+      "run": "A1",
+      "group": "baseline",
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 2889344,
+      "input_tokens": 2987080,
+      "output_tokens": 15127,
+      "reasoning_output_tokens": 4632,
+      "total_tokens": 3002207,
+      "uncached_input_tokens": 97736,
+      "model_requests": 39,
+      "initial_read_requests": 42,
+      "initial_overlapping_reads": 15,
+      "initial_overlap_rounds": 6,
+      "overlaps_after_retained_truncation": 12,
+      "before_first_edit": {
+        "response_count": 16,
+        "usage": {
+          "input_tokens": 868525,
+          "cached_input_tokens": 802944,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2901,
+          "reasoning_output_tokens": 926,
+          "total_tokens": 871426
+        }
+      },
+      "read_groups": {
+        "guidance": {
+          "reads": 20,
+          "overlaps": 12
+        },
+        "other": {
+          "reads": 2,
+          "overlaps": 0
+        },
+        "source": {
+          "reads": 12,
+          "overlaps": 1
+        },
+        "tests": {
+          "reads": 8,
+          "overlaps": 2
+        }
+      },
+      "unclassified_initial_reads": [],
+      "retained_truncation_rounds": 4,
+      "independent_tests_passed": 90,
+      "matched_installed_files": 91,
+      "client_version": "0.159.3",
+      "settings": {
+        "bash_chars": 12000,
+        "compact_percent": 90,
+        "compact_tokens": 0,
+        "context_tokens": 300000,
+        "tool_tokens": 3000
+      },
+      "normalized_input_sha256": "ebe3b94a4739bc7371865dddeed87fcf08b69bd67156fc281a1c56c72a839b32",
+      "reading_guidance_sha256": "c52bde6b927a43373e8da4ca27e31fff64f1f70509ec3228e751f61623262cd1",
+      "native_session_sha256": "64d74cdb3c18d7f709c61c77b31725ac745e4a2bddcc961c1240ac96fbc32f34",
+      "candidate_patch_sha256": "821abd3c86c9b7b945d34f949de2bfedd7be9587e4d9e0b8f2b2d1bcc5da3473",
+      "model": {
+        "effort": "high",
+        "model": "gpt-6.1-sol"
+      }
+    },
+    {
+      "run": "A2",
+      "group": "baseline",
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 1755008,
+      "input_tokens": 1839460,
+      "output_tokens": 12345,
+      "reasoning_output_tokens": 3417,
+      "total_tokens": 1851805,
+      "uncached_input_tokens": 84452,
+      "model_requests": 27,
+      "initial_read_requests": 52,
+      "initial_overlapping_reads": 22,
+      "initial_overlap_rounds": 10,
+      "overlaps_after_retained_truncation": 16,
+      "before_first_edit": {
+        "response_count": 13,
+        "usage": {
+          "input_tokens": 658471,
+          "cached_input_tokens": 598400,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3111,
+          "reasoning_output_tokens": 874,
+          "total_tokens": 661582
+        }
+      },
+      "read_groups": {
+        "guidance": {
+          "reads": 15,
+          "overlaps": 7
+        },
+        "other": {
+          "reads": 4,
+          "overlaps": 1
+        },
+        "source": {
+          "reads": 19,
+          "overlaps": 9
+        },
+        "tests": {
+          "reads": 14,
+          "overlaps": 5
+        }
+      },
+      "unclassified_initial_reads": [],
+      "retained_truncation_rounds": 4,
+      "independent_tests_passed": 64,
+      "matched_installed_files": 91,
+      "client_version": "0.159.3",
+      "settings": {
+        "bash_chars": 12000,
+        "compact_percent": 90,
+        "compact_tokens": 0,
+        "context_tokens": 300000,
+        "tool_tokens": 3000
+      },
+      "normalized_input_sha256": "ebe3b94a4739bc7371865dddeed87fcf08b69bd67156fc281a1c56c72a839b32",
+      "reading_guidance_sha256": "c52bde6b927a43373e8da4ca27e31fff64f1f70509ec3228e751f61623262cd1",
+      "native_session_sha256": "87dc718eee2cc7a3b9b733626d811a1b7b6cfdeaf65445966c5484b53048be42",
+      "candidate_patch_sha256": "54a0b903b6b354e55928dc4b51c588a11fab83f289c4513a924a0b68afae254b",
+      "model": {
+        "effort": "high",
+        "model": "gpt-6.1-sol"
+      }
+    },
+    {
+      "run": "C1",
+      "group": "candidate",
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 1683072,
+      "input_tokens": 1763438,
+      "output_tokens": 14780,
+      "reasoning_output_tokens": 5255,
+      "total_tokens": 1778218,
+      "uncached_input_tokens": 80366,
+      "model_requests": 27,
+      "initial_read_requests": 47,
+      "initial_overlapping_reads": 16,
+      "initial_overlap_rounds": 9,
+      "overlaps_after_retained_truncation": 9,
+      "before_first_edit": {
+        "response_count": 13,
+        "usage": {
+          "input_tokens": 655268,
+          "cached_input_tokens": 598272,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3607,
+          "reasoning_output_tokens": 1182,
+          "total_tokens": 658875
+        }
+      },
+      "read_groups": {
+        "guidance": {
+          "reads": 12,
+          "overlaps": 4
+        },
+        "source": {
+          "reads": 16,
+          "overlaps": 5
+        },
+        "other": {
+          "reads": 3,
+          "overlaps": 0
+        },
+        "tests": {
+          "reads": 16,
+          "overlaps": 7
+        }
+      },
+      "unclassified_initial_reads": [],
+      "retained_truncation_rounds": 7,
+      "independent_tests_passed": 77,
+      "matched_installed_files": 91,
+      "client_version": "0.159.3",
+      "settings": {
+        "bash_chars": 12000,
+        "compact_percent": 90,
+        "compact_tokens": 0,
+        "context_tokens": 300000,
+        "tool_tokens": 3000
+      },
+      "normalized_input_sha256": "ebe3b94a4739bc7371865dddeed87fcf08b69bd67156fc281a1c56c72a839b32",
+      "reading_guidance_sha256": "92f9593fe66b7538413203899b78f749ddb27d295bbceca6cd84defe125c308d",
+      "native_session_sha256": "95a28484e6e3a929a96a4e5d481bed0242ab3ba372fdec3fdec250656906327f",
+      "candidate_patch_sha256": "14c9b7ea5c738bad966a27bb2ca3acf74caca96276963531dc788c68f705f0a6",
+      "model": {
+        "effort": "high",
+        "model": "gpt-6.1-sol"
+      }
+    },
+    {
+      "run": "C2",
+      "group": "candidate",
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 2197760,
+      "input_tokens": 2282774,
+      "output_tokens": 13293,
+      "reasoning_output_tokens": 4498,
+      "total_tokens": 2296067,
+      "uncached_input_tokens": 85014,
+      "model_requests": 33,
+      "initial_read_requests": 46,
+      "initial_overlapping_reads": 17,
+      "initial_overlap_rounds": 9,
+      "overlaps_after_retained_truncation": 15,
+      "before_first_edit": {
+        "response_count": 13,
+        "usage": {
+          "input_tokens": 644126,
+          "cached_input_tokens": 588416,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2866,
+          "reasoning_output_tokens": 644,
+          "total_tokens": 646992
+        }
+      },
+      "read_groups": {
+        "guidance": {
+          "reads": 13,
+          "overlaps": 5
+        },
+        "other": {
+          "reads": 2,
+          "overlaps": 0
+        },
+        "source": {
+          "reads": 17,
+          "overlaps": 8
+        },
+        "tests": {
+          "reads": 14,
+          "overlaps": 4
+        }
+      },
+      "unclassified_initial_reads": [],
+      "retained_truncation_rounds": 12,
+      "independent_tests_passed": 71,
+      "matched_installed_files": 91,
+      "client_version": "0.159.3",
+      "settings": {
+        "bash_chars": 12000,
+        "compact_percent": 90,
+        "compact_tokens": 0,
+        "context_tokens": 300000,
+        "tool_tokens": 3000
+      },
+      "normalized_input_sha256": "ebe3b94a4739bc7371865dddeed87fcf08b69bd67156fc281a1c56c72a839b32",
+      "reading_guidance_sha256": "92f9593fe66b7538413203899b78f749ddb27d295bbceca6cd84defe125c308d",
+      "native_session_sha256": "abec257f11961a7585bc219ea884be543b9ff87f7459233e5af92261b597c084",
+      "candidate_patch_sha256": "2f32c791425fa49e55ece60491918a62ba6a8bfdae771115d05efc7e4b5de72d",
+      "model": {
+        "effort": "high",
+        "model": "gpt-6.1-sol"
+      }
+    }
+  ],
+  "totals": {
+    "baseline": {
+      "input_tokens": 4826540,
+      "cached_input_tokens": 4644352,
+      "uncached_input_tokens": 182188,
+      "output_tokens": 27472,
+      "total_tokens": 4854012,
+      "model_requests": 66,
+      "initial_read_requests": 94,
+      "initial_overlapping_reads": 37,
+      "initial_overlap_rounds": 16,
+      "overlaps_after_retained_truncation": 28,
+      "independent_tests_passed": 154
+    },
+    "candidate": {
+      "input_tokens": 4046212,
+      "cached_input_tokens": 3880832,
+      "uncached_input_tokens": 165380,
+      "output_tokens": 28073,
+      "total_tokens": 4074285,
+      "model_requests": 60,
+      "initial_read_requests": 93,
+      "initial_overlapping_reads": 33,
+      "initial_overlap_rounds": 18,
+      "overlaps_after_retained_truncation": 24,
+      "independent_tests_passed": 148
+    }
+  },
+  "candidate_change_percent": {
+    "input_tokens": -16.17,
+    "cached_input_tokens": -16.44,
+    "uncached_input_tokens": -9.23,
+    "output_tokens": 2.19,
+    "total_tokens": -16.06,
+    "model_requests": -9.09,
+    "initial_read_requests": -1.06,
+    "initial_overlapping_reads": -10.81,
+    "initial_overlap_rounds": 12.5,
+    "overlaps_after_retained_truncation": -14.29
+  },
+  "common_independent_checks": 46,
+  "controls": "Same a95 Git tree, task bytes, dependencies, model and launch settings. Normalize only operation directory, run label, project ID and the changed reading guidance.",
+  "usage_scope": "Per-response native usage reconciled to the dispatch receipt; worker execution only. Cached input is part of input and reasoning is part of output.",
+  "read_scope": "Literal Get-Content line-range overlap before the first apply_patch. Overlap describes requested ranges, not marginal model token cost. Post-edit reads and test reruns are outside this metric.",
+  "sequence": "Historical A1 and A2 controls followed by C1 and C2 candidate runs; no randomized causal estimate.",
+  "change": {
+    "owner": "ProjectExecution.prompt",
+    "mechanism": "Task-scoped referenced reading and missing-range retrieval in the existing project prompt",
+    "output_default": 3000,
+    "production_selection_changed": false
+  },
+  "verification": {
+    "runtime_tests_passed": 126,
+    "candidate_tests_passed": 148,
+    "common_checks_per_run": 46,
+    "matched_installed_files_per_candidate": 91
+  }
+}
