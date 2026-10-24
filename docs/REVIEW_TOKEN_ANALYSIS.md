@@ -180,12 +180,13 @@ now includes the launch-context tests. The
 selection and restoration of an explicit output limit.
 
 
-## Worker scope after a94 acceptance
+## Worker measurements
 
-The native-output comparison above measured independent reviews. It contains no
-coding-worker turns and establishes no worker token saving. Release a95 retains
-the 3,000-token default for workers and managers, and uses native settings for
-Codex reviewers. Explicit project settings and historical launch settings retain
-their recorded behavior. A future worker-default change requires paired worker
-runs of the same coding task, including input, cached input, output, tool reads,
-truncation rereads and completed-work reuse.
+The comparison above measures independent reviews. The subsequent
+[coding-worker comparison](WORKER_TOKEN_ANALYSIS.md) used four real coding
+sessions on the same Foundry defect repair in A-B-B-A order. Native output
+reduced aggregate total tokens by 18.78% and overlapping initial reads by 72.97%,
+but the paired total-token changes were -38.51% and +13.22%; aggregate uncached
+input increased 1.75%. All candidates passed the same independent acceptance
+contract. The worker default remains 3,000. Explicit project values and captured
+historical settings retain their existing behavior.
