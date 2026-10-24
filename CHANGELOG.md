@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0a97 — 2026-10-23
+
+- Scope project startup reading to task-relevant sections and reuse unchanged
+  instructions already present in the worker context.
+- Keep combined read output within the enclosing tool-call budget and retrieve
+  required missing ranges after truncation, preserving large output in task evidence.
+- Publish the same-task worker comparison: the two scoped-reading repetitions
+  used 16.06% fewer total tokens and 9.23% fewer uncached input tokens than the
+  retained controls; overlapping guidance reads decreased from 19 to 9.
+- Retain role-based output defaults, explicit overrides and recorded task settings.
+  See [scoped project reading](docs/WORKER_READING_ANALYSIS.md) for the task,
+  measurements and validation results.
+
 ## 0.1.0a96 — 2026-10-23
 
 - Capture the reviewer role for independent review-group members, preserving
