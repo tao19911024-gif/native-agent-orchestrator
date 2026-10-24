@@ -44,6 +44,8 @@ EVIDENCE_GUIDANCE = (
 
 
 def execution_plan_prompt(body, decision, *, project_guidance=""):
+    from ._goal_scratch import prompt
+    body = prompt(body, decision or {})
     # Goal-owned manager guidance is carried by the existing frozen decision.
     # It need not have an admission-plan receipt (e.g. an original-session amendment).
     if decision is None or not ({"planning_receipt", "manager", "expert_consultation"} & decision.keys()):

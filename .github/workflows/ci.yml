@@ -66,6 +66,8 @@ jobs:
             tests/test_review_context.py `
             tests/test_launch_context.py `
             tests/test_failed_manager_handback.py tests/test_completed_turn_recovery.py `
+            tests/test_goal_preflight_recovery.py tests/test_execution_stop.py `
+            tests/test_project_default_provider.py tests/test_goal_scratch.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
             tests/test_acceptance_a96.py tests/test_acceptance_a69.py `
             --junitxml ci-results/pytest.xml -q

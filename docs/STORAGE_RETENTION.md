@@ -88,6 +88,39 @@ their hash checks; a test receipt does not bypass an existing exact review.
 
 ## Scratch cleanup and archive verification
 
+### Explicit disposable storage for new goals
+
+Add `--disposable-scratch` to a new `--foundry-goal` invocation to register
+`<goal-evidence>/disposable` in that goal's manifest. Registration creates a new
+directory; it does not adopt an existing directory. The option applies to the
+new goal only. Recovery uses the recorded declaration, and historical goals
+without that declaration retain their existing storage behavior.
+
+The worker receives the exact directory in its execution instructions. Test
+commands place their `TMP`, `TEMP` and pytest `--basetemp` child directories
+there. Reports, original failures, deliverables and recovery inputs belong
+outside the disposable directory. Workers move required evidence out before
+requesting review or delivering artifacts. No host-wide environment changes
+are made.
+
+The existing goal owner retains this directory during execution, review,
+interruption and recovery. After publishing `candidate_verified` or
+`artifacts_delivered`, it reclaims the registered directory and records the
+observed logical bytes and file count in `usage.json` under `scratch`. A named
+delivered artifact inside that directory retains the entire directory with its
+reason. Filesystem links are removed without traversing their targets. A file
+that cannot be removed remains in place with the cleanup error recorded; the
+task result keeps its original verdict.
+
+This declaration is per goal directory. A continuation or correction in a
+different directory does not inherit authority to delete its predecessor's
+storage. The predecessor remains with its recovery owner until that dependency
+is resolved through the existing maintenance process. There is no background
+cleanup job or search of historical `tmp` directories. Logical bytes count
+successfully removed regular files; they do not measure physical free space.
+
+### Manual cleanup and archives
+
 1. Resolve each exact source path and its expected parent. Inspect reparse
    points; do not recurse into a linked external tree as if it were local data.
 2. Check the creating operation has ended, process references and relevant

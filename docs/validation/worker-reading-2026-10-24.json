@@ -63,6 +63,12 @@
       "model": {
         "effort": "high",
         "model": "gpt-6.1-sol"
+      },
+      "wall_clock": {
+        "start_utc": "2026-10-24T00:03:12.478Z",
+        "end_utc": "2026-10-24T00:10:42.668Z",
+        "elapsed_seconds": 450.19,
+        "session_sha256": "64d74cdb3c18d7f709c61c77b31725ac745e4a2bddcc961c1240ac96fbc32f34"
       }
     },
     {
@@ -128,6 +134,12 @@
       "model": {
         "effort": "high",
         "model": "gpt-6.1-sol"
+      },
+      "wall_clock": {
+        "start_utc": "2026-10-24T00:25:54.371Z",
+        "end_utc": "2026-10-24T00:31:07.585Z",
+        "elapsed_seconds": 313.214,
+        "session_sha256": "87dc718eee2cc7a3b9b733626d811a1b7b6cfdeaf65445966c5484b53048be42"
       }
     },
     {
@@ -193,6 +205,12 @@
       "model": {
         "effort": "high",
         "model": "gpt-6.1-sol"
+      },
+      "wall_clock": {
+        "start_utc": "2026-10-24T01:37:31.794Z",
+        "end_utc": "2026-10-24T01:44:24.834Z",
+        "elapsed_seconds": 413.04,
+        "session_sha256": "95a28484e6e3a929a96a4e5d481bed0242ab3ba372fdec3fdec250656906327f"
       }
     },
     {
@@ -258,6 +276,12 @@
       "model": {
         "effort": "high",
         "model": "gpt-6.1-sol"
+      },
+      "wall_clock": {
+        "start_utc": "2026-10-24T01:46:02.223Z",
+        "end_utc": "2026-10-24T01:52:45.538Z",
+        "elapsed_seconds": 403.315,
+        "session_sha256": "abec257f11961a7585bc219ea884be543b9ff87f7459233e5af92261b597c084"
       }
     }
   ],
@@ -317,5 +341,6 @@
     "candidate_tests_passed": 148,
     "common_checks_per_run": 46,
     "matched_installed_files_per_candidate": 91
-  }
+  },
+  "wall_clock_scope": "Native task_started to task_complete for the same turn; includes worker tool and provider waits, excludes setup and independent acceptance."
 }

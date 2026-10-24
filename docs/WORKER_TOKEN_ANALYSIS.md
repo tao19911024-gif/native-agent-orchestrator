@@ -126,6 +126,30 @@ uncached input and generated output did not decrease.
 
 ## Configuration decision
 
+### Elapsed time
+
+The retained native records also provide a `task_started` and `task_complete`
+timestamp for each run's single turn. Their difference includes worker tools and
+provider waits and excludes experiment setup and independent acceptance checks.
+
+| Run | Output setting | Elapsed seconds |
+| --- | --- | ---: |
+| A1 | 3,000 | 450.190 |
+| B1 | Native | 361.896 |
+| B2 | Native | 377.199 |
+| A2 | 3,000 | 313.214 |
+
+Combined native elapsed time was 739.095 seconds against 763.404 seconds for
+the controls, a 3.18% reduction. B1 was faster than A1; B2 was slower than A2.
+The 29% reduction in model requests did not yield a comparable elapsed-time
+reduction. The configuration decision below remains unchanged.
+
+Future paired measurements record per-run start, end, elapsed time, token
+usage and acceptance together, using the same execution boundary for both arms.
+Provider waits and tool execution remain part of elapsed time.
+
+### Selected defaults
+
 Retain the a96 worker default of 3,000 and preserve existing explicit project
 values. The two paired totals disagree, while the reduction in initial rereads
 is consistent. The next bounded optimization target is the task's initial

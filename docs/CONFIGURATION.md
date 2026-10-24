@@ -16,6 +16,7 @@ execution before starting a task, and inspect it with `--foundry-project check`.
 | `evidence_root` | Absolute directory for task records; registration places it under the descriptor's directory |
 | `execution` | Execution owner, preflight command, and optional project observation hooks |
 | `launch` | Per-project native launch settings |
+| `default_provider` | Optional `claude` or `codex` coding default for new Foundry goals |
 | `history_roots` | Optional directory references used by historical recovery discovery |
 
 Registration selects `AGENTS.md` when present. Repeat `--project-rule` to choose
@@ -24,6 +25,25 @@ other entry files. The format and identity rules are implemented by
 
 Store the descriptor outside the source repository. Configure it before the
 first dispatch; continuations retain its recorded identity and bytes.
+
+### Default coding provider
+
+Set `"default_provider": "claude"` to select Claude coding, correction and native
+team backend for new goals. Explicit provider, launcher, compute-profile, coding
+or correction model selections take precedence; otherwise the project default precedes the
+task-kind table. The task kind continues to supply team shape and other omitted
+role choices. Independent reviewer selections retain their existing rules.
+
+For example, `--task-kind cross-module --print-staffing` with this descriptor
+selects Claude coding and an adaptive Claude team, and reports `project` as the
+coding/correction source and team backend source. `--provider codex` overrides
+the project setting. Without `default_provider`, task-kind behavior is unchanged.
+
+This default applies to new descriptor-based goals. Direct dispatch, standalone
+review, amendments and recovery retain their existing selection paths. Create a
+separate descriptor for a changed new-work policy; preserve the descriptor bytes
+and settings referenced by existing tasks. Project adapters continue to own their
+own entry policy.
 
 The project execution prompt directs workers to read rule entries once, reuse
 unchanged material already in context, and locate task-relevant sections in
@@ -120,6 +140,11 @@ positive limit, including the earlier default of 3,000 tokens. Set
 `FOUNDRY_TOOL_TOKENS` to `3000` to select that limit for a new project call.
 
 ## Provider selection
+
+New goals can opt into managed disposable storage with `--disposable-scratch`.
+The runtime registers a fresh directory under that goal's evidence directory
+and supplies it in worker instructions. See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals)
+for completion, recovery, report retention and cleanup accounting.
 
 `--provider codex` or `--provider claude` selects the provider for a new task.
 For a goal, it applies to coding and review roles. Native clients own their

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in disposable storage for new goals, retained through review and
+  recovery and reclaimed by the existing completion owner. Record removed
+  bytes and cleanup failures in task usage; preserve named delivered artifacts
+  and historical directories.
+
+- Allow project descriptors to select the default coding provider for new goals.
+  Explicit choices take precedence and recorded recovery choices remain unchanged;
+  staffing output and prepared goals record the project source.
+
+- Wait for the controller's intent-lock handoff within the existing stop deadline
+  after verified cleanup is published; both native transports preserve unfinished work.
+- Verify that failed-worker feedback carries the operator answer to the retained
+  manager, including interruption after feedback publication, and correct the
+  waiting-for-input recovery fixture's phase.
+- Include recovery-preflight and controller-stop regression tests in public CI.
+- Add per-run elapsed time to the worker output and scoped-reading comparisons.
+  Native output reduced aggregate elapsed time by 3.18%; scoped reading increased
+  it by 6.94% despite reducing tokens.
+
 ## 0.1.0a97 — 2026-10-23
 
 - Scope project startup reading to task-relevant sections and reuse unchanged

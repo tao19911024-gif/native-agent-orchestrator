@@ -126,13 +126,19 @@ def main(argv=None, *, project_adapter=None) -> int:
 def _selected_main(owner, a, ap, project, project_adapter):
     from .foundry_entry import handle_mode
     a.launcher_explicit = a.launcher is not None
+    # Only new goal coding inherits the descriptor default. Explicit selectors
+    # and all recorded continuations keep their existing resolution path.
+    a.project_default_provider = (project.project.get('default_provider')
+        if project is not None and a.foundry_goal and not (a.amend_from or a.recover_goal)
+        and not any((a.provider, a.launcher, a.compute_profile, a.coding_model, a.auto_amend_model)) else None)
     if a.provider == "codex" and a.launcher == "claude":
         ap.error("--provider codex cannot use --launcher claude")
     if a.launcher == "claude" and a.provider is None:
         a.provider = "claude"
     if a.provider == "claude" and a.launcher not in (None, "claude"):
         ap.error("--provider claude uses --launcher claude")
-    a.launcher = a.launcher or ("claude" if a.provider == "claude" else "app-server" if a.foundry_goal or project else "exec")
+    a.launcher = a.launcher or ("claude" if (a.provider or a.project_default_provider) == "claude"
+                              else "app-server" if a.foundry_goal or project else "exec")
     policy = policy_from_arguments(a, ap)
     a.app_server_policy = policy
     if project is None:
