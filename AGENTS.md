@@ -23,6 +23,10 @@ Storage disposition is part of completing that work, not a separate future task.
 - Preserve source changes and primary evidence. After verification, remove
   reproducible scratch, duplicate build outputs and completed disposable test
   environments; retain compact results, commands, provenance and failure logs.
+- Record created output roots with the existing operation evidence. Close those
+  outputs before scanning the historical archive for release retention. Reuse
+  the complete verified retention invocation and combine authorized release
+  candidates in one operation; retain its native handle until completion.
 - Measure large output trees before expanding them. If space is constrained,
   use a suitable scratch/archive volume rather than silently adding copies to
   the execution volume. Do not stop another task to recover space.

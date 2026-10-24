@@ -122,3 +122,6 @@ Restore any changed project runtime pointers and new-work launch settings from
 the release record. Tasks started with the new release retain that environment
 for their own recovery. Apply [storage retention](STORAGE_RETENTION.md) to build
 outputs and older releases after checking their recorded dependencies.
+Close completed build and test output first. Then run authorized retention once
+with the full verified invocation and all obsolete candidates. Retain its
+command, scan statistics and final disposition with the private release record.

@@ -455,6 +455,40 @@ def test_deep_ordinary_directories_do_not_repeat_realpath_io(estate, monkeypatch
     assert len(calls) <= 2, 'ordinary descendants must reuse their canonical root, not reopen every path'
 
 
+def test_scan_reports_physical_root_cost_without_double_counting(estate):
+    _, selection, versions, evidence = estate
+    nested = evidence / 'nested'
+    first = write(evidence / 'ordinary/manifest.json', {'report': 'one'})
+    second = write(nested / 'deep/request.json', {'report': 'two'})
+    gaps, metrics = [], {'directories': 0, 'records': 0}
+    assert set(retention._walk([evidence, nested, evidence], gaps, metrics)) == {first, second}
+    assert not gaps
+    rows = {r['root']: r for r in metrics['roots']}
+    assert set(rows) == {str(evidence), str(nested)}
+    assert rows[str(evidence)]['directories'] == 2
+    assert rows[str(nested)]['directories'] == 2
+    assert sum(r['directories'] for r in rows.values()) == metrics['directories'] == 4
+    assert sum(r['discovered_records'] for r in rows.values()) == metrics['records'] == 2
+    assert all(r['reader_seconds'] >= 0 for r in rows.values())
+
+
+def test_refresh_attributes_discovery_to_registered_root(estate):
+    _, selection, versions, evidence = estate
+    directory = evidence / 'existing'
+    write(directory / 'manifest.json', {'report': 'initial'})
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence], _discovery=discovery)
+    write(directory / 'added/request.json', {'report': 'new'})
+    report = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert not report['gaps']
+    assert report['scan']['roots'][0]['root'] == str(evidence)
+    assert report['scan']['roots'][0]['directories'] == report['scan']['directories'] == 2
+    assert report['scan']['roots'][0]['discovered_records'] == 2
+    assert report['scan']['records'] == 2
+
+
 def test_installation_names_do_not_hide_task_evidence(estate):
     _, _, _, evidence = estate
     write(evidence / 'snapshot/venv/pyvenv.cfg', {})
