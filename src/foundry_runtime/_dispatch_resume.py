@@ -406,6 +406,7 @@ def _resume_attempt(
                 **team_kwargs(native_team), execution_policy=intent.frozen["execution_policy"],
                 launch_context=launch_context,
             )
+            from ._launch_context import worker_environment
             rc = owner.run_codex(
                 argv,
                 body,
@@ -413,6 +414,7 @@ def _resume_attempt(
                 log,
                 tag,
                 lease=lease,
+                env=worker_environment(owner.codex_env(argv[0]), launch_context),
                 on_started=lambda: package_launch.active(lease, session),
             )
         package_launch.finish()

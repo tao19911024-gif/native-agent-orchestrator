@@ -1056,6 +1056,12 @@ class NativeAnalyst:
         hashes = {"stdout": hashlib.sha256(), "stderr": hashlib.sha256()}
         decoded = init = native_result = None
 
+        def drain_readers():
+            deadline = time.monotonic() + self.kill_seconds
+            for thread in readers:
+                if thread.ident is not None:
+                    thread.join(timeout=max(0, deadline - time.monotonic()))
+
         def pump(pipe, name, destination):
             nonlocal stored
             pending = bytearray()
@@ -1140,7 +1146,16 @@ class NativeAnalyst:
                     outcome = "cancelled"
                     raise NativeError("native call cancelled: " + str(self._cancel_reason))
                 returncode = process.poll()
-                if returncode is not None and all(not thread.is_alive() for thread in readers):
+                if returncode is not None:
+                    # Descendants may retain inherited pipe writers after the root
+                    # exits. End their owned Job, then drain buffered output before
+                    # closing our readers; EOF cannot be a prerequisite for cleanup.
+                    cleanup = process.stop_and_verify(drain_seconds=0, kill_seconds=self.kill_seconds,
+                                                      drain_output=drain_readers)
+                    if not cleanup.cleanup_verified or any(thread.is_alive() for thread in readers):
+                        raise NativeError('native output cleanup did not settle after root exit')
+                    if overflow.is_set() or protocol_failure.is_set() or read_error.is_set():
+                        continue  # Preserve failures observed while draining the last output.
                     break
                 if deadline is not None and time.monotonic() >= deadline:
                     outcome = "timeout"
@@ -1165,7 +1180,8 @@ class NativeAnalyst:
             cleanup_started = time.monotonic()
             if process is not None:
                 try:
-                    cleanup = process.stop_and_verify(drain_seconds=0, kill_seconds=self.kill_seconds)
+                    cleanup = process.stop_and_verify(drain_seconds=0, kill_seconds=self.kill_seconds,
+                                                      drain_output=drain_readers)
                 except Exception as exc:
                     cleanup = CleanupReceipt(attempt_id, process.pid, process.creation_time, False, None, False,
                                              "cleanup failed: " + str(exc))

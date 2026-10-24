@@ -10,7 +10,7 @@ import subprocess
 active_directory = ContextVar('foundry_hosted_directory', default=None)
 ENVIRONMENT = ('PATH', 'CODEX_HOME', 'CODEX_THREAD_ID', 'CLAUDE_CONFIG_DIR',
                'PDCL_MODEL_CATALOGUE', 'FOUNDRY_CONTEXT_TOKENS', 'FOUNDRY_COMPACT_PERCENT', 'FOUNDRY_COMPACT_TOKENS',
-               'FOUNDRY_BASH_CHARS', 'FOUNDRY_TOOL_TOKENS', 'FOUNDRY_CODEGRAPH_ARGV',
+               'FOUNDRY_BASH_CHARS', 'FOUNDRY_TOOL_TOKENS', 'FOUNDRY_WAIT_INTERVAL_SECONDS', 'FOUNDRY_CODEGRAPH_ARGV',
                'FOUNDRY_CODEGRAPH_STATE_DIR')
 INPUT_FLAGS = ('--project-preflight-input', '--project-resume-preflight-input')
 

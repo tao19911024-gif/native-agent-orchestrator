@@ -102,6 +102,16 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     "review": {"backend": backend, **compute_for_kind(
                         freeze_roles(role_policy), "review", analyst_compute)},
                     "scope": "requested settings; omitted model/effort inherit native defaults"}}
+    from . import _goal_scratch
+    if (retained is None and review_range is None and
+            (disposable_scratch or (launch_context or {}).get('worker_environment'))):
+        # A new child goal owns fresh scratch even if its parent's was reclaimed.
+        # Same-folder recovery reuses the context stored in its checkpoint.
+        worker_environment = _goal_scratch.register(evidence_dir, manifest)
+        from ._launch_context import capture
+        launch_context = {**(launch_context or capture(tree,
+            root_role=(native_team or {}).get('lead_role', 'executor'), backend=coding_backend,
+            coding_model=(coding_compute or {}).get('model'))), 'worker_environment': worker_environment}
     from ._followup import origin, announce
     manifest['originating_session'] = origin()
     if task_deadline_at is not None:
@@ -201,9 +211,6 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             _write(evidence_dir / 'coding-checkpoint.json', continued_coding)
             manifest['coding_checkpoint'] = _fact(evidence_dir / 'coding-checkpoint.json')
             manifest['manager_phase'] = 'feedback_pending'
-    from . import _goal_scratch
-    if disposable_scratch and retained is None and not continuation and not amend_from and review_range is None:
-        _goal_scratch.register(evidence_dir, manifest)
     project_plan_prompt = plan_prompt
     def plan_prompt(body, decision):
         return _goal_scratch.prompt(project_plan_prompt(body, decision), manifest)
@@ -669,10 +676,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     manifest.update(manager_phase='feedback_pending', manager_packet=manager_packet)
                     if manager_answer is not None:
                         manager_packet['operator_answer'] = manager_answer
-                _write(evidence_dir / "coding-checkpoint.json", checkpoint)
-                manifest["coding_checkpoint"] = _fact(evidence_dir / "coding-checkpoint.json")
-                manifest.pop('pending_dispatch', None)
-                _write(evidence_dir / "manifest.json", manifest)
+                owner._publish_coding_checkpoint(evidence_dir, manifest, checkpoint)
                 if migrate_recovered_manager and rc == 0:
                     from ._foundry_goal_transitions import manager as transfer_manager
                     manifest = transfer_manager(owner, evidence_dir, manifest, provider=None,

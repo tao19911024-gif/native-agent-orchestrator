@@ -63,13 +63,17 @@ replace it with a version-number, modification-time or blanket-directory delete.
 For an already authorized cleanup, pass all exact obsolete release candidates
 with repeated `--prune-release` arguments in one invocation, along with the
 available `--test-run-record` and `--evidence-review` inputs. The operation
-discovers records once, then rereads them and their current dependencies before
-removal. If project registration adds evidence roots during that operation, it
-scans the added roots (including new roots nested under an already scanned root)
-and merges their records before considering removal. Reordered roots do not
+discovers the directory tree, then rereads records and their current dependencies
+before removal. It also compares the observed directories' modification times
+and enumerates changed directories and newly discovered child trees. New goals
+and hosted requests under an already known evidence root therefore join the same
+dependency assessment. Unchanged archived directories reuse their discovery.
+If project registration adds evidence roots during that operation, it scans the
+added roots (including new roots nested under an already scanned root) and merges
+their records before considering removal. Reordered roots do not
 restart discovery; removing a registration does not discard its already
 observed dependencies. This discovery state lives only within the operation.
-A separate planning invocation followed by pruning performs two full
+A separate planning invocation followed by pruning performs two initial full
 discoveries; a saved planning report is not a fresh dependency observation.
 
 Discovery reads the entire evidence tree, including nested source and test
@@ -90,18 +94,26 @@ their hash checks; a test receipt does not bypass an existing exact review.
 
 ### Explicit disposable storage for new goals
 
-Add `--disposable-scratch` to a new `--foundry-goal` invocation to register
+Add `--disposable-scratch` to a new `--foundry-goal` invocation, or set the
+project descriptor or adapter's `default_disposable_scratch` to `true`, to register
 `<goal-evidence>/disposable` in that goal's manifest. Registration creates a new
 directory; it does not adopt an existing directory. The option applies to the
 new goal only. Recovery uses the recorded declaration, and historical goals
 without that declaration retain their existing storage behavior.
 
-The worker receives the exact directory in its execution instructions. Test
-commands place their `TMP`, `TEMP` and pytest `--basetemp` child directories
-there. Reports, original failures, deliverables and recovery inputs belong
+The worker receives the exact directory in its execution instructions. New
+registrations create `tmp` and `pytest` children and freeze `TMPDIR`, `TMP` and
+`TEMP` to the former and `PYTEST_DEBUG_TEMPROOT` to the latter in the existing
+launch context. Codex exec, Codex app-server and Claude coding workers inherit
+these values, including native continuation. Standard temporary-file APIs and
+pytest's default temporary directory use those children. An explicit pytest
+`--basetemp` or a program's explicit output path still selects its stated location.
+Reports, original failures, deliverables and recovery inputs belong
 outside the disposable directory. Workers move required evidence out before
 requesting review or delivering artifacts. No host-wide environment changes
-are made.
+are made. Manager and reviewer environments retain their existing settings.
+Historical launch contexts without `worker_environment` preserve their original
+environment behavior.
 
 The existing goal owner retains this directory during execution, review,
 interruption and recovery. After obtaining `candidate_verified` or
@@ -117,9 +129,13 @@ If deletion was interrupted before its counters were saved, usage marks scratch
 accounting as `partial_after_interruption`; the counters contain only recorded
 removals, rather than an estimate of lost observations.
 
-This declaration is per goal directory. A continuation or correction in a
-different directory does not inherit authority to delete its predecessor's
-storage. The predecessor remains with its recovery owner until that dependency
+This declaration is per goal directory. Same-goal recovery reuses its recorded
+directory. A continuation or amendment in a new directory inherits the storage
+policy only when its predecessor has a recorded `worker_environment`; it registers
+its own directory and rebinds the environment without requiring a new opt-in flag.
+Historical records without that field retain their existing behavior. A new goal
+does not inherit authority to delete its predecessor's storage.
+The predecessor remains with its recovery owner until that dependency
 is resolved through the existing maintenance process. There is no background
 cleanup job or search of historical `tmp` directories. Logical bytes count
 successfully removed regular files; they do not measure physical free space.

@@ -597,11 +597,13 @@ class OwnedProcess:
                                                   c.sizeof(accounting), None))
         return accounting.ActiveProcesses
 
-    def stop_and_verify(self, *, drain_seconds, kill_seconds):
+    def stop_and_verify(self, *, drain_seconds, kill_seconds, drain_output=None):
         """Passive drain (no signal), then terminate this Job and poll to deadline.
 
         Unknown cleanup leaves the Job/process handles owned and can be retried.
         Callers must not release their lease or claim success on that receipt.
+        After verified process exit, drain_output may join the consumer's pipe
+        readers before this owner closes their handles. The callback must be bounded.
         """
         drain_seconds, kill_seconds = _seconds(drain_seconds), _seconds(kill_seconds)
         if self._receipt and self._receipt.cleanup_verified:
@@ -640,6 +642,11 @@ class OwnedProcess:
             # to push into a dead reader. Broken pipes must not leak Job handles.
             close_errors = []
             try:
+                if drain_output is not None:
+                    try:
+                        drain_output()
+                    except (OSError, ValueError, RuntimeError) as error:
+                        close_errors.append('output drain: ' + str(error))
                 for stream in self._streams:
                     try:
                         stream.close()

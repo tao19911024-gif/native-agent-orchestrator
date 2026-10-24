@@ -607,7 +607,9 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
                                     on_started=lambda: package_launch.active(lease), on_turn=intent.bind_turn,
                                     app_server_policy=intent.frozen['app_server_policy'], **selection)
             else:
+                from ._launch_context import worker_environment
                 rc = run_codex(argv, body, wt, log, tag, lease=lease,
+                               env=worker_environment(codex_env(argv[0]), launch_context),
                                on_started=lambda: package_launch.active(lease))
             package_launch.finish()
             return _finish_intent(intent, log, out, rc)

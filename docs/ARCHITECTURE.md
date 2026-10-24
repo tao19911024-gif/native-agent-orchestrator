@@ -5,9 +5,10 @@ Codex and Claude clients perform model execution and provider-native delegation.
 The runtime records custody, continuation, review results, usage, and result receipts.
 
 Explicit disposable storage is registered in the owning goal manifest by
-`--disposable-scratch`. The goal records reclamation in the existing usage
+`--disposable-scratch` or the project's new-goal default. The goal records reclamation in the existing usage
 record before publishing its completed outcome and final usage reference. Worker
-instructions carry the storage path; review and recovery retain the directory
+instructions carry the storage path, and the frozen launch context carries the
+coding worker's temporary-directory environment. Review and recovery retain the directory
 until the owning goal completes. The lifecycle contract is defined in
 [Storage retention](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals).
 
@@ -34,8 +35,9 @@ historical migration. The release selector owns new-task deployment and records
 the version-bound acceptance receipt. Task provenance continues to own recovery.
 Project admission retries remain in the project adapter's repository.
 
-For new descriptor-based goals, the CLI resolves an explicit coding selection,
-then the descriptor's optional `default_provider`, then the task-kind default.
+For new goals, the CLI resolves an explicit coding selection, then the descriptor
+or adapter's optional `default_provider`, then the task-kind default. Both project
+forms expose their defaults through the existing `ProjectExecution` contract.
 The existing goal preparation records the selected provider and its `project`
 source. Recovery and amendments retain their recorded configuration.
 
@@ -59,6 +61,16 @@ a started successor retains its own package. Legacy manager handback resolves
 an ambiguous assignment through its bound native input, frozen request digest
 and current decision. The goal preserves failed return codes and passes settled
 feedback to the manager on explicit recovery before further worker dispatch.
+
+An exited native root initiates cleanup of its owned process group. The existing
+output readers drain buffered bytes after owned writers exit and before their
+handles close. Process exit, protocol terminal and verified cleanup remain
+separate observations; a missing terminal retains an unknown execution result.
+
+Normal worker return and recovered feedback use one coding-checkpoint publisher.
+It retains the previous checkpoint bytes before replacing the current file, then
+publishes the new manifest reference. The manifest's prior hash remains readable
+if execution stops between those writes.
 
 Goal and hosted status expose [review feedback](FEEDBACK_LOOP.md) by reading
 the existing outcome and manifest. The delivery projection reuses the goal's
@@ -98,3 +110,5 @@ verdict validation remains bound to the complete checkpoint context hash.
 The checkpoint also retains the native evidence-reading policy. Normal review,
 recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.
+Declared review-author models remain in that checkpoint context and participate
+in the same reviewer-independence check after recovery or provider handoff.

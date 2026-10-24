@@ -324,11 +324,13 @@ def run(owner, body, worktree, log, out, tag, *, lease, on_started,
                 prompt.write(body.encode('utf-8')); prompt.seek(0)
                 try:
                     from ._task_deadline import check
+                    from ._launch_context import worker_environment
                     check()
                     proc = owner.OwnedProcess.spawn(args, cwd=worktree, stdin=subprocess.PIPE if live.enabled else prompt,
                         cleanup_path=log.with_suffix('.cleanup.json'),
                         stdout=stream, stderr=human, attempt_id=lease.attempt_id,
-                        env=environment(effort, **({"execution_environment": execution_environment} if execution_environment is not None else {})))
+                        env=worker_environment(environment(effort,
+                            **({"execution_environment": execution_environment} if execution_environment is not None else {})), launch_context))
                 except owner.SpawnFailure as exc:
                     proc = exc.process
                     raise

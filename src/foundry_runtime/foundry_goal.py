@@ -65,6 +65,26 @@ def _fact(path):
         return {"path": str(path), "sha256": hashlib.file_digest(stream, "sha256").hexdigest()}
 
 
+def _publish_coding_checkpoint(folder, manifest, checkpoint, *, checkpoint_path=None, publish=True):
+    """Keep the manifest's prior input until its replacement pointer is durable."""
+    prior = manifest.get('coding_checkpoint')
+    if prior and publish:
+        archived = folder / ('coding-checkpoint-' + prior['sha256'] + '.json')
+        if not archived.exists():
+            raw = goal_usage._reference(prior)
+            temporary = archived.with_suffix('.tmp')
+            with temporary.open('wb') as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.replace(temporary, archived)
+        goal_usage._reference({**prior, 'path': str(archived)})
+    path = Path(checkpoint_path) if checkpoint_path is not None else folder / 'coding-checkpoint.json'
+    _write(path, checkpoint)
+    manifest['coding_checkpoint'] = _fact(path)
+    manifest.pop('pending_dispatch', None)
+    if publish:
+        _write(folder / 'manifest.json', manifest)
+
+
 def _publish_outcome(folder, outcome):
     """Finalize goal storage and usage before publishing the completed outcome."""
     manifest = json.loads((folder / 'manifest.json').read_bytes())
@@ -438,6 +458,8 @@ def amendment_manifest(outcome_path, coding_session=None):
                         'execution_decision', 'coding_launcher', 'task_deadline_at', 'predispatch'):
                 if key in source:
                     manifest[key] = source[key]
+            if (source.get('launch_context') or {}).get('worker_environment'):
+                manifest['launch_context'] = source['launch_context']
             manifest['requested_compute'] = {**manifest.get('requested_compute', {}),
                 'coding': source.get('requested_compute', {}).get('coding')}
             manifest['execution_decision'] = {**manifest.get('execution_decision', {}),
@@ -505,6 +527,10 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
     plan, prior = None, {}
     if kwargs.get("amend_from"):
         prior = amendment_manifest(kwargs["amend_from"], kwargs.get('coding_session'))
+        if kwargs.get('launch_context') is None and (prior.get('launch_context') or {}).get('worker_environment'):
+            # Retain the declared worker storage policy; the new goal owner
+            # binds its own directory instead of reusing the predecessor's path.
+            kwargs['launch_context'] = dict(prior['launch_context'])
         recorded_deadline = prior.get('task_deadline_at')
         if recorded_deadline is not None:
             kwargs['task_deadline_at'] = recorded_deadline
@@ -837,13 +863,15 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
         if transfers != manifest.get('review_transfers', {}):
             manifest['review_transfers'] = transfers
             _write(folder/'manifest.json', manifest)
-        if 'implementation_evidence' in checkpoint:
+        declared_authors = (context.get('review_authorship') or {}).get('models', [])
+        if 'implementation_evidence' in checkpoint or declared_authors:
             from ._compute_selection import independent_reviewers
             selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
             selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
             try:
-                participation = checkpoint['implementation_evidence']
-                independent_reviewers(selected, participation.get('review_exclusion_models', participation['implementation_models']), explicit=True)
+                participation = checkpoint.get('implementation_evidence') or {}
+                excluded = participation.get('review_exclusion_models', participation.get('implementation_models', []))
+                independent_reviewers(selected, [*excluded, *declared_authors], explicit=True)
             except ValueError as exc:
                 raise GoalBlocked(str(exc), 'review_blocked') from exc
         try:

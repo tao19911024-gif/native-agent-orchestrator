@@ -68,8 +68,11 @@ jobs:
             tests/test_failed_manager_handback.py tests/test_completed_turn_recovery.py `
             tests/test_goal_preflight_recovery.py tests/test_execution_stop.py `
             tests/test_project_default_provider.py tests/test_goal_scratch.py `
+            tests/test_goal_checkpoint_publication.py tests/test_review_authorship_recovery.py `
+            tests/test_project_hooks_deadline.py tests/test_root_exit_cleanup.py `
+            tests/test_worker_scratch_environment.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
-            tests/test_acceptance_a96.py tests/test_acceptance_a69.py `
+            tests/test_acceptance_a96.py tests/test_acceptance_a69.py tests/test_acceptance_a67.py `
             --junitxml ci-results/pytest.xml -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

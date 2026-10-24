@@ -52,7 +52,7 @@ def _reviewed_evidence(path):
     return rows
 
 
-def _walk(roots, gaps, metrics=None, *, allowed_roots=None):
+def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=None, refresh=False):
     """Unbounded depth, physical-directory deduplication for junctions and cycles."""
     if metrics is None:
         metrics = {'directories': 0, 'records': 0}
@@ -64,7 +64,12 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None):
 
     def entries_at(directory):
         children, records, errors = [], [], []
+        stamp = None
         try:
+            # Capture before enumeration so an entry added during this read is
+            # still discovered by the next refresh of this operation.
+            if directory_stamps is not None:
+                stamp = directory.stat().st_mtime_ns
             with os.scandir(directory) as entries:
                 for entry in entries:
                     try:
@@ -81,7 +86,7 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None):
                         errors.append((entry.path, exc))
         except (OSError, RuntimeError) as exc:
             errors.append((str(directory), exc))
-        return children, records, errors
+        return directory, stamp, children, records, errors
 
     # Only filesystem reads overlap. Classification and keep-list decisions stay
     # on the caller thread. Bounded batches avoid retaining an entire archive.
@@ -99,9 +104,14 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None):
                                  'add its target explicitly to reconcile, rather than scanning unrelated directories'})
                     continue
                 batch.append(directory)
-            for children, records, errors in readers.map(entries_at, batch):
+            for directory, stamp, children, records, errors in readers.map(entries_at, batch):
                 metrics['directories'] += 1
-                pending.extend(children)
+                # Changed known directories are separate refresh roots. Only
+                # new child trees need recursive discovery from this directory.
+                pending.extend(child for child in children if not refresh or
+                               directory_stamps is None or str(child) not in directory_stamps)
+                if directory_stamps is not None and stamp is not None:
+                    directory_stamps[str(directory)] = stamp
                 for source, error in errors:
                     gaps.append({'source': str(source), 'reason': 'unreadable evidence directory: ' + str(error)})
                 for path in records:
@@ -324,14 +334,32 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     if not Path(rollback_python).is_file():
         gaps.append({'source': str(rollback_python), 'reason': 'rollback interpreter missing'})
 
-    # A serialized prune operation discovers the archive once. Later passes read
-    # every discovered record again, including previously non-goal records, and
-    # follow current checkpoint/native references. This is not a saved-plan API.
+    # A serialized prune operation discovers the archive once, then refreshes
+    # changed directory entries and rereads every discovered record, including
+    # previously non-goal records and current checkpoint/native references.
     refreshing = _discovery is not None and 'paths' in _discovery
     metrics['discovery'] = 'known-record refresh' if refreshing else 'full tree'
     root_names = [str(p.resolve()) for p in roots]
     if refreshing:
         paths = _discovery['paths']
+        stamps = _discovery['directories']
+        changed = []
+
+        def directory_stamp(item):
+            name, before = item
+            try:
+                return name, Path(name).stat().st_mtime_ns != before, None
+            except OSError as exc:
+                return name, False, str(exc)
+
+        directories = list(stamps.items())
+        with ThreadPoolExecutor(max_workers=4) as readers:
+            for start in range(0, len(directories), 32):
+                for name, differs, error in readers.map(directory_stamp, directories[start:start + 32]):
+                    if error:
+                        gaps.append({'source': name, 'reason': 'unreadable evidence directory: ' + error})
+                    elif differs:
+                        changed.append(Path(name))
         known = set(map(Path, _discovery['roots']))
         added = list(dict.fromkeys(Path(p) for p in root_names if Path(p) not in known))
         if added:
@@ -339,20 +367,25 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
             # operation's discovery, then reread all records; never discard it
             # or omit a new root merely because its ancestor was scanned before.
             _discovery['roots'].extend(map(str, added))
+            metrics['added_roots'] = list(map(str, added))
+        if changed or added:
             observed = set(paths)
-            for path in _walk(added, gaps, metrics, allowed_roots=_discovery['roots']):
+            for path in _walk([*changed, *added], gaps, metrics,
+                              allowed_roots=_discovery['roots'], directory_stamps=stamps, refresh=True):
                 if path not in observed:
                     paths.append(path)
                     observed.add(path)
-            metrics['discovery'] = 'known-record refresh + added roots'
-            metrics['added_roots'] = list(map(str, added))
+            metrics['discovery'] = ('known-record refresh + added roots' if added
+                                    else 'known-record refresh + changed directories')
+            metrics['changed_directories'] = len(changed)
         # Reordering is immaterial. Removed registrations do not erase records
         # already observed by this operation; their dependencies are reread too.
         metrics['records'] = len(paths)
     else:
-        paths = _walk(roots, gaps, metrics)
         if _discovery is not None:
-            _discovery.update(paths=[], roots=root_names)
+            _discovery.update(paths=[], roots=root_names, directories={})
+        paths = _walk(roots, gaps, metrics, directory_stamps=(
+            _discovery['directories'] if _discovery is not None else None))
     for path in paths:
         if _discovery is not None and not refreshing:
             _discovery['paths'].append(path)
@@ -500,7 +533,7 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
         'interpreters_and_dependencies': [{'path': p, 'reasons': reasons} for p, reasons in sorted(keep.items())],
         'keep': [{'release': p, 'reasons': reasons} for p, reasons in sorted(versions.items()) if reasons],
         'candidates': [p for p, reasons in sorted(versions.items()) if not reasons],
-        'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers once, adds newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
+        'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers the archive once, refreshes changed directories and newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
 
 
 def _remove_release(path, root, selection):

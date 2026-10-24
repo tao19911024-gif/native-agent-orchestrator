@@ -152,7 +152,7 @@ def test_review_cannot_follow_manifest_change_during_long_scan(estate, monkeypat
 
 
 @pytest.mark.parametrize('change', ['record', 'checkpoint', 'native', 'reopen', 'pth'])
-def test_batch_walks_once_and_refreshes_dependencies_before_each_delete(estate, monkeypatch, change):
+def test_batch_refreshes_changed_entries_and_dependencies_before_each_delete(estate, monkeypatch, change):
     home, selection, versions, evidence = estate
     path = write(evidence / 'TASK/goal-old/manifest.json', {'tag': 'TASK',
         'runtime_provenance': {'python': str(versions[3] / 'Scripts/python.exe')}})
@@ -187,11 +187,15 @@ def test_batch_walks_once_and_refreshes_dependencies_before_each_delete(estate, 
     monkeypatch.setattr(retention, '_remove_release', remove)
     result = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2],
                              roots=[evidence], project_adapter=adapter)
-    assert walks == [1] and removals == [versions[0]]
+    entries_changed = change in ('checkpoint', 'native')
+    assert walks == ([1, 1] if entries_changed else [1])
+    assert removals == [versions[0]]
     assert result['deleted'] == [str(versions[0])] and result['retained'] == [str(versions[1])]
     assert not result['errors']
     assert [r['scan']['discovery'] for r in result['inventories']] == [
-        'full tree', 'known-record refresh', 'known-record refresh']
+        'full tree', 'known-record refresh',
+        'known-record refresh + changed directories' if entries_changed else 'known-record refresh']
+    assert result['inventories'][1]['scan']['directories'] == 0
 
 
 def test_live_external_python_pth_keeps_shared_release_and_not_prefix_neighbour(estate, monkeypatch):
@@ -588,6 +592,105 @@ def test_new_nested_root_is_scanned_even_if_ancestor_was_scanned(estate):
                                  roots=[evidence, added], _discovery=discovery)
     assert report['candidates'] == [str(versions[1])]
     assert report['scan']['added_roots'] == [str(added)]
+
+
+@pytest.mark.parametrize('record_kind', ['goal', 'hosted_request'])
+@pytest.mark.parametrize('new_directory', [False, True])
+def test_new_records_under_known_root_refresh_runtime_dependencies(estate, record_kind, new_directory):
+    _, selection, versions, evidence = estate
+    directory = evidence / 'nested' / 'goal-new'
+    (directory.parent if new_directory else directory).mkdir(parents=True)
+    discovery = {}
+    first = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) in first['candidates']
+    interpreter = str(versions[1] / 'Scripts/python.exe')
+    if record_kind == 'goal':
+        path = write(directory / 'manifest.json', {
+            'order': {'path': 'new-order.md'}, 'run_id': 'new-task',
+            'runtime_provenance': {'python': interpreter}})
+    else:
+        path = write(directory / 'request.json', {
+            'task_name': 'Foundry-new-task', 'run_id': 'new-task', 'python': interpreter})
+    refreshed = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                    roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) not in refreshed['candidates']
+    records = (refreshed['unfinished_goals'] if record_kind == 'goal'
+               else refreshed['hosted_registrations'])
+    assert str(path) in records
+
+
+def test_changed_directory_refresh_does_not_enumerate_unchanged_archive(estate, monkeypatch):
+    _, selection, versions, evidence = estate
+    archive = evidence / 'archive' / 'nested' / 'goal-completed'
+    write(archive / 'manifest.json', {'order': {'path': 'old'}, 'run_id': 'old'})
+    write(archive / 'outcome.json', {'status': 'candidate_verified'})
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence], _discovery=discovery)
+    scanned = []
+    original = retention.os.scandir
+
+    def scandir(directory):
+        scanned.append(Path(directory))
+        return original(directory)
+
+    monkeypatch.setattr(retention.os, 'scandir', scandir)
+    unchanged = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                    roots=[evidence], _discovery=discovery)
+    assert unchanged['scan']['directories'] == 0
+    assert unchanged['scan']['discovery'] == 'known-record refresh'
+    path = write(evidence / 'goal-new' / 'manifest.json', {
+        'runtime_provenance': {'python': str(versions[1] / 'Scripts/python.exe')}})
+    result = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) not in result['candidates']
+    assert path.parent in scanned
+    assert not any(directory.is_relative_to(evidence / 'archive') for directory in scanned)
+
+
+def test_directory_change_during_discovery_is_seen_on_refresh(estate, monkeypatch):
+    from contextlib import contextmanager
+    _, selection, versions, evidence = estate
+    directory = evidence / 'goal-new'
+    directory.mkdir()
+    path = directory / 'manifest.json'
+    original = retention.os.scandir
+
+    @contextmanager
+    def scandir(target):
+        with original(target) as entries:
+            yield entries
+        if Path(target) == directory and not path.exists():
+            write(path, {'runtime_provenance': {'python': str(versions[1] / 'Scripts/python.exe')}})
+
+    monkeypatch.setattr(retention.os, 'scandir', scandir)
+    discovery = {}
+    first = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) in first['candidates']
+    second = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) not in second['candidates']
+
+
+def test_directory_stat_failure_on_refresh_preserves_runtime(estate, monkeypatch):
+    _, selection, versions, evidence = estate
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence], _discovery=discovery)
+    original = Path.stat
+
+    def stat(path, *args, **kwargs):
+        if path == evidence:
+            raise PermissionError('synthetic directory stat unavailable')
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'stat', stat)
+    result = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert result['candidates'] == []
+    assert any('synthetic directory stat unavailable' in row['reason'] for row in result['gaps'])
 
 
 def test_receipt_owned_fixture_needs_no_content_read_but_host_request_does(estate, monkeypatch):

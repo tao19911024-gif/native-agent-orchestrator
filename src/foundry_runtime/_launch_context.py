@@ -113,6 +113,11 @@ def bind_coding_model(launch, selected):
     policy['recorded_coding_models'] = sorted(models)
 
 
+def worker_environment(environment, launch=None):
+    """Apply only this worker's frozen environment without changing its controller."""
+    return {**environment, **(launch or {}).get('worker_environment', {})}
+
+
 def claude_args(workspace=None, *, launch=None, aliases=None):
     launch = capture(workspace, backend="claude") if launch is None else launch
     server = launch["server"]

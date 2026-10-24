@@ -33,12 +33,17 @@ def test_submission_is_once_even_after_repeated_identical_request(tmp_path, serv
         hosted.submit(tmp_path, ['--prompt', 'different'])
 
 
-def test_single_call_compaction_setting_survives_service_handoff(tmp_path, service, monkeypatch):
-    monkeypatch.setenv('FOUNDRY_COMPACT_TOKENS', '240000')
+@pytest.mark.parametrize('setting,value,replacement', [
+    ('FOUNDRY_COMPACT_TOKENS', '240000', '120000'),
+    ('FOUNDRY_WAIT_INTERVAL_SECONDS', '0', '1800'),
+])
+def test_single_call_setting_survives_service_handoff(tmp_path, service, monkeypatch,
+                                                     setting, value, replacement):
+    monkeypatch.setenv(setting, value)
     hosted.submit(tmp_path, ['--help'])
     request = hosted.read(tmp_path / 'request.json')
-    assert request['environment']['FOUNDRY_COMPACT_TOKENS'] == '240000'
-    monkeypatch.setenv('FOUNDRY_COMPACT_TOKENS', '120000')
+    assert request['environment'][setting] == value
+    monkeypatch.setenv(setting, replacement)
     assert hosted.read(tmp_path / 'request.json') == request
     assert [op for op, _ in service].count('register') == 1
 
