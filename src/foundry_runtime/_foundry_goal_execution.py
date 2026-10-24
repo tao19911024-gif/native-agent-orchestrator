@@ -149,6 +149,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         'coding_model': coding_model, 'coding_effort': coding_effort, 'role_compute': role_policy,
         'coding_launcher': coding_launcher, 'app_server_policy': app_server_policy,
         'compute_assignment': compute_assignment, 'native_team': native_team,
+        **({'handover': handover} if handover is not None else {}),
         **({'launch_context': launch_context} if launch_context is not None else {}),
         **({'migrate_recovered_manager': True} if migrate_recovered_manager else {}),
         **({'project_record': project_record} if project_record is not None else {})}
@@ -559,15 +560,15 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         if worker_recovery and not manager_repeat:
                             result = dispatch.resume_order(coding_session, tree, tag, manager_answer,
                                 recovery_file=recovery_file, **policy, **(coding_compute or {}))
-                        elif manager_repeat:
-                            result = dispatch.resume_order(coding_session, tree, tag,
-                                plan_prompt("Continue the same task from the retained worker result.", execution_decision),
-                                **policy, **(coding_compute or {}))
                         elif handover is not None:
                             message = (continuation["answer"] if continuation is not None else
                                        amendment_prompt(order, amendment, execution_decision, project=project))
                             result = goal_continuation.dispatch_handoff(owner, order, handover,
-                                message, execution_decision, policy, coding_compute)
+                                plan_prompt(message, execution_decision), execution_decision, policy, coding_compute)
+                        elif manager_repeat:
+                            result = dispatch.resume_order(coding_session, tree, tag,
+                                plan_prompt("Continue the same task from the retained worker result.", execution_decision),
+                                **policy, **(coding_compute or {}))
                         elif continuation is not None and coding_session:
                             # Dispatch deduplicates resume text. Bind the answer to its
                             # predecessor so identical replies to different questions are
@@ -632,6 +633,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 coding_turns.extend(goal_usage.capture(row[1], tag) for row in executions)
                 coding = {'managed_turns': coding_turns} if manager_state is not None or len(coding_turns) > 1 else coding_turns[-1]
                 coding_session = _session_from_log(log) if handover else coding_session or _session_from_log(log)
+                # The checkpoint now owns the replacement session. Retain the
+                # transfer packet as history, not as another dispatch request.
+                handover = None
+                execution_options.pop('handover', None)
                 turn_evidence = [fact for row in executions for fact in
                     (_fact(row[1]), _fact(row[2]), _fact(Path(row[1]).with_suffix('.cleanup.json')))]
                 coding_evidence.extend(turn_evidence)

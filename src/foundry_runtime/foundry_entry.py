@@ -57,7 +57,7 @@ def add_arguments(ap) -> None:
     ap.add_argument('--upgrade-requested-runtime', help=argparse.SUPPRESS)
     ap.add_argument("--retained-only", action="store_true", help="with --recover-goal, recover completed historical reviews without model calls or project acceptance")
     ap.add_argument("--goal-evidence")
-    ap.add_argument('--disposable-scratch', action='store_true',
+    ap.add_argument('--disposable-scratch', action=argparse.BooleanOptionalAction, default=None,
                     help='register disposable storage for a new goal; reclaim after successful completion')
     ap.add_argument("--analysis-evidence")
     ap.add_argument("--analyst-backend", choices=("codex", "claude"), default=None)
@@ -107,7 +107,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     coding_session = getattr(a, "coding_session", None)
     auto_model, auto_effort = getattr(a, "auto_amend_model", None), getattr(a, "auto_amend_effort", None)
     recovery = getattr(a, "recover_goal", None)
-    if getattr(a, 'disposable_scratch', False) and (not a.foundry_goal or recovery or amend_from):
+    if getattr(a, 'disposable_scratch_explicit', False) and (not a.foundry_goal or recovery or amend_from):
         ap.error('--disposable-scratch applies only to a new --foundry-goal')
     if getattr(a, 'retained_only', False) and not recovery:
         ap.error('--retained-only requires --recover-goal')

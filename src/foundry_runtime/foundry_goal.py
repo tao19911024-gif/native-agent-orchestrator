@@ -950,7 +950,12 @@ def _manager_checkpoint(folder, manifest, *, allow_failed=False):
         if not checkpoint.get('coding_session'):
             raise GoalBlocked('worker did not complete; use its existing answer or execution recovery path')
         if checkpoint['returncode']:
-            if not allow_failed:
+            # A prepared coding transfer already carries the operator's answer.
+            # Before its first dispatch, the prior failed checkpoint is feedback
+            # for that same manager; recovering it does not authorize a retry
+            # on the failed provider.
+            pending_handoff = checkpoint['options'].get('handover')
+            if not allow_failed and not pending_handoff:
                 raise GoalBlocked('worker failed; explicit operator instructions are required before manager recovery')
             from ._recovery_reconciliation import completed_coding
             completed_coding(checkpoint)

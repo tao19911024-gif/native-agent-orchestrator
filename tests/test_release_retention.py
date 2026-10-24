@@ -693,6 +693,50 @@ def test_directory_stat_failure_on_refresh_preserves_runtime(estate, monkeypatch
     assert any('synthetic directory stat unavailable' in row['reason'] for row in result['gaps'])
 
 
+@pytest.mark.parametrize('remove_tree', [False, True])
+def test_refresh_accepts_removed_evidence_and_rediscovers_replacement(estate, remove_tree):
+    _, selection, versions, evidence = estate
+    path = write(evidence / 'disposable' / 'manifest.json', {
+        'order': {'path': 'fixture.md'}, 'run_id': 'fixture',
+        'runtime_provenance': {'python': str(versions[1] / 'Scripts/python.exe')}})
+    discovery = {}
+    before = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert str(versions[1]) not in before['candidates']
+    if remove_tree:
+        shutil.rmtree(path.parent)
+    else:
+        path.unlink()
+    removed = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                  roots=[evidence], _discovery=discovery)
+    assert not removed['gaps']
+    assert str(versions[1]) in removed['candidates']
+    write(path.parent / 'replacement' / 'manifest.json', {
+        'order': {'path': 'replacement.md'}, 'run_id': 'replacement',
+        'runtime_provenance': {'python': str(versions[1] / 'Scripts/python.exe')}})
+    restored = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                   roots=[evidence], _discovery=discovery)
+    assert not restored['gaps']
+    assert str(versions[1]) not in restored['candidates']
+
+
+def test_refresh_keeps_missing_dependency_of_present_goal_as_gap(estate):
+    _, selection, versions, evidence = estate
+    native = write(evidence / 'native' / 'native-manifest.json', {
+        'executable': str(versions[1] / 'Scripts/python.exe')})
+    path = write(evidence / 'goal-held' / 'manifest.json', {
+        'runtime_provenance': {'python': str(versions[1] / 'Scripts/python.exe')},
+        'manager_state': {'native_dir': str(native.parent), 'last_call_id': 'retained'}})
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                        roots=[evidence], _discovery=discovery)
+    native.unlink()
+    result = retention.inventory(selection, versions[2] / 'Scripts/python.exe',
+                                 roots=[evidence], _discovery=discovery)
+    assert path.exists() and result['candidates'] == []
+    assert any('native-manifest.json' in row['reason'] for row in result['gaps'])
+
+
 def test_receipt_owned_fixture_needs_no_content_read_but_host_request_does(estate, monkeypatch):
     home, selection, versions, evidence = estate
     root = evidence / 'completed-tests'

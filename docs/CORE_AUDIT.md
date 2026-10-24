@@ -16,10 +16,29 @@ retention. Fixes extend the existing owners and records.
 | P2: Project observation ignores the task deadline | A project review or acceptance hook starts after an explicit deadline, or continues beyond it. | Check the existing task clock before admission and during polling, then use the existing cleanup and observation path. | Both hook types cover expired admission, expiration while running and operation without a deadline. |
 | P1: Pruning overlooks newly created recovery records | A new goal or hosted request appears under a directory already traversed by a long prune operation. Refreshing only previously discovered files omits its interpreter dependency. | Keep directory signatures in the existing operation-local discovery state, enumerate changed directories and new child trees, and assess the new records through the original dependency classifier. | Goal and request creation in existing and new nested directories, changes during enumeration, directory read errors and unchanged archive reuse. |
 | P2: Hosted submission loses a wait override | A caller sets `FOUNDRY_WAIT_INTERVAL_SECONDS`, then submits through the scheduler. The launch envelope omitted the setting. | Retain it with the existing explicit environment settings in the launch request. | The submitted value remains recorded after the caller changes its environment. |
-| P2: Project adapter defaults do not reach goal selection | A project adapter declares a default provider, but only descriptor-backed goals read that value. Disposable storage has no project-level default. | Resolve both optional defaults through the existing project execution contract for new goals. | Descriptor and adapter defaults, explicit role precedence, retained-task exclusions and the project composition entry. |
+| P2: Project defaults lack shared storage resolution | Disposable storage has no project-level default. Project adapters may already select providers through their own entry configuration. | Resolve both optional defaults through the existing project execution contract for new goals. | Descriptor and adapter defaults, explicit role precedence, retained-task exclusions and the project composition entry. |
 | P2: Registered scratch is absent from worker environments | A coding worker uses standard temporary-file APIs or pytest defaults; only its prompt names the disposable directory. | Freeze worker-specific temporary-directory values in the existing launch context and apply them at all three coding transports. | Real temporary-file and nested pytest execution for Codex exec, app-server and Claude, continuation, parallel isolation and separate amendment rounds. |
 
 ## Architecture and ownership
+
+The follow-up review after a99 reproduced a managed coding-provider transfer
+refusal, invalid adapter defaults falling back silently, and vanished evidence
+blocking retention refresh. Regression coverage now includes both transfer
+directions, interruptions before and after replacement execution, and interruption
+before replacement checkpoint publication. The same manager receives retained
+failure evidence and subsequent assignments resume the replacement session.
+
+Adapter defaults are checked at the project boundary. A new goal can override
+enabled disposable storage with `--no-disposable-scratch`. Removed records are
+absent during retention refresh; missing dependencies of a present record remain
+visible. Recreated evidence directories are discovered on later refreshes.
+
+Artifact regression tests confirm that the existing delivery boundary rejects
+invalid declarations and resolves relative paths against the project workspace
+before reclamation. The reclamation owner consumes those normalized artifacts.
+Failed goals continue to retain storage for recovery. Reclaiming abandoned work
+requires its owner's recorded closure and resolved recovery dependencies under
+the existing storage disposition procedure.
 
 `OwnedProcess` remains the sole owner of process-group termination and handle
 closure. Its output-drain callback joins the transport's existing readers after

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Allow an explicit coding-provider handoff in a managed goal while retaining
+  the manager session, failed-worker feedback and completed evidence. Resume the
+  replacement worker after normal return or interrupted checkpoint publication.
+- Report invalid project-adapter default values at the configuration boundary.
+  Support `--no-disposable-scratch` as an explicit override for a new goal.
+- Treat previously observed evidence directories and records that disappear
+  during retention refresh as absent, while retaining missing dependencies of
+  records that still exist. Rediscover replacement directories on later refreshes.
+- Verify artifact path normalization at the existing delivery boundary before
+  scratch reclamation.
+
 ## 0.1.0a99 — 2026-10-24
 
 - Complete owned-process cleanup when a native root exits, then drain buffered
