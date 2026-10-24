@@ -4,6 +4,13 @@ Native Agent Orchestrator combines a coordinator with a durable task lifecycle. 
 Codex and Claude clients perform model execution and provider-native delegation.
 The runtime records custody, continuation, review results, usage, and result receipts.
 
+Explicit disposable storage is registered in the owning goal manifest by
+`--disposable-scratch`. The goal records reclamation in the existing usage
+record before publishing its completed outcome and final usage reference. Worker
+instructions carry the storage path; review and recovery retain the directory
+until the owning goal completes. The lifecycle contract is defined in
+[Storage retention](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals).
+
 ## Ownership and dependency direction
 
 | Surface | Owner |
@@ -26,6 +33,11 @@ in serialized formats and environment settings. The
 historical migration. The release selector owns new-task deployment and records
 the version-bound acceptance receipt. Task provenance continues to own recovery.
 Project admission retries remain in the project adapter's repository.
+
+For new descriptor-based goals, the CLI resolves an explicit coding selection,
+then the descriptor's optional `default_provider`, then the task-kind default.
+The existing goal preparation records the selected provider and its `project`
+source. Recovery and amendments retain their recorded configuration.
 
 ## One lifecycle
 

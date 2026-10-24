@@ -85,12 +85,18 @@ def stop(common, task, frozen, *, intent_id, output, reason, wait_seconds=20, ke
     else:
         with request.open('x', encoding='utf-8') as stream:
             json.dump(binding, stream, ensure_ascii=False, indent=2)
-    if stop_controller_after_cleanup:
-        _stop_cleaned_controller(owner, record)
-    else:
+    if not stop_controller_after_cleanup:
         _terminate(record)
     deadline = time.monotonic() + wait_seconds
     while True:
+        if stop_controller_after_cleanup:
+            try:
+                _stop_cleaned_controller(owner, record)
+                stop_controller_after_cleanup = False
+            except IntentBusy:
+                # Cleanup is published before the controller releases its intent
+                # lock. Wait through that handoff using this stop request's clock.
+                pass
         latest, _, _ = owner._read(owner.path)
         if latest['state'] in ('completed', 'closed'):
             return latest  # A native terminal result racing the stop remains authoritative.

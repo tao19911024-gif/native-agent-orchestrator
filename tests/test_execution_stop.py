@@ -14,7 +14,7 @@ from foundry_runtime._execution_intent import ExecutionIntent
 
 @pytest.mark.parametrize('backend', ['claude', 'app-server'])
 @pytest.mark.parametrize('keep_recoverable,residual_controller', [(False, False), (True, False), (True, True)])
-def test_stop_settles_executor_and_preserves_work(external, tmp_path, backend, keep_recoverable, residual_controller):
+def test_stop_settles_executor_and_preserves_work(external, tmp_path, monkeypatch, backend, keep_recoverable, residual_controller):
     tree, scope, order, _ = external
     marker = tree / 'unfinished.txt'
     marker.write_text('保留未提交的工作', encoding='utf-8')
@@ -45,6 +45,23 @@ t.run_executor=run
 d.dispatch_order(Path(sys.argv[2]),project=open_project(sys.argv[1]),launcher='app-server')
 ''' % ('HANG=True\n' + SERVER)
     if residual_controller:
+        # Publish cleanup while retaining the real intent lock until the stopper
+        # observes contention. This is a lifecycle boundary, not a disk-speed race.
+        release = tmp_path / 'release-owner-lock'
+        script = '''
+import time
+from pathlib import Path
+from foundry_runtime._execution_intent import ExecutionIntent
+release = Path(%r)
+original_exit = ExecutionIntent.__exit__
+def held_exit(self, *args):
+    if self._locked and self._record and self.state == 'unknown':
+        deadline = time.monotonic() + 15
+        while not release.exists() and time.monotonic() < deadline:
+            time.sleep(.01)
+    return original_exit(self, *args)
+ExecutionIntent.__exit__ = held_exit
+''' % str(release) + script
         script = 'try:\n    exec(' + repr(script) + ')\nfinally:\n    import time; time.sleep(60)\n'
     with (tmp_path / 'controller.log').open('wb') as log:
         controller_python = os.environ.get('FOUNDRY_TEST_STOP_PYTHON', sys.executable)
@@ -80,8 +97,21 @@ d.dispatch_order(Path(sys.argv[2]),project=open_project(sys.argv[1]),launcher='a
                     time.sleep(.1)
                 assert latest['state'] == 'unknown' and latest['cleanup']['cleanup_verified']
                 assert proc.poll() is None
+                acquire = ExecutionIntent._acquire
+                contended = []
+                def acquire_after_handoff(self):
+                    from foundry_runtime._execution_intent import IntentBusy
+                    try:
+                        return acquire(self)
+                    except IntentBusy:
+                        contended.append(True)
+                        release.touch()
+                        raise
+                monkeypatch.setattr(ExecutionIntent, '_acquire', acquire_after_handoff)
                 args.append('--stop-controller-after-cleanup')
             assert recovery.main(args) == 0
+            if residual_controller:
+                assert contended
             proc.wait(timeout=10)
             settled, _, _ = ExecutionIntent.read_history(folder, task_key='TASK1')
             assert settled['state'] == ('unknown' if keep_recoverable else 'closed')
@@ -137,6 +167,25 @@ def test_keep_recoverable_requires_explicit_stop_reason():
         recovery.main(['--project-config','unused.json','--task','TASK', '--predecessor','0'*64,
                        '--keep-recoverable','--output','unused-output.json'])
     assert error.value.code == 2
+
+
+def test_controller_lock_handoff_uses_stop_deadline(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from foundry_runtime import _execution_stop as stop
+    record = dict(state='unknown', root_pid=21, root_creation_time=22,
+                  owner_pid=31, owner_creation_time=32, attempt_id='attempt')
+    def acquire():
+        raise stop.IntentBusy('controller is releasing its lock')
+    owner = SimpleNamespace(path=tmp_path, _read=lambda _: (record, None, None),
+                            _acquire=acquire, __exit__=lambda *a: None)
+    monkeypatch.setattr(stop, 'ExecutionIntent', lambda *a, **k: owner)
+    monkeypatch.setattr(stop, '_terminate', lambda r: pytest.fail('controller still owns its lock'))
+    monkeypatch.setattr(stop, 'process_identity_exited', lambda *a: False)
+    with pytest.raises(TimeoutError, match='cleanup is still pending'):
+        stop.stop(tmp_path, 'TASK', {}, intent_id='intent', output=tmp_path/'out.json',
+                  reason='handoff', keep_recoverable=True, stop_controller_after_cleanup=True,
+                  wait_seconds=0)
+    assert record['state'] == 'unknown' and not (tmp_path/'out.json').exists()
 
 
 @pytest.mark.parametrize('defect', ['active', 'unverified', 'children', 'wrong_attempt', 'root_alive', 'successor', 'owner_changed', 'busy'])

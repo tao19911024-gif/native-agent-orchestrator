@@ -65,6 +65,31 @@ def _fact(path):
         return {"path": str(path), "sha256": hashlib.file_digest(stream, "sha256").hexdigest()}
 
 
+def _publish_outcome(folder, outcome):
+    """Finalize goal storage and usage before publishing the completed outcome."""
+    manifest = json.loads((folder / 'manifest.json').read_bytes())
+    if 'disposable_scratch' not in manifest:
+        _write(folder / 'outcome.json', outcome)
+        return
+    from ._goal_scratch import reclaim
+    usage_path = folder / 'usage.json'
+    usage = json.loads(usage_path.read_bytes()) if usage_path.exists() else {}
+    prior = usage.get('scratch') or {**manifest['disposable_scratch'],
+                                   'bytes_reclaimed': 0, 'files_removed': 0}
+    if prior.get('status') == 'reclaiming':
+        prior = {**prior, 'accounting': 'partial_after_interruption'}
+    if outcome.get('status') in {'candidate_verified', 'artifacts_delivered'}:
+        # An interrupted cleanup resumes through the existing review/manager
+        # checkpoint. Never leave a success outcome pointing at mutable usage.
+        usage['scratch'] = {**prior, 'status': 'reclaiming'}
+        _write(usage_path, usage)
+    usage['scratch'] = reclaim(folder, manifest, outcome, prior)
+    _write(usage_path, usage)
+    outcome['task_usage'] = _fact(usage_path)
+    outcome['delivery_report'] = goal_usage.delivery_report(outcome, usage, manifest.get('delivery_context'))
+    _write(folder / 'outcome.json', outcome)
+
+
 @contextmanager
 def _run_lock(folder, *, reuse_owned=False):
     """One controller per evidence directory; released by process exit too."""
@@ -536,7 +561,9 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
     elif team_profile is not None:
         team_source = staffing_sources["team"] if staffing_sources else "explicit"
         decision["team"] = {"profile": team_profile, "source": team_source,
-                            "reason": {"kind": "Task kind selects the team.", "quota": "Codex runs ahead of its quota "
+                            "reason": {"kind": "Task kind selects the team.",
+                            "project": "Project default selects the team backend; task kind supplies its profile.",
+                            "quota": "Codex runs ahead of its quota "
                             "window; the ui-live row selects the team."}.get(team_source) or ("Explicit coding provider "
                             "selects the team backend; task kind supplies its profile." if team_source_detail == {
                             "profile": "kind", "backend": "explicit"} else "Explicit team choice takes precedence over the admission recommendation.")}
@@ -575,11 +602,15 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             f"Default profile '{compute_profile}' supplies roles without explicit overrides."
             if compute_source == "default" else "Explicit profile; explicit per-role model pairs take precedence."}
         if task_kind:
-            assignment["selection"] = {"source": compute_source if compute_source in ("kind", "quota") else "explicit",
-                "reason": "Task kind supplies omitted role choices; explicit model pairs take precedence."}
-            for role in assignment["roles"].values():
+            assignment["selection"] = {"source": compute_source if compute_source in ("kind", "quota", "project") else "explicit",
+                "reason": ("Project default selects the coding provider; task kind supplies other omitted choices."
+                           if compute_source == 'project' else
+                           "Task kind supplies omitted role choices; explicit model pairs take precedence.")}
+            for name, role in assignment["roles"].items():
                 if role["source"] == "profile":
-                    role["source"] = compute_source if compute_source in ("kind", "quota") else "explicit"
+                    role["source"] = ((staffing_sources or {}).get('reviewers' if name == 'review' else name, 'project')
+                        if compute_source == 'project' else
+                        compute_source if compute_source in ("kind", "quota") else "explicit")
         kwargs = {**kwargs, **expanded, "compute_assignment": assignment}
     elif prior.get("task_staffing") and kwargs.get("compute_assignment"):
         assignment = kwargs["compute_assignment"]
@@ -610,7 +641,8 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             kwargs["compute_assignment"] = {**assignment,
                 "roles": {key: row for key, row in assignment["roles"].items() if key != "review"},
                 "reviewers": kwargs["reviewers"],
-                "selection": {"source": reviewer_source, "reason": assignment["selection"]["reason"] +
+                "selection": {"source": assignment['selection']['source'] if compute_source == 'project' else reviewer_source,
+                    "reason": assignment["selection"]["reason"] +
                     (" Task kind supplies independent reviewer assignments." if reviewer_source == "kind" else
                      " Explicit independent reviewer assignments replace the profile's review role.")}}
         decision["reviewers"] = kwargs["reviewers"]
@@ -741,6 +773,10 @@ def _record_usage(folder, coding, native, outcome, *, native_team=None, context=
         if outcome is not None and manifest.get('candidate_closure'):
             outcome['candidate_closure'] = manifest['candidate_closure']
         usage = goal_usage.task_usage(coding, native, native_team=native_team)
+        if manifest.get('disposable_scratch'):
+            previous = json.loads(usage_path.read_bytes()) if usage_path.exists() else {}
+            usage['scratch'] = previous.get('scratch') or {
+                **manifest['disposable_scratch'], 'status': 'retained', 'bytes_reclaimed': 0, 'files_removed': 0}
         usage['expert_consultations'] = observe_experts(manifest.get('manager_state') or manifest.get('expert_state'))
         manager_usage = folder / 'manager-usage.json'
         if manager_usage.exists():
@@ -867,7 +903,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                           context=checkpoint.get("delivery_context"))
     if not retained_only and _candidate(tree) != outcome["candidate_commit"]:
         raise GoalBlocked("candidate changed during independent review", "review_blocked")
-    _write(folder / "outcome.json", outcome)
+    _publish_outcome(folder, outcome)
     return outcome
 
 

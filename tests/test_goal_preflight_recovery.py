@@ -117,7 +117,7 @@ def test_existing_awaiting_input_answer_keeps_coding_continuation(external, tmp_
     checkpoint = json.loads((folder / 'coding-checkpoint.json').read_bytes())
     checkpoint['returncode'] = 1
     goal._write(folder / 'coding-checkpoint.json', checkpoint)
-    manifest.update(manager_phase='feedback_pending', coding_checkpoint=goal._fact(folder / 'coding-checkpoint.json'))
+    manifest.update(manager_phase='awaiting_input', coding_checkpoint=goal._fact(folder / 'coding-checkpoint.json'))
     goal._write(folder / 'manifest.json', manifest)
     if with_outcome:
         goal._write(folder / 'outcome.json', {'status': 'awaiting_input'})

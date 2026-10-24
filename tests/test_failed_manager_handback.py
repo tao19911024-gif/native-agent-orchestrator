@@ -16,7 +16,8 @@ from foundry_runtime import _dispatch_resume, _dispatch_package, _foundry_goal_c
 from foundry_runtime._execution_plan_prompt import execution_plan_prompt
 
 
-@pytest.mark.parametrize('legacy,publication_crash', [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize('legacy,publication_crash', [
+    (False, None), (True, None), (True, 'before'), (True, 'after')])
 def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_path, monkeypatch, legacy, publication_crash):
     tree, scope, order, _ = external
     requests, decisions = manager_io
@@ -95,6 +96,8 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
         write = goal._write
         def crash(path, value):
             if path == folder/'manifest.json' and value.get('manager_phase') == 'feedback_pending':
+                if publication_crash == 'after':
+                    write(path, value)
                 raise RuntimeError('fixture checkpoint publication interruption')
             return write(path, value)
         with monkeypatch.context() as interrupted:
@@ -106,6 +109,7 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     assert result['status'] == 'awaiting_input'
     assert len(requests) == 3
     assert requests[-1]['packet']['returncode'] == 1
+    assert requests[-1]['packet']['operator_answer'] == 'Review the failed second slice without repeating completed work.'
     assert failed['evidence']['log'] in requests[-1]['packet']['worker_evidence']
     restored = json.loads((folder/'coding-checkpoint.json').read_bytes())
     assert restored['returncode'] == 1 and len(restored['coding_usage']['managed_turns']) == 2

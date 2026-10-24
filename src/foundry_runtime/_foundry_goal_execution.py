@@ -14,7 +14,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                   reviewers=None, recovery_file=None, manager_state=None, retained=None,
                   task_staffing=None, handover=None, project_record=None, manager_answer=None,
                   follow_up_goal=None, migrate_recovered_manager=False, worker_recovery=False, task_deadline_at=None,
-                  review_author_models=None, initializing=False, **_legacy):
+                  review_author_models=None, initializing=False, disposable_scratch=False, **_legacy):
     """Execute the three-part task, then judge the frozen commit twice."""
     from . import foundry_goal as owner
     from .foundry_goal import (
@@ -201,6 +201,12 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             _write(evidence_dir / 'coding-checkpoint.json', continued_coding)
             manifest['coding_checkpoint'] = _fact(evidence_dir / 'coding-checkpoint.json')
             manifest['manager_phase'] = 'feedback_pending'
+    from . import _goal_scratch
+    if disposable_scratch and retained is None and not continuation and not amend_from and review_range is None:
+        _goal_scratch.register(evidence_dir, manifest)
+    project_plan_prompt = plan_prompt
+    def plan_prompt(body, decision):
+        return _goal_scratch.prompt(project_plan_prompt(body, decision), manifest)
     _write(evidence_dir / "manifest.json", manifest)
     if retained is not None or follow_up_goal is None:
         announce(evidence_dir, manifest)
@@ -571,8 +577,11 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                                            plan_prompt(message, execution_decision),
                                                            **policy, **(coding_compute or {}))
                         elif amendment is None:
+                            dispatch_decision = {**(execution_decision or {}),
+                                **({'disposable_scratch': manifest['disposable_scratch']}
+                                   if manifest.get('disposable_scratch') else {})}
                             result = dispatch.dispatch_order(order, predispatch_receipt=receipt_path,
-                                                             **({"execution_decision": execution_decision} if execution_decision else {}),
+                                                             **({"execution_decision": dispatch_decision} if dispatch_decision else {}),
                                                              **policy, **(coding_compute or {}))
                         else:
                             result = dispatch.resume_order(coding_session, tree, tag,
@@ -833,6 +842,6 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             _record_usage(evidence_dir, coding, native, outcome, native_team=native_team,
                           context=manifest["delivery_context"])
             if phase == "artifacts" and outcome is not None:
-                _write(evidence_dir / "outcome.json", outcome)
+                owner._publish_outcome(evidence_dir, outcome)
     _write(evidence_dir / "outcome.json", outcome)
     return outcome

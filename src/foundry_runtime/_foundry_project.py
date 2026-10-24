@@ -59,6 +59,8 @@ def load(path):
     if "launch" in value:
         from ._launch_context import validate_project_launch
         validate_project_launch(value["launch"])
+    if 'default_provider' in value and value['default_provider'] not in ('codex', 'claude'):
+        raise ValueError('default_provider must be codex or claude')
     return value
 
 

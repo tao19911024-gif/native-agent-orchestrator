@@ -57,6 +57,8 @@ def add_arguments(ap) -> None:
     ap.add_argument('--upgrade-requested-runtime', help=argparse.SUPPRESS)
     ap.add_argument("--retained-only", action="store_true", help="with --recover-goal, recover completed historical reviews without model calls or project acceptance")
     ap.add_argument("--goal-evidence")
+    ap.add_argument('--disposable-scratch', action='store_true',
+                    help='register disposable storage for a new goal; reclaim after successful completion')
     ap.add_argument("--analysis-evidence")
     ap.add_argument("--analyst-backend", choices=("codex", "claude"), default=None)
     ap.add_argument("--analyst-exe")
@@ -105,6 +107,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     coding_session = getattr(a, "coding_session", None)
     auto_model, auto_effort = getattr(a, "auto_amend_model", None), getattr(a, "auto_amend_effort", None)
     recovery = getattr(a, "recover_goal", None)
+    if getattr(a, 'disposable_scratch', False) and (not a.foundry_goal or recovery or amend_from):
+        ap.error('--disposable-scratch applies only to a new --foundry-goal')
     if getattr(a, 'retained_only', False) and not recovery:
         ap.error('--retained-only requires --recover-goal')
     recovery_file = getattr(a, "recovery_file", None)
@@ -122,11 +126,12 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     manager_profile = getattr(a, "manager_profile", None)
     task_kind = getattr(a, "task_kind", None)
     launcher_explicit = getattr(a, "launcher_explicit", False)
-    kind_chooses_provider = (a.foundry_goal and not amend_from and not provider and not launcher_explicit
+    project_provider = getattr(a, 'project_default_provider', None)
+    kind_chooses_provider = (a.foundry_goal and not amend_from and not provider and not launcher_explicit and not project_provider
             and profile in (None, "claude")
             and not any(name and not name.startswith("claude-") for name in (a.coding_model, auto_model)))
     # Task kind and explicit operator choices own staffing, not quota pacing.
-    if kind_chooses_provider and task_kind == "ui-live":
+    if project_provider == 'claude' or (kind_chooses_provider and task_kind == "ui-live"):
         a.launcher = "claude"
         # Kind selects Claude coding, not the explicit --provider all-roles contract.
         # A reviewer model pair without a backend retains the CLI's Codex default,
@@ -289,7 +294,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 "effort": "high" if admission_provider == "claude" else "native-default",
                 "source": admission_source}
             kind_backend = "claude" if task_kind == "ui-live" else "codex"
-            team_backend_source = ("explicit" if launcher_explicit or requested_provider or
+            team_backend_source = ('project' if project_provider else "explicit" if launcher_explicit or requested_provider or
                                    coding_backend != kind_backend else "kind")
             team_source_detail = {"profile": "explicit" if team_profile else "kind",
                                   "backend": team_backend_source}
@@ -301,6 +306,10 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 ("correction", auto_model or a.compute_profile or requested_provider or launcher_explicit),
                 ("reviewers", a.review_profile or a.compute_profile or a.analyst_model or a.analyst_backend or
                  requested_provider))}
+            if project_provider:
+                staffing_sources.update(coding='project', correction='project')
+                if not team_profile:
+                    staffing_sources['team'] = 'project'
             review_source_detail = {
                 "backend": "explicit" if a.analyst_backend or a.review_profile or requested_provider or
                     (task_kind == "ui-live" and a.analyst_model and backend == "codex") else "kind",
@@ -308,7 +317,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             profile = profile or ("claude" if coding_backend == "claude" else
                                   "sol-claude" if kind_row["compute_profile"] == "claude" else
                                   kind_row["compute_profile"])
-            compute_source = ("explicit" if a.compute_profile or requested_provider or launcher_explicit else "kind")
+            compute_source = ("explicit" if a.compute_profile or requested_provider or launcher_explicit
+                              else 'project' if project_provider else "kind")
             # New Codex execution starts with Opus coordination. A provider
             # selection is not evidence that Claude quota is unavailable;
             # measured refusal transfers the retained manager in the goal owner.
@@ -429,6 +439,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 amend_from=amend_from, coding_session=coding_session or getattr(a, '_boundary_session', None),
                 **({'amend_prompt': amend_prompt} if amend_from and amend_prompt is not None else {}),
                 auto_amend_model=auto_model, auto_amend_effort=auto_effort,
+                **({'disposable_scratch': True} if getattr(a, 'disposable_scratch', False) else {}),
                 compute_profile=profile,
                 compute_source=compute_source,
                 task_kind=task_kind, staffing_sources=staffing_sources,

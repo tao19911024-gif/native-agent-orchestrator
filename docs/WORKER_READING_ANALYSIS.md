@@ -89,6 +89,21 @@ experiment evidence.
 | Overlapping guidance reads | 19 | 9 | -52.63% |
 | Overlaps after a retained truncation marker | 28 | 24 | -14.29% |
 
+The same-turn native start and completion timestamps provide elapsed time:
+
+| Run | Reading guidance | Elapsed seconds |
+| --- | --- | ---: |
+| A1 | Baseline | 450.190 |
+| A2 | Baseline | 313.214 |
+| C1 | Scoped | 413.040 |
+| C2 | Scoped | 403.315 |
+
+Scoped runs took 816.355 seconds combined against 763.404 seconds for the
+controls, an increase of 6.94%. The measured token and reread reductions did
+not improve combined elapsed time. Timing includes worker tools and provider
+waits; setup and independent local acceptance are outside this boundary.
+Subsequent comparisons retain both elapsed-time and token observations.
+
 Usage is reconciled by native response ID to each execution receipt. Cached
 input is included in input; reasoning output is included in output. The totals
 cover the worker's diagnosis, implementation, verification, storage disposition,
