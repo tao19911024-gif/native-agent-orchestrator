@@ -66,15 +66,24 @@ def _fact(path):
 
 
 def _publish_outcome(folder, outcome):
-    """Publish completion before disposing explicitly registered task storage."""
-    _write(folder / 'outcome.json', outcome)
+    """Finalize goal storage and usage before publishing the completed outcome."""
     manifest = json.loads((folder / 'manifest.json').read_bytes())
     if 'disposable_scratch' not in manifest:
+        _write(folder / 'outcome.json', outcome)
         return
     from ._goal_scratch import reclaim
     usage_path = folder / 'usage.json'
     usage = json.loads(usage_path.read_bytes()) if usage_path.exists() else {}
-    usage['scratch'] = reclaim(folder, manifest, outcome, usage.get('scratch'))
+    prior = usage.get('scratch') or {**manifest['disposable_scratch'],
+                                   'bytes_reclaimed': 0, 'files_removed': 0}
+    if prior.get('status') == 'reclaiming':
+        prior = {**prior, 'accounting': 'partial_after_interruption'}
+    if outcome.get('status') in {'candidate_verified', 'artifacts_delivered'}:
+        # An interrupted cleanup resumes through the existing review/manager
+        # checkpoint. Never leave a success outcome pointing at mutable usage.
+        usage['scratch'] = {**prior, 'status': 'reclaiming'}
+        _write(usage_path, usage)
+    usage['scratch'] = reclaim(folder, manifest, outcome, prior)
     _write(usage_path, usage)
     outcome['task_usage'] = _fact(usage_path)
     outcome['delivery_report'] = goal_usage.delivery_report(outcome, usage, manifest.get('delivery_context'))

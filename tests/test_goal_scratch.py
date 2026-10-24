@@ -28,11 +28,14 @@ def test_cli_registers_only_new_goal_option(external, monkeypatch):
     assert len(prepared) == 1
 
 
-@pytest.mark.parametrize('interrupted', [False, True])
-def test_goal_reclaims_one_gib_after_review_and_preserves_report(external, tmp_path, monkeypatch, interrupted):
+@pytest.mark.parametrize('interrupted', [False, True, 'before-reclaim', 'during-reclaim', 'after-usage'])
+def test_goal_scratch_survives_review_and_completion_interruptions(external, tmp_path, monkeypatch, interrupted):
     _, scope, order, launches = external
     folder = tmp_path / 'goal'
     original = dispatch.coding_argv
+    chunks = 1024 if isinstance(interrupted, bool) else 1
+    expected_bytes = chunks * 1024**2
+    native_analyst = goal.NativeAnalyst
     outputs = []
     def coding(*args, **kwargs):
         outputs.append(Path(args[args.index('-o') + 1]))
@@ -40,7 +43,7 @@ def test_goal_reclaims_one_gib_after_review_and_preserves_report(external, tmp_p
         argv[-1] += (
             f"; scratch=Path({str(folder / 'disposable')!r}); "
             "f=(scratch/'fixture.bin').open('wb'); block=b'x'*(1024*1024); "
-            "[f.write(block) for _ in range(1024)]; f.close(); "
+            f"[f.write(block) for _ in range({chunks})]; f.close(); "
             f"Path({str(folder / 'report.txt')!r}).write_text('retained evidence'); "
             "import subprocess; Path('candidate.txt').write_text('done'); "
             "subprocess.run(['git','add','candidate.txt'],check=True); "
@@ -49,12 +52,57 @@ def test_goal_reclaims_one_gib_after_review_and_preserves_report(external, tmp_p
         return argv
     class Review(Analyst):
         def __call__(self, request):
-            assert (folder / 'disposable' / 'fixture.bin').stat().st_size == 1024**3
+            assert (folder / 'disposable' / 'fixture.bin').stat().st_size == expected_bytes
             assert (folder / 'report.txt').read_text() == 'retained evidence'
             return super().__call__(request)
     monkeypatch.setattr(dispatch, 'coding_argv', coding)
     monkeypatch.setattr(goal, 'NativeAnalyst', Review)
-    if interrupted:
+    if isinstance(interrupted, str):
+        from foundry_runtime import foundry_native as native
+        monkeypatch.setattr(goal, 'NativeAnalyst', native_analyst)
+        spawn, review_calls = native.OwnedProcess.spawn, []
+        def review_process(argv, **kwargs):
+            source = kwargs.get('stdin')
+            if 'reviews' not in str(getattr(source, 'name', '')):
+                return spawn(argv, **kwargs)
+            assert len(review_calls) < 2, 'completed review must be reused'
+            request = json.loads(source.read().rsplit(b'\n\n', 1)[-1]); source.seek(0)
+            review_calls.append(str(source.name))
+            context = request['packet']
+            value = {'candidate_commit': context['candidate_commit'],
+                     'packet_sha256': request['packet_sha256'], 'verdict': 'PASS', 'findings': []}
+            slot = 1 if 'review-1' in str(source.name) else 0
+            rows = [{'type': 'thread.started', 'thread_id': f'00000000-0000-4000-8000-{slot+1:012d}'},
+                    {'type': 'turn.started'}, {'type': 'item.completed',
+                     'item': {'id': 'final', 'type': 'agent_message', 'text': json.dumps(value)}},
+                    {'type': 'turn.completed', 'usage': {'input_tokens': 10, 'output_tokens': 5}}]
+            script = 'import sys; sys.stdin.buffer.read(); sys.stdout.write(' + repr('\n'.join(map(json.dumps, rows))+'\n') + ')'
+            return spawn([sys.executable, '-B', '-c', script], **kwargs)
+        monkeypatch.setattr(native.OwnedProcess, 'spawn', review_process)
+        original_write, original_unlink = goal._write, Path.unlink
+        def write(path, value):
+            original_write(path, value)
+            state = value.get('scratch', {}).get('status')
+            if Path(path).name == 'usage.json' and (
+                    interrupted == 'before-reclaim' and state == 'reclaiming' or
+                    interrupted == 'after-usage' and state == 'reclaimed'):
+                raise RuntimeError('fixture completion interrupted')
+        def unlink(path, *args, **kwargs):
+            original_unlink(path, *args, **kwargs)
+            if path.name == 'fixture.bin':
+                raise RuntimeError('fixture completion interrupted')
+        monkeypatch.setattr(goal, '_write', write)
+        if interrupted == 'during-reclaim':
+            monkeypatch.setattr(Path, 'unlink', unlink)
+        with pytest.raises(RuntimeError, match='fixture completion interrupted'):
+            goal.run_goal(order, folder, Path(sys.executable), coding_launcher='exec',
+                          project_record=scope.record(), disposable_scratch=True)
+        assert not (folder / 'outcome.json').exists()
+        monkeypatch.setattr(goal, '_write', original_write)
+        monkeypatch.setattr(Path, 'unlink', original_unlink)
+        outcome = goal.recover_goal(order, folder)
+        assert len(review_calls) == 2
+    elif interrupted:
         class InterruptedReview(Review):
             def __call__(self, request):
                 super().__call__(request)
@@ -74,7 +122,9 @@ def test_goal_reclaims_one_gib_after_review_and_preserves_report(external, tmp_p
     assert not (folder / 'disposable').exists()
     assert (folder / 'report.txt').read_text() == 'retained evidence'
     usage = json.loads(goal.goal_usage._reference(outcome['task_usage']))
-    assert usage['scratch']['bytes_reclaimed'] == 1024**3
+    assert usage['scratch']['bytes_reclaimed'] == (0 if interrupted == 'during-reclaim' else expected_bytes)
+    if interrupted in ('before-reclaim', 'during-reclaim'):
+        assert usage['scratch']['accounting'] == 'partial_after_interruption'
     assert usage['scratch']['status'] == 'reclaimed'
     assert outcome['delivery_report']['usage_reference'] == outcome['task_usage']
     # The actual dispatcher prompt reaches the synthetic native process.

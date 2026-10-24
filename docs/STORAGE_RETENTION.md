@@ -104,13 +104,18 @@ requesting review or delivering artifacts. No host-wide environment changes
 are made.
 
 The existing goal owner retains this directory during execution, review,
-interruption and recovery. After publishing `candidate_verified` or
+interruption and recovery. After obtaining `candidate_verified` or
 `artifacts_delivered`, it reclaims the registered directory and records the
 observed logical bytes and file count in `usage.json` under `scratch`. A named
 delivered artifact inside that directory retains the entire directory with its
 reason. Filesystem links are removed without traversing their targets. A file
 that cannot be removed remains in place with the cleanup error recorded; the
-task result keeps its original verdict.
+task result keeps its original verdict. The completed outcome is published once
+the usage reference is final. An interruption before publication resumes through
+the existing review or manager checkpoint without repeating completed work.
+If deletion was interrupted before its counters were saved, usage marks scratch
+accounting as `partial_after_interruption`; the counters contain only recorded
+removals, rather than an estimate of lost observations.
 
 This declaration is per goal directory. A continuation or correction in a
 different directory does not inherit authority to delete its predecessor's

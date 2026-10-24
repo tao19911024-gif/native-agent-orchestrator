@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a98 — 2026-10-23
 
 - Add opt-in disposable storage for new goals, retained through review and
   recovery and reclaimed by the existing completion owner. Record removed
   bytes and cleanup failures in task usage; preserve named delivered artifacts
   and historical directories.
+  Finalize cleanup and usage before publishing completion so interrupted
+  cleanup resumes from the existing checkpoint without a stale usage reference.
 
 - Allow project descriptors to select the default coding provider for new goals.
   Explicit choices take precedence and recorded recovery choices remain unchanged;
