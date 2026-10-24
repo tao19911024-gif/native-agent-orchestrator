@@ -25,6 +25,14 @@ other entry files. The format and identity rules are implemented by
 Store the descriptor outside the source repository. Configure it before the
 first dispatch; continuations retain its recorded identity and bytes.
 
+The project execution prompt directs workers to read rule entries once, reuse
+unchanged material already in context, and locate task-relevant sections in
+referenced guidance and source files. Combined tool output must fit the selected
+output budget. Large results remain in task evidence; after truncation, workers
+retrieve the required missing ranges. Project-mandated full coverage and checks
+remain part of the task. This guidance uses the existing prompt and introduces
+no additional reading gate or output-limit override.
+
 ## Execution owner and preflight
 
 Merge this object into the generated descriptor:
