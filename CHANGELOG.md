@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a100 — 2026-10-24
 
 - Allow an explicit coding-provider handoff in a managed goal while retaining
   the manager session, failed-worker feedback and completed evidence. Resume the
