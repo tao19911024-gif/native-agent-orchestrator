@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit an explicit contract revision after a failed worker has settled at the
+  manager feedback boundary. Verify the retained checkpoint through the existing
+  dispatch completion owner before publishing the revision.
+
 - Rotate installed version directories from current selection, one rollback,
   explicit active-task holds and live host references. Daily cleanup no longer
   traverses historical archives; archive investigation uses `--audit-history`.

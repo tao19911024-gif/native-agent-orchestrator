@@ -86,6 +86,13 @@ states and a repeated conflict-response correction scenario.
 
 ## Reconcile interrupted execution
 
+An explicitly authorized `--order-revision` can reconcile the retained contract
+at a settled failed-worker feedback boundary. The existing dispatch completion
+verifier checks the original checkpoint, terminal and cleanup before admission.
+Original goal identity and checkpoint evidence remain unchanged. Contract
+revision and runtime upgrade are separate recorded operations; neither establishes
+business acceptance.
+
 For an `unknown` direct attempt, project status returns `recovery_commands` when
 the original package and native identities are available. The generated
 `reconcile` command measures the recorded processes and cleanup state. Where

@@ -60,11 +60,17 @@ def validate(owner, folder, manifest, order, decision):
             or request.get('order') != manifest['order']):
         raise owner.GoalBlocked('order revision must name this exact original goal and operator decision')
     outcome_path = folder/'outcome.json'
+    outcome = json.loads(outcome_path.read_bytes()) if outcome_path.exists() else {}
     waiting = (manifest.get('manager_phase') == 'awaiting_input'
-               and outcome_path.exists()
-               and json.loads(outcome_path.read_bytes()).get('status') == 'awaiting_input')
+               and outcome.get('status') == 'awaiting_input')
+    failed_feedback = (manifest.get('manager_state') and not manifest.get('review_checkpoint')
+                       and manifest.get('manager_phase') == 'feedback_pending'
+                       and outcome.get('status') == 'coding_incomplete' and manifest.get('coding_checkpoint'))
+    if failed_feedback:
+        from ._recovery_reconciliation import completed_coding
+        completed_coding(json.loads(owner.goal_usage._reference(manifest['coding_checkpoint'])))
     if (not manifest.get('manager_state') or manifest.get('review_checkpoint')
-            or (outcome_path.exists() and not waiting)):
+            or (outcome_path.exists() and not (waiting or failed_feedback))):
         raise owner.GoalBlocked('order revision belongs to an unfinished manager goal; completed work uses its amendment boundary')
     row = {'decision': fact, 'request': request}
     for name in ('previous', 'revised', 'authorization'):
