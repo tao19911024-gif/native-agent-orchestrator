@@ -177,12 +177,12 @@ class Panel:
             value = self.members[name](actual)
         if self.validate:
             self.validate(value)
-        self.results[name] = {'value': value, 'session': self.members[name].native_session(actual)}
+        self.results[name] = {'value': value}
         return value
 
     def native_session(self, request):
         name = self.routes[request['call_id']]
-        if name in self.results:
+        if name in self.results and 'session' in self.results[name]:
             return self.results[name]['session']
         return self.members[name].native_session(self.active_requests[name])
 
