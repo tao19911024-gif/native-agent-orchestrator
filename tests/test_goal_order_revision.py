@@ -314,3 +314,33 @@ def test_boundary_input_authorizes_new_round_contract_without_rewriting_root(ext
                   runtime_upgrades=[{'round': str(next_round), 'input': goal._fact(prepared)}])
     assert revision.records(goal, parent)[0] == goal._fact(order)
     assert parent['order'] == manifest['order']
+
+@pytest.mark.parametrize('settled', [True, False])
+def test_explicit_revision_after_failed_worker_uses_existing_completion_verifier(external, tmp_path, monkeypatch, settled):
+    from foundry_runtime import _recovery_reconciliation as reconciliation
+    folder, manifest, order, decision = revision_case(external, tmp_path)
+    manifest['manager_phase'] = 'feedback_pending'
+    path = folder/'coding-checkpoint.json'
+    checkpoint = json.loads(path.read_bytes()); checkpoint['returncode'] = 1
+    goal._write(path, checkpoint); manifest['coding_checkpoint'] = goal._fact(path)
+    checkpoint_before = path.read_bytes()
+    goal._write(folder/'manifest.json', manifest)
+    goal._write(folder/'outcome.json', {'status':'coding_incomplete'})
+    before = (folder/'manifest.json').read_bytes()
+    calls = []
+    def verify(value):
+        calls.append(value)
+        if not settled:
+            raise goal.GoalBlocked('original worker cleanup is unsettled')
+        return {'state':'completed','cleanup_verified':True}
+    monkeypatch.setattr(reconciliation, 'completed_coding', verify)
+    if settled:
+        saved = revision.admit(goal, folder, manifest, order, decision)
+        assert revision.matches(goal, order, saved) and revision.pending(saved)
+        assert path.read_bytes() == checkpoint_before
+    else:
+        with pytest.raises(ValueError, match='cleanup is unsettled'):
+            revision.admit(goal, folder, manifest, order, decision)
+        assert (folder/'manifest.json').read_bytes() == before
+    assert calls == [checkpoint]
+    assert not external[3]
