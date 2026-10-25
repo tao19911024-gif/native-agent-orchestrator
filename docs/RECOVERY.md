@@ -141,9 +141,19 @@ checkpoint remains unchanged. Completed eligible slots retain their verdicts;
 only unfinished slots receive replacement assignments. Explicit model choices
 and provider transfers retain their recorded selection rules.
 
+Review exclusions include model-bearing coding responses, native model-usage
+observations and acknowledged team assignments. These participation records
+remain distinct from observed editing authors. Configured roles without usage
+or an acknowledged assignment do not establish participation. Older reviews can
+reconcile the existing retained coding stream against its recorded hash; the
+effective exclusions are reported without rewriting the original checkpoint.
+When only some default slots need replacement, selection excludes models in
+retained slots and requests only the number of unfinished replacements.
+
 Codex `Reconnecting... n/m` error events with retries remaining are progress
 within the current native turn. Keep the existing operation handle while the
-client retries. A final retry notice, failed turn or nonzero process exit
+client retries, including before `thread.started`. A final retry notice, failed
+turn or nonzero process exit
 retains its failure outcome. Review completion still requires the native
 terminal event and validated result. A successful sibling's result is retained
 when the other reviewer fails.

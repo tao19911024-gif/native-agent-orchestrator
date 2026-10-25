@@ -776,7 +776,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             from ._compute_selection import execution_evidence
             from ._foundry_goal_transitions import select_reviewers
             checkpoint['implementation_evidence'] = execution_evidence(coding)
-            if not checkpoint['implementation_evidence']['implementation_models'] and (coding_compute or {}).get('model'):
+            if not checkpoint['implementation_evidence']['review_exclusion_models'] and (coding_compute or {}).get('model'):
                 checkpoint['implementation_evidence']['review_exclusion_models'] = [coding_compute['model']]
                 checkpoint['implementation_evidence']['review_exclusion_basis'] = 'recorded coding assignment fallback; editing authorship unverified'
             checkpoint['implementation_evidence']['review_exclusion_models'] = list(dict.fromkeys([
@@ -791,7 +791,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 reviewers = current_reviews
                 checkpoint['review_selection_gap'] = str(exc)
             reviewers = [{**r, 'executable': r.get('executable') or str(executable)} for r in reviewers]
-            checkpoint['model_independence'] = ('observed_editing_participants_excluded' if
+            checkpoint['model_independence'] = ('observed_coding_participants_excluded' if
+                checkpoint['implementation_evidence']['coding_participant_models'] else 'observed_editing_participants_excluded' if
                 checkpoint['implementation_evidence']['implementation_models'] else
                 'recorded_coding_assignment_excluded' if checkpoint['implementation_evidence'].get('review_exclusion_models') else 'unverified_missing_participant_evidence')
             manifest['reviewers'] = reviewers

@@ -263,33 +263,43 @@ def reading_signals(rows, turn):
                      'missing/unclassified calls remain unknown. Observational only; not read admission or a savings estimate.'}
 
 
-def claude_work(path):
+def claude_work(path, *, expected_sha256=None):
     """Model-bearing editing calls and test outcomes from the retained CLI stream."""
-    models, failures, seen, owners = set(), [], set(), {}
-    with Path(path).open(encoding='utf-8') as stream:
+    models, participants, failures, seen, owners, delegates = set(), set(), [], set(), {}, {}
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
         for line in stream:
+            digest.update(line)
             row = json.loads(line)
             message = row.get('message') or {}
+            if isinstance(message.get('model'), str):
+                participants.add(message['model'])
             content = message.get('content', [])
             for item in content if isinstance(content, list) else []:
                 identity = item.get('id', item.get('tool_use_id'))
                 if item.get('type') == 'tool_use':
                     owners[identity] = message.get('model')
+                    if item.get('name') in ('Agent', 'Task') and isinstance((item.get('input') or {}).get('model'), str):
+                        delegates[identity] = item['input']['model']
                     obs = tool_record({'type': 'function_call', 'call_id': identity,
                         'name': item.get('name', ''), 'arguments': json.dumps(item.get('input', {}))})
                     if obs and obs['implementation'] and message.get('model'):
                         models.add(message['model'])
                 elif item.get('type') == 'tool_result' and identity not in seen:
                     seen.add(identity)
+                    if identity in delegates and not item.get('is_error'):
+                        participants.add(delegates[identity])
                     failures += [{'call_id': identity, 'test_id': t, 'model': owners.get(identity)}
                                  for t in test_failures(_output_text(item.get('content', '')))]
-    return {'models': sorted(models), 'test_failures': failures,
+    if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+        raise ValueError('retained coding stream changed')
+    return {'models': sorted(models), 'participant_models': sorted(participants), 'test_failures': failures,
             'basis': 'model-bearing editing requests and named assertion outputs; not proof of every change author'}
 
 
-def observe_work(path):
+def observe_work(path, *, expected_sha256=None):
     try:
-        return claude_work(path)
+        return claude_work(path, expected_sha256=expected_sha256)
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
         return {'models': [], 'test_failures': [], 'coverage': 'uncovered', 'gap': str(exc)}
 

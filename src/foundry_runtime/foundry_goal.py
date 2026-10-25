@@ -834,6 +834,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     from . import _foundry_dispatch as dispatch
     context, tree = checkpoint["context"], Path(checkpoint["worktree"])
     native, outcome = None, None
+    participation = checkpoint.get('implementation_evidence') or {}
     try:
         names = ["review-0", "review-1"]
         manifest = json.loads((folder/'manifest.json').read_bytes())
@@ -869,13 +870,15 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
             selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
             try:
-                participation = checkpoint.get('implementation_evidence') or {}
+                if not retained_only:
+                    participation = goal_usage.review_participation(checkpoint.get('coding_usage') or {}, participation)
                 excluded = participation.get('review_exclusion_models', participation.get('implementation_models', []))
                 default_pending = [name for name in names if name not in analyst.results and not transfers.get(name)]
                 if not retained_only and default_pending:
                     from ._foundry_goal_transitions import select_reviewers
                     choices = select_reviewers(selected, [*excluded, *declared_authors], manifest,
-                                               checkpoint.get('compute_assignment'), resolve=resolve_executable)
+                                               checkpoint.get('compute_assignment'), resolve=resolve_executable,
+                                               pending=[names.index(name) for name in default_pending])
                     for name, current, chosen in zip(names, selected, choices):
                         if name in default_pending and chosen != current:
                             transfers.setdefault(name, []).append(chosen)
@@ -925,7 +928,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             outcome['retained_recovery'] = {'model_calls': 0, 'acceptance_evaluated': False,
                 'current_head': _git(tree, 'rev-parse', 'HEAD').decode().strip()}
         if checkpoint.get('implementation_evidence'):
-            outcome['implementation_evidence'] = checkpoint['implementation_evidence']
+            outcome['implementation_evidence'] = participation
             outcome['model_independence'] = checkpoint['model_independence']
         if not retained_only and context.get("project_record"):
             from ._project_execution import from_record

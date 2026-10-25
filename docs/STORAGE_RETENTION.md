@@ -119,6 +119,15 @@ and structured result outside the source repository. Restore all required
 evidence-root options when reusing an earlier command, including explicit
 targets of junctions that leave the registered evidence roots.
 
+Version entries registered directly under `releases` may point to relocated
+physical installations. Pass the registered entry to `--prune-release`.
+Inventory keeps the physical path as its candidate identity and records
+`release_aliases`; process arguments, scheduled actions and Python environment
+references match both forms. Removal rechecks that the entry still points to
+the observed physical version, performs the existing dependency checks, removes
+the physical directory and then removes its alias. Both paths must be absent
+for a completed deletion. A failure remains recorded and stops the operation.
+
 Discovery reads the entire evidence tree, including nested source and test
 copies. Four bounded readers perform directory enumeration, attribute reads and
 link resolution; dependency classification stays on the caller thread. A failed

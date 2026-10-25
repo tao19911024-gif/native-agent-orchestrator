@@ -216,7 +216,7 @@ def _native_dependencies(record):
             yield from _native_dependencies(value)
 
 
-def _python_dependencies(interpreter, releases):
+def _python_dependencies(interpreter, releases, aliases=None):
     """Installed .pth/venv references can keep a release even outside its process path."""
     path = Path(interpreter)
     if path.name.lower() not in ('python.exe', 'pythonw.exe'):
@@ -235,8 +235,8 @@ def _python_dependencies(interpreter, releases):
                           if line.partition('=')[0].strip().lower() == 'home'), '')
         text = value.replace('\\\\', '\\').replace('/', '\\').casefold()
         for release in releases:
-            needle = release.replace('/', '\\').casefold()
-            if re.search(re.escape(needle) + r'(?=\\|\s|[\"\x27]|$)', text):
+            names = [release, *(aliases or {}).get(release, [])]
+            if any(re.search(re.escape(name.replace('/', '\\').casefold()) + r'(?=\\|\s|[\"\x27]|$)', text) for name in names):
                 yield release, source
         if source.suffix == '.pth':
             for line in value.splitlines():
@@ -317,7 +317,11 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     home = Path(selection).resolve().parent
     releases = home / 'releases'
     gaps, keep, unknown, unfinished, registered = [], {}, [], [], []
-    versions = {str(p.resolve()): [] for p in releases.iterdir() if p.is_dir()}
+    aliases = {}
+    for path in releases.iterdir():
+        if path.is_dir():
+            aliases.setdefault(str(path.resolve()), []).append(str(path))
+    versions = {path: [] for path in aliases}
     if roots is None:
         roots, discovered_gaps = known_roots(selection, extra_roots)
         gaps.extend(discovered_gaps)
@@ -524,20 +528,20 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
                 protect(action['Execute'], 'scheduled registration', registration['name'])
                 arguments = str(action.get('Arguments') or '').replace('/', '\\').casefold()
                 for version, reasons in versions.items():
-                    if version.replace('/', '\\').casefold() + '\\' in arguments:
+                    if any(name.replace('/', '\\').casefold() + '\\' in arguments for name in [version, *aliases[version]]):
                         reasons.append({'reason': 'scheduled action argument', 'source': registration['name']})
         for process in host['processes']:
             text = '\n'.join(str(process.get(k) or '') for k in ('ExecutablePath', 'CommandLine')).replace('/', '\\').casefold()
             for version, reasons in versions.items():
-                if version.replace('/', '\\').casefold() + '\\' in text:
+                if any(name.replace('/', '\\').casefold() + '\\' in text for name in [version, *aliases[version]]):
                     reasons.append({'reason': 'live process', 'source': 'pid:' + str(process['ProcessId'])})
             first = re.match(r'^\s*(?:"([^"]+)"|(\S+))', str(process.get('CommandLine') or ''))
             for interpreter in [process.get('ExecutablePath'), next((x for x in first.groups() if x), None) if first else None]:
                 if interpreter:
-                    for dependency, source in _python_dependencies(interpreter, versions):
+                    for dependency, source in _python_dependencies(interpreter, versions, aliases):
                         protect(dependency, 'live Python environment dependency', source)
         for interpreter in list(keep):
-            for dependency, source in _python_dependencies(interpreter, versions):
+            for dependency, source in _python_dependencies(interpreter, versions, aliases):
                 protect(dependency, 'retained Python environment dependency', source)
     except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         gaps.append({'source': 'Windows host', 'reason': str(exc)})
@@ -552,14 +556,14 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
         'discovery_roots': list(_discovery['roots']) if _discovery is not None else root_names,
         'unfinished_goals': unfinished, 'hosted_registrations': [r['path'] for r in registered],
         'unknown_provenance': unknown, 'gaps': gaps,
-        'classified_history': classified,
+        'classified_history': classified, 'release_aliases': aliases,
         'interpreters_and_dependencies': [{'path': p, 'reasons': reasons} for p, reasons in sorted(keep.items())],
         'keep': [{'release': p, 'reasons': reasons} for p, reasons in sorted(versions.items()) if reasons],
         'candidates': [p for p, reasons in sorted(versions.items()) if not reasons],
         'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers the archive once, refreshes changed directories and newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
 
 
-def _remove_release(path, root, selection):
+def _remove_release(path, root, selection, *, physical=None):
     """One native PowerShell operation, exact path and fresh process check before removal.
 
     Never use an alternate executor after a host rejection. The caller records
@@ -569,28 +573,54 @@ def _remove_release(path, root, selection):
     $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
     $root = (Resolve-Path -LiteralPath $request.root).ProviderPath.TrimEnd('\')
     $item = Get-Item -LiteralPath $request.path -Force
-    $target = (Resolve-Path -LiteralPath $item.FullName).ProviderPath
-    if ($item.Parent.FullName.TrimEnd('\') -ne $root -or $target -ne $item.FullName -or
-        ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Not a direct release directory' }
+    $target = [IO.Path]::GetFullPath($request.physical)
+    $alias = $item.FullName
+    $linked = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    if ($item.Parent.FullName.TrimEnd('\') -ne $root) { throw 'Not a registered release directory' }
+    if ($linked) {
+        $destination = @($item.Target)[0]
+        if (-not [IO.Path]::IsPathRooted($destination)) { $destination = Join-Path $item.Parent.FullName $destination }
+        if ([IO.Path]::GetFullPath($destination) -ne $target -or [IO.Path]::GetFileName($target) -ne $item.Name) {
+            throw 'Release alias changed; retained'
+        }
+    } elseif ($target -ne $item.FullName) { throw 'Release physical path changed; retained' }
+    if ((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'Physical release root is a link; reconcile before cleanup'
+    }
     if (@(Get-ChildItem -LiteralPath $target -Force -Recurse | Where-Object {
         $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Release contains a link; reconcile before cleanup' }
-    $needle = $target.TrimEnd('\') + '\'
+    $needles = @(($target.TrimEnd('\')+'\'), ($alias.TrimEnd('\')+'\'))
+    function HasReference($text) {
+        if ($text) {
+            foreach ($needle in $needles) {
+                if ($text.Replace('/','\').IndexOf($needle,[StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+            }
+        }
+        return $false
+    }
     $selected = (Get-Content -LiteralPath $request.selection -Raw | ConvertFrom-Json).python
     if (-not $selected) { throw 'Current interpreter unavailable' }
     $references = @($selected) + @(Get-ScheduledTask | Where-Object TaskName -Like 'Foundry-*' | ForEach-Object {
         $_.Actions | ForEach-Object { $_.Execute; $_.Arguments }
     })
-    if (@($references | Where-Object { $_ -and $_.Replace('/','\').IndexOf($needle,[StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count) {
+    if (@($references | Where-Object { HasReference $_ }).Count) {
         throw 'Release acquired a selection or registration reference; retained'
     }
     $live = @(Get-CimInstance Win32_Process | Where-Object {
-        ($_.ExecutablePath -and $_.ExecutablePath.Replace('/','\').IndexOf($needle,[StringComparison]::OrdinalIgnoreCase) -ge 0) -or
-        ($_.CommandLine -and $_.CommandLine.Replace('/','\').IndexOf($needle,[StringComparison]::OrdinalIgnoreCase) -ge 0)
+        (HasReference $_.ExecutablePath) -or (HasReference $_.CommandLine)
     })
     if ($live.Count) { throw 'Release acquired a process reference; retained' }
     Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
-    @{removed=$target; exists=(Test-Path -LiteralPath $target)} | ConvertTo-Json -Compress
-    ''', {'path': str(path), 'root': str(root), 'selection': str(selection)})
+    if (Test-Path -LiteralPath $target) { throw 'Physical release remains after removal' }
+    if ($linked) {
+        $remaining = Get-Item -LiteralPath $alias -Force
+        $destination = @($remaining.Target)[0]
+        if (-not [IO.Path]::IsPathRooted($destination)) { $destination = Join-Path $remaining.Parent.FullName $destination }
+        if ([IO.Path]::GetFullPath($destination) -ne $target) { throw 'Release alias changed after physical cleanup' }
+        Remove-Item -LiteralPath $alias -Force -ErrorAction Stop
+    }
+    @{removed=$target; alias=$alias; exists=((Test-Path -LiteralPath $target) -or (Test-Path -LiteralPath $alias))} | ConvertTo-Json -Compress
+    ''', {'path': str(path), 'root': str(root), 'physical': str(physical or path), 'selection': str(selection)})
 
 
 def prune(selection, rollback_python, targets, *, roots=None, extra_roots=(), project_adapter=None,
@@ -602,7 +632,10 @@ def prune(selection, rollback_python, targets, *, roots=None, extra_roots=(), pr
     initial_candidates = None
     for raw in targets:
         path = Path(raw).absolute()
-        if path.parent != root or path.resolve().parent != root or not re.fullmatch(r'\d+\.\d+\.\d+(?:[ab]\d+)?', path.name):
+        physical = path.resolve()
+        linked = path.is_junction() or path.is_symlink()
+        if (path.parent != root or not re.fullmatch(r'\d+\.\d+\.\d+(?:[ab]\d+)?', path.name)
+                or physical.name != path.name or (physical.parent != root and not linked)):
             raise ValueError('Cleanup accepts only exact direct version directories under ' + str(root))
         if initial_candidates is not None and str(path.resolve()) not in initial_candidates:
             result['retained'].append(str(path))
@@ -629,8 +662,9 @@ def prune(selection, rollback_python, targets, *, roots=None, extra_roots=(), pr
             result['retained'].append(str(path))
             continue
         try:
-            removed = _remove_release(path, root, selection)
-            if removed.get('exists') is not False or path.exists():
+            removed = (_remove_release(path, root, selection, physical=physical) if linked else
+                       _remove_release(path, root, selection))
+            if removed.get('exists') is not False or path.exists() or physical.exists():
                 raise OSError('Removal did not confirm absence')
             result['deleted'].append(str(path))
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
