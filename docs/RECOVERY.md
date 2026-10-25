@@ -133,6 +133,21 @@ Standalone review keeps its declared author-model exclusions when reviewers
 resume or transfer providers. Select a reviewer outside those recorded authors;
 the same independence rule applies before issuing the resumed review request.
 
+Review launch and recovery use the same recorded model-selection policy.
+When frozen default assignments conflict with observed implementation or
+declared author models, recovery selects eligible defaults through the existing
+catalogue and records replacements in `review_transfers`. The original review
+checkpoint remains unchanged. Completed eligible slots retain their verdicts;
+only unfinished slots receive replacement assignments. Explicit model choices
+and provider transfers retain their recorded selection rules.
+
+Codex `Reconnecting... n/m` error events with retries remaining are progress
+within the current native turn. Keep the existing operation handle while the
+client retries. A final retry notice, failed turn or nonzero process exit
+retains its failure outcome. Review completion still requires the native
+terminal event and validated result. A successful sibling's result is retained
+when the other reviewer fails.
+
 Execution and recovery contracts are implemented by
 [`resume_argv` and `status`](../src/foundry_runtime/_project_status.py),
 [`prepare`](../src/foundry_runtime/_foundry_recovery_preflight.py), and

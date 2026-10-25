@@ -773,7 +773,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                       "analyst": {"executable": str(executable), "backend": backend,
                                   "role_compute": role_policy, **(analyst_compute or {})}}
         if (compute_assignment or {}).get('profile_version', 0) >= 5:
-            from ._compute_selection import execution_evidence, independent_reviewers
+            from ._compute_selection import execution_evidence
+            from ._foundry_goal_transitions import select_reviewers
             checkpoint['implementation_evidence'] = execution_evidence(coding)
             if not checkpoint['implementation_evidence']['implementation_models'] and (coding_compute or {}).get('model'):
                 checkpoint['implementation_evidence']['review_exclusion_models'] = [coding_compute['model']]
@@ -782,30 +783,13 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 *checkpoint['implementation_evidence'].get('review_exclusion_models', checkpoint['implementation_evidence']['implementation_models']),
                 *manifest.get('coordination_models', [])]))
             current_reviews = reviewers or [{'backend': backend, **(analyst_compute or {})}] * 2
-            quota_fallback = bool((manager_state or {}).get('quota_fallback'))
-            review_source = (manifest.get('task_staffing') or {}).get('review_source_detail') or {}
-            explicit = (review_source.get('model') == 'explicit' if review_source else
-                        ((manifest.get('task_staffing') or {}).get('sources', {}).get('reviewers') or
-                         (compute_assignment or {}).get('selection', {}).get('source')) == 'explicit') and not quota_fallback
-            if not explicit:
-                executables = {r['backend']: r.get('executable') for r in current_reviews if r.get('executable')}
-                permitted = (('codex',) if quota_fallback else tuple({r['backend'] for r in current_reviews})
-                             if review_source.get('backend') == 'explicit' else ('claude', 'codex'))
-                for provider in permitted:
-                    if provider not in executables:
-                        try:
-                            executables[provider] = str(resolve_executable(provider))
-                        except (OSError, ValueError, RuntimeError):
-                            pass
-                try:
-                    reviewers = independent_reviewers(current_reviews,
-                        checkpoint['implementation_evidence'].get('review_exclusion_models', checkpoint['implementation_evidence']['implementation_models']), available_backends=executables)
-                    reviewers = [{**r, 'executable': r.get('executable') or executables.get(r['backend'])} for r in reviewers]
-                except ValueError as exc:
-                    reviewers = current_reviews
-                    checkpoint['review_selection_gap'] = str(exc)
-            else:
-                reviewers = current_reviews  # Conflict is checked after saving the review checkpoint.
+            try:
+                reviewers = select_reviewers(current_reviews,
+                    checkpoint['implementation_evidence'].get('review_exclusion_models', checkpoint['implementation_evidence']['implementation_models']),
+                    manifest, compute_assignment, resolve=resolve_executable)
+            except ValueError as exc:
+                reviewers = current_reviews
+                checkpoint['review_selection_gap'] = str(exc)
             reviewers = [{**r, 'executable': r.get('executable') or str(executable)} for r in reviewers]
             checkpoint['model_independence'] = ('observed_editing_participants_excluded' if
                 checkpoint['implementation_evidence']['implementation_models'] else

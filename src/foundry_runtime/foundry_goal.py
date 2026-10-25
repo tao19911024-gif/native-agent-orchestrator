@@ -843,7 +843,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                                        read_policy=checkpoint.get('review_read_policy'))
                     for name in names}
         reviewers = checkpoint.get('reviewers') or [checkpoint['analyst']] * 2
-        transfers = manifest.get('review_transfers', {})
+        transfers = {name: list(rows) for name, rows in manifest.get('review_transfers', {}).items()}
         if context.get("project_record"):
             reviewers = [{**row, "execution_profiles": context["project_record"]["context"]["execution_profiles"]}
                          for row in reviewers]
@@ -861,7 +861,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
                     rejected_review=InvalidReview, transfers=transfers)
         if transfers != manifest.get('review_transfers', {}):
-            manifest['review_transfers'] = transfers
+            manifest['review_transfers'] = {name: list(rows) for name, rows in transfers.items()}
             _write(folder/'manifest.json', manifest)
         declared_authors = (context.get('review_authorship') or {}).get('models', [])
         if 'implementation_evidence' in checkpoint or declared_authors:
@@ -871,9 +871,27 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             try:
                 participation = checkpoint.get('implementation_evidence') or {}
                 excluded = participation.get('review_exclusion_models', participation.get('implementation_models', []))
+                default_pending = [name for name in names if name not in analyst.results and not transfers.get(name)]
+                if not retained_only and default_pending:
+                    from ._foundry_goal_transitions import select_reviewers
+                    choices = select_reviewers(selected, [*excluded, *declared_authors], manifest,
+                                               checkpoint.get('compute_assignment'), resolve=resolve_executable)
+                    for name, current, chosen in zip(names, selected, choices):
+                        if name in default_pending and chosen != current:
+                            transfers.setdefault(name, []).append(chosen)
+                    if transfers:
+                        analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
+                            folder/'reviews', tree, resume=resume,
+                            validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                            rejected_review=InvalidReview, transfers=transfers)
+                        selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
+                        selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
                 independent_reviewers(selected, [*excluded, *declared_authors], explicit=True)
             except ValueError as exc:
                 raise GoalBlocked(str(exc), 'review_blocked') from exc
+        if transfers != manifest.get('review_transfers', {}):
+            manifest['review_transfers'] = transfers
+            _write(folder/'manifest.json', manifest)
         try:
             # The panel reuses completed verdicts and gives each unfinished slot
             # a fresh attempt on explicit recovery, retaining every prior receipt.

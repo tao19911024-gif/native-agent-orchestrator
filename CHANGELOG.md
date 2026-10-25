@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Treat Codex stream reconnect notices before the final retry as progress.
+  Preserve terminal provider failures and nonzero process exits, and retain a
+  completed healthy reviewer when its sibling fails.
+- Apply the same reviewer-independence selection during launch and recovery.
+  Reselect conflicting default assignments through existing review transfers,
+  retain explicit choices and reuse completed eligible reviews.
 - Report directory counts, discovered records and cumulative reader time by
   physical evidence root in release-retention results.
 - Establish an ordered storage closeout procedure: dispose of completed

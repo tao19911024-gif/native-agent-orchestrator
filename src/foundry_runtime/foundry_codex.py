@@ -266,6 +266,11 @@ class CodexStreamProtocol:
             error = row.get('error') if kind == 'turn.failed' else row
             message = error.get('message') if isinstance(error, dict) else None
             if isinstance(message, str) and message:
+                # Exec reports stream retry progress as error events. The same
+                # turn can still complete; terminal failure remains authoritative.
+                retry = re.match(r'^Reconnecting\.\.\.\s+(\d+)/(\d+)(?:\s|$)', message) if kind == 'error' else None
+                if retry and 0 < int(retry[1]) < int(retry[2]):
+                    return
                 from .foundry_native import NativeProviderError
                 raise NativeProviderError('native Codex failure: ' + message, event=row)
         # Completion and session identity remain authoritative; extra telemetry
