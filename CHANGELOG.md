@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a101 — 2026-10-24
 
 - Treat Codex stream reconnect notices before the final retry as progress.
   Preserve terminal provider failures and nonzero process exits, and retain a
