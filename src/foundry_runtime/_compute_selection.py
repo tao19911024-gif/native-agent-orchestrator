@@ -20,7 +20,7 @@ ESCALATION_TIERS = {'claude': ('haiku', 'sonnet', 'opus'), 'codex': ('luna', 'so
 
 def execution_evidence(coding):
     """Project frozen observations; never infer implementers from coordinator role."""
-    models, failures, seen, gaps = set(), [], set(), []
+    models, participants, failures, seen, gaps = set(), set(), [], set(), []
     def visit(row):
         identity = (row.get('session_id'), row.get('turn_id'), row.get('attempt_id'))
         if any(identity) and identity in seen:
@@ -38,6 +38,11 @@ def execution_evidence(coding):
         models.update(observed)
         signals = row.get('reading_signals') or {}
         declared = (row.get('model_observation') or {}).get('declarations') or []
+        participants.update(m for m in work.get('participant_models', []) if isinstance(m, str))
+        participants.update(d['model'] for d in declared if isinstance(d, dict) and isinstance(d.get('model'), str))
+        for observed in row.get('models') or []:
+            if isinstance(observed, dict):
+                participants.update(observed[k] for k in ('model', 'canonical_model') if isinstance(observed.get(k), str))
         if signals.get('implementation_calls') and len(declared) == 1:
             models.add(declared[0]['model'])
         observed_model = declared[0]['model'] if len(declared) == 1 else None
@@ -64,7 +69,8 @@ def execution_evidence(coding):
             if not unresolved:
                 break
             active.extend(f for f in recent if f.get('test_id') in unresolved)
-    return {'implementation_models': sorted(models), 'test_failures': failures,
+    return {'implementation_models': sorted(models), 'coding_participant_models': sorted(participants),
+            'review_exclusion_models': sorted(models | participants), 'test_failures': failures,
             'active_test_failures': active,
             'gaps': gaps,
             'basis': 'observed editing participants; coordinator model is not substituted for missing authorship'}
@@ -104,7 +110,7 @@ def escalation(current, evidence, *, prior_findings=(), findings=()):
             'reason': 'Repeated named assertion, blocking finding, or reviewer-identified evidence contradiction; infrastructure failures are excluded.'}
 
 
-def independent_reviewers(assignments, implementation_models, *, explicit=False, available_backends=None):
+def independent_reviewers(assignments, implementation_models, *, explicit=False, available_backends=None, count=2):
     """Select through existing catalogue only; explicit conflicting slots are refused."""
     def canonical(value):
         value = value.removesuffix('[1m]')
@@ -112,9 +118,9 @@ def independent_reviewers(assignments, implementation_models, *, explicit=False,
     excluded = {canonical(m) for m in implementation_models}
     rows = review_assignments(assignments)
     if not excluded:
-        return rows  # Missing observation is not evidence of a prohibited reviewer.
+        return rows[:count]  # Missing observation is not evidence of a prohibited reviewer.
     if not any(canonical(row['model']) in excluded for row in rows):
-        return rows
+        return rows[:count]
     if explicit:
         raise ValueError('Reviewer model matches an observed coding participant; select another model, preferably another provider.')
     from ._model_catalogue import tier_for_model
@@ -127,7 +133,7 @@ def independent_reviewers(assignments, implementation_models, *, explicit=False,
         chosen = model(tier)
         if canonical(chosen) not in excluded and chosen not in {r['model'] for r in result}:
             result.append({'backend': BACKEND[tier], 'model': chosen, 'effort': 'high'})
-        if len(result) == 2:
+        if len(result) == count:
             return result
     raise ValueError('No independent review pair is available in the current model catalogue.')
 

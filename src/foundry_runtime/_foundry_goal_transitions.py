@@ -181,7 +181,7 @@ def reviewers(checkpoint, saved, *, role, provider, migrate, completed=()):
     return transfers
 
 
-def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolve):
+def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolve, pending=None):
     """Launch and recovery share the recorded model/provider selection policy."""
     from ._compute_selection import independent_reviewers
     quota_fallback = bool((manifest.get('manager_state') or {}).get('quota_fallback'))
@@ -207,5 +207,13 @@ def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolv
                 executables[provider] = str(resolve(provider))
             except (OSError, ValueError, RuntimeError):
                 pass
-    selected = independent_reviewers(settings, excluded, available_backends=executables)
-    return [{**row, 'executable': row.get('executable') or executables.get(row['backend'])} for row in selected]
+    pending = list(range(len(settings))) if pending is None else list(pending)
+    if not pending:
+        return settings
+    reserved = [row['model'] for index, row in enumerate(settings) if index not in pending]
+    selected = independent_reviewers(settings, [*excluded, *reserved],
+        available_backends=executables, count=len(pending))
+    result = list(settings)
+    for index, row in zip(pending, selected):
+        result[index] = {**row, 'executable': row.get('executable') or executables.get(row['backend'])}
+    return result

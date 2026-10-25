@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0a102 — 2026-10-24
+
+- Record observed coding leads and team members separately from editing authors.
+  Reconcile older participation from hash-bound retained streams for review
+  selection without changing the frozen checkpoint.
+- Exclude retained reviewer models when replacing unfinished default slots, so
+  partial reselection preserves distinct models and completed results.
+- Accept retry progress before Codex thread identity while retaining identity,
+  completion and terminal-error requirements.
+- Match registered release aliases in process, scheduler and Python dependency
+  observations. Remove unused relocated installations and their aliases through
+  the existing serialized retention operation.
+
 ## 0.1.0a101 — 2026-10-24
 
 - Treat Codex stream reconnect notices before the final retry as progress.

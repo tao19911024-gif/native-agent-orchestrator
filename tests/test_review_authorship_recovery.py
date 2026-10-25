@@ -12,7 +12,7 @@ from foundry_runtime import foundry_goal as goal, _foundry_goal_transitions as t
 @pytest.mark.parametrize('explicit,completed,prior', [
     (False, False, None), (False, False, {}), (False, False, 'partial'),
     (False, False, 'new-transfer'),
-    (False, True, None), (True, False, None)])
+    (False, True, None), (False, True, 'completed-luna'), (True, False, None)])
 def test_frozen_review_defaults_reselect_through_existing_transfer(external, tmp_path, monkeypatch, explicit, completed, prior):
     from foundry_runtime._model_catalogue import model
     tree, scope, order, _ = external
@@ -41,20 +41,22 @@ def test_frozen_review_defaults_reselect_through_existing_transfer(external, tmp
     monkeypatch.setattr(transitions, 'resolve_executable', lambda _: Path(sys.executable))
     reviewers = [{'backend': 'codex', 'model': model('astra'), 'effort': 'high'},
                  {'backend': 'claude', 'model': model('sonnet'), 'effort': 'high'}]
+    if prior == 'completed-luna':
+        reviewers[0]['model'] = model('luna')
     folder = tmp_path / 'review'
     with pytest.raises(RuntimeError, match='fixture review interrupted'):
         goal.run_review(order, folder, Path(sys.executable), target_worktree=tree,
             base_commit=base, candidate_commit=head, project_record=scope.record(), reviewers=reviewers)
     manifest = json.loads((folder / 'manifest.json').read_bytes())
     checkpoint = json.loads((folder / 'review-checkpoint.json').read_bytes())
-    checkpoint['implementation_evidence'] = {'implementation_models': [model('sonnet')] if completed or prior == 'new-transfer' else
+    checkpoint['implementation_evidence'] = {'implementation_models': [model('sonnet')] if (completed and prior != 'completed-luna') or prior == 'new-transfer' else
         [model(tier) for tier in ('opus', 'sonnet', 'fable', 'sol', 'astra')]}
     checkpoint['model_independence'] = 'observed_editing_participants_excluded'
     checkpoint['compute_assignment'] = {'selection': {'source': 'explicit' if explicit else 'kind'}}
     goal._write(folder / 'review-checkpoint.json', checkpoint)
     manifest['review_checkpoint'] = goal._fact(folder / 'review-checkpoint.json')
     manifest['task_staffing'] = {'review_source_detail': {'model': 'explicit' if explicit else 'kind', 'backend': 'kind'}}
-    if prior is not None and prior != 'new-transfer':
+    if prior is not None and prior not in ('new-transfer', 'completed-luna'):
         manifest['review_transfers'] = {} if prior == {} else {'review-0': [
             {'backend': 'codex', 'model': model('terra'), 'effort': 'high', 'executable': sys.executable}]}
     goal._write(folder / 'manifest.json', manifest)
@@ -76,7 +78,9 @@ def test_frozen_review_defaults_reselect_through_existing_transfer(external, tmp
         assert goal.recover_goal(order, folder, **transfer)['status'] == 'candidate_verified'
         assert len(calls) == (1 if completed else 2)
         if prior == 'new-transfer':
-            assert set(calls) == {model('opus'), model('sol')}
+            assert set(calls) == {model('opus'), model('astra')}
+        elif prior == 'completed-luna':
+            assert calls == [model('terra')]
         elif not completed:
             assert set(calls) == {model('terra'), model('luna')}
         current = json.loads((folder / 'manifest.json').read_bytes())

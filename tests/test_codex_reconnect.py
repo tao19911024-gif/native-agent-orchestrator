@@ -22,6 +22,21 @@ def test_retry_progress_does_not_end_codex_turn(attempt):
                                       max_bytes=10000, backend='codex') == {'verdict': 'PASS'}
 
 
+def test_retry_before_thread_start_preserves_identity_and_completion():
+    rows = events('Reconnecting... 2/5 (request timed out)')
+    rows.insert(0, rows.pop(2))
+    assert native.parse_native_output('\n'.join(map(json.dumps, rows)).encode(),
+                                     max_bytes=10000, backend='codex') == {'verdict': 'PASS'}
+    with pytest.raises(native.NativeError):
+        native.parse_native_output(json.dumps(rows[0]).encode(), max_bytes=10000, backend='codex')
+
+
+def test_unclassified_reconnect_format_remains_in_error_diagnostic():
+    rows = events('Reconnecting\u2026 2/5 (new client format)')
+    with pytest.raises(native.NativeProviderError, match='Reconnecting\u2026 2/5'):
+        native.parse_native_output('\n'.join(map(json.dumps, rows)).encode(), max_bytes=10000, backend='codex')
+
+
 @pytest.mark.parametrize('kind,message', [
     ('error', 'Reconnecting... 5/5 (request timed out)'),
     ('turn.failed', 'Reconnecting... 2/5 (request timed out)'),

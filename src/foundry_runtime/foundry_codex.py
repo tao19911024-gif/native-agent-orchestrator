@@ -252,6 +252,19 @@ class CodexStreamProtocol:
             return
         if self.result is not None:
             raise _error('Codex event after terminal turn')
+        if self.init is not None and 'thread_id' in row and row['thread_id'] != self.init['session_id']:
+            raise _error('Codex stream changed thread identity')
+        if kind in ('error', 'turn.failed'):
+            error = row.get('error') if kind == 'turn.failed' else row
+            message = error.get('message') if isinstance(error, dict) else None
+            if isinstance(message, str) and message:
+                # Exec reports stream retry progress as error events, including
+                # before thread.started. Completion still requires the identity.
+                retry = re.match(r'^Reconnecting\.\.\.\s+(\d+)/(\d+)(?:\s|$)', message) if kind == 'error' else None
+                if retry and 0 < int(retry[1]) < int(retry[2]):
+                    return
+                from .foundry_native import NativeProviderError
+                raise NativeProviderError('native Codex failure: ' + message, event=row)
         if self.init is None:
             thread_id = row.get('thread_id')
             if (kind != 'thread.started' or set(row) != {'type', 'thread_id'}
@@ -260,19 +273,6 @@ class CodexStreamProtocol:
                 raise _error('Codex stream must start with one valid thread identity')
             self.init = {'session_id': thread_id, 'model': None}
             return
-        if 'thread_id' in row and row['thread_id'] != self.init['session_id']:
-            raise _error('Codex stream changed thread identity')
-        if kind in ('error', 'turn.failed'):
-            error = row.get('error') if kind == 'turn.failed' else row
-            message = error.get('message') if isinstance(error, dict) else None
-            if isinstance(message, str) and message:
-                # Exec reports stream retry progress as error events. The same
-                # turn can still complete; terminal failure remains authoritative.
-                retry = re.match(r'^Reconnecting\.\.\.\s+(\d+)/(\d+)(?:\s|$)', message) if kind == 'error' else None
-                if retry and 0 < int(retry[1]) < int(retry[2]):
-                    return
-                from .foundry_native import NativeProviderError
-                raise NativeProviderError('native Codex failure: ' + message, event=row)
         # Completion and session identity remain authoritative; extra telemetry
         # fields on these events do not change their meaning.
         if kind == 'turn.started':

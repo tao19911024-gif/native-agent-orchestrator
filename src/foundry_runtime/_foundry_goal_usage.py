@@ -84,6 +84,34 @@ def _observations(parent):
     return rows, gaps
 
 
+def review_participation(coding, recorded):
+    """Reconcile older frozen observations from their existing hash-bound streams."""
+    from ._compute_selection import execution_evidence
+    from ._context_signals import observe_work
+    observed = execution_evidence(coding)
+    participants = set(observed['coding_participant_models']) | set(recorded.get('coding_participant_models', []))
+    excluded = set(recorded.get('review_exclusion_models', recorded.get('implementation_models', [])))
+    gaps = [*recorded.get('gaps', []), *observed['gaps']]
+    sources, seen = [], set()
+    for _, row in _observations(coding)[0]:
+        ref = (row.get('source') or {}).get('stdout')
+        if (row.get('backend') != 'claude' or 'participant_models' in (row.get('work_observation') or {})
+                or not ref or (ref['path'], ref['sha256']) in seen):
+            continue
+        seen.add((ref['path'], ref['sha256']))
+        work = observe_work(ref['path'], expected_sha256=ref['sha256'])
+        if work.get('coverage') == 'uncovered':
+            gaps.append(work['gap'])
+        else:
+            participants.update(work['participant_models'])
+            sources.append(ref)
+    return {**recorded, 'implementation_models': sorted(set(recorded.get('implementation_models', [])) |
+                                                     set(observed['implementation_models'])),
+            'coding_participant_models': sorted(participants),
+            'review_exclusion_models': sorted(excluded | set(observed['review_exclusion_models']) | participants),
+            'participant_sources': sources, 'gaps': gaps}
+
+
 def coding_usage(parent):
     """One row per native turn. Conflicting snapshots stay unknown, never sum."""
     try:
