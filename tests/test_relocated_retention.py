@@ -74,7 +74,7 @@ def test_native_alias_prune_rechecks_owner_and_live_references(estate, relocated
         return original(path, root, current, **kwargs)
     monkeypatch.setattr(retention, '_remove_release', remove)
     try:
-        report = retention.prune(selection, versions[2] / 'Scripts/python.exe', [alias], roots=[evidence])
+        report = retention.prune(selection, versions[2] / 'Scripts/python.exe', [alias])
     finally:
         if child is not None:
             child.terminate(); child.wait()
@@ -93,10 +93,10 @@ def test_alias_removal_rejection_is_not_retried(estate, relocated, monkeypatch):
     _, selection, versions, evidence = estate
     alias, physical = relocated
     calls = []
-    def rejected(*args):
+    def rejected(*args, **kwargs):
         calls.append(1)
         raise OSError('blocked by policy')
     monkeypatch.setattr(retention, '_powershell', rejected)
-    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', [alias], roots=[evidence])
+    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', [alias])
     assert len(calls) == 1 and report['errors'] and not report['deleted']
     assert physical.exists() and alias.exists()

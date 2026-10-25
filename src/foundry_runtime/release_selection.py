@@ -50,9 +50,12 @@ def main(argv=None, *, project_adapter=None):
     operation = parser.add_mutually_exclusive_group(required=True)
     operation.add_argument("--python", help="installed versioned interpreter")
     parser.add_argument('--acceptance-receipt', help='version-bound reviewer or operator acceptance JSON')
-    operation.add_argument("--retention-plan", action='store_true', help="read-only runtime dependency inventory")
-    operation.add_argument("--prune-release", action='append', help="exact obsolete release directory; refresh inventory for each")
+    operation.add_argument("--retention-plan", action='store_true', help="read-only installed-version rotation plan")
+    operation.add_argument("--prune-release", action='append', help="exact obsolete release directory")
+    operation.add_argument('--prune-unused', action='store_true', help='remove installed versions outside current, rollback and task holds')
+    operation.add_argument('--audit-history', action='store_true', help='explicit archive-wide dependency investigation; not part of rotation')
     parser.add_argument('--rollback-python', help='the one qualified rollback interpreter, required for retention')
+    parser.add_argument('--keep-release', action='append', default=[], help='version directory required by an active or explicitly retained recovery task')
     parser.add_argument('--evidence-root', action='append', default=[], help='additional evidence root; known roots always included')
     parser.add_argument('--test-run-record', action='append', default=[],
                         help='completed pytest receipt proving its absolute fixture basetemp')
@@ -73,8 +76,13 @@ def main(argv=None, *, project_adapter=None):
             options['test_run_records'] = args.test_run_record
         if args.evidence_review:
             options['evidence_review'] = args.evidence_review
-        result = (retention.inventory(args.selection, args.rollback_python, **options) if args.retention_plan
-                  else retention.prune(args.selection, args.rollback_python, args.prune_release, **options))
+        if args.audit_history:
+            result = retention.inventory(args.selection, args.rollback_python, **options)
+        elif args.retention_plan:
+            result = retention.installed_inventory(args.selection, args.rollback_python, keep_releases=args.keep_release)
+        else:
+            result = retention.prune(args.selection, args.rollback_python,
+                                     None if args.prune_unused else args.prune_release, keep_releases=args.keep_release)
     print(json.dumps(result, indent=2))
     if result.get('errors'):
         return 1

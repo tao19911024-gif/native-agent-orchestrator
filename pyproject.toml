@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foundry-runtime"
-version = "0.1.0a102"
+version = "0.1.0a103.dev0"
 description = "Shared native-agent execution and orchestration runtime"
 readme = "README.md"
 license = "MIT"

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Rotate installed version directories from current selection, one rollback,
+  explicit active-task holds and live host references. Daily cleanup no longer
+  traverses historical archives; archive investigation uses `--audit-history`.
+- Stop rotation after ten minutes and report the completed removals and remaining
+  targets. Record removed bytes through the existing native deletion operation.
+- Add the release-rotation skill and make storage disposition part of each release.
+
 ## 0.1.0a102 — 2026-10-24
 
 - Record observed coding leads and team members separately from editing authors.

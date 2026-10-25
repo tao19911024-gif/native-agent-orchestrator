@@ -136,13 +136,13 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
         row['reader_seconds'] = round(row['reader_seconds'], 6)
 
 
-def _powershell(script, value=None):
+def _powershell(script, value=None, *, timeout=120):
     if os.name != 'nt':
         raise OSError('Release cleanup process/registration observation requires Windows')
     executable = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
     result = subprocess.run([str(executable), '-NoProfile', '-NonInteractive', '-Command', script],
         input=json.dumps(value), text=True, encoding='utf-8', capture_output=True,
-        creationflags=subprocess.CREATE_NO_WINDOW, timeout=120)
+        creationflags=subprocess.CREATE_NO_WINDOW, timeout=timeout)
     if result.returncode:
         raise OSError(result.stderr[-3000:])
     return json.loads(result.stdout.lstrip('\ufeff'))
@@ -151,14 +151,14 @@ def _powershell(script, value=None):
 _ENCODING = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
 
 
-def host_snapshot():
+def host_snapshot(*, timeout=120):
     return _powershell(_ENCODING + r'''
     $processes = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ExecutablePath,CommandLine)
     $tasks = @(Get-ScheduledTask | Where-Object TaskName -Like 'Foundry-*' | ForEach-Object {
         @{name=$_.TaskName; actions=@($_.Actions | Select-Object Execute,Arguments)}
     })
     @{processes=$processes; registrations=$tasks} | ConvertTo-Json -Depth 6 -Compress
-    ''')
+    ''', timeout=timeout)
 
 
 def known_roots(selection, extra=()):
@@ -310,7 +310,7 @@ def _retired_owner(path, record, adapter, authority):
 
 
 def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project_adapter=None,
-              test_run_records=(), evidence_review=None, _discovery=None):
+              test_run_records=(), evidence_review=None, _discovery=None, keep_releases=(), deadline=None):
     """Fresh observations only. Unknown lifetime/provenance protects all possible releases."""
     started = perf_counter()
     metrics = {'directories': 0, 'records': 0, 'directory_readers': 4}
@@ -352,6 +352,8 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
         except (OSError, ValueError, AttributeError) as exc:
             gaps.append({'source': str(path), 'reason': str(exc)})
     protect(str(rollback_python), 'qualified rollback', 'operator rollback selection')
+    for release in keep_releases:
+        protect(str(Path(release) / 'Scripts/python.exe'), 'active or retained recovery task', 'operator task ownership list')
     if not Path(rollback_python).is_file():
         gaps.append({'source': str(rollback_python), 'reason': 'rollback interpreter missing'})
 
@@ -409,8 +411,8 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     else:
         if _discovery is not None:
             _discovery.update(paths=[], roots=root_names, directories={})
-        paths = _walk(roots, gaps, metrics, directory_stamps=(
-            _discovery['directories'] if _discovery is not None else None))
+        paths = (_walk(roots, gaps, metrics, directory_stamps=(
+            _discovery['directories'] if _discovery is not None else None)) if roots else ())
     for path in paths:
         if _discovery is not None and not refreshing:
             _discovery['paths'].append(path)
@@ -518,7 +520,8 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     try:
         selected_now = _read(selection)
         protect(selected_now['python'], 'current (refreshed after scan)', selection)
-        host = host_snapshot()
+        host = (host_snapshot() if deadline is None else
+                host_snapshot(timeout=max(0.01, min(120, deadline - perf_counter()))))
         names = {r['name'] for r in host['registrations']}
         for row in registered:
             if not row['finished'] or row['record']['task_name'] in names:
@@ -563,7 +566,15 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
         'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers the archive once, refreshes changed directories and newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
 
 
-def _remove_release(path, root, selection, *, physical=None):
+def installed_inventory(selection, rollback_python, *, keep_releases=(), deadline=None):
+    """File-management view: registered installations, explicit task holds and host use."""
+    report = inventory(selection, rollback_python, roots=[], keep_releases=keep_releases, deadline=deadline)
+    report['scan']['discovery'] = 'installed versions and current references'
+    report['note'] = 'Task holds are supplied from current owner records. Historical archives are outside daily rotation.'
+    return report
+
+
+def _remove_release(path, root, selection, *, physical=None, timeout=120):
     """One native PowerShell operation, exact path and fresh process check before removal.
 
     Never use an alternate executor after a host rejection. The caller records
@@ -587,7 +598,8 @@ def _remove_release(path, root, selection, *, physical=None):
     if ((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw 'Physical release root is a link; reconcile before cleanup'
     }
-    if (@(Get-ChildItem -LiteralPath $target -Force -Recurse | Where-Object {
+    $items = @(Get-ChildItem -LiteralPath $target -Force -Recurse)
+    if (@($items | Where-Object {
         $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Release contains a link; reconcile before cleanup' }
     $needles = @(($target.TrimEnd('\')+'\'), ($alias.TrimEnd('\')+'\'))
     function HasReference($text) {
@@ -619,42 +631,34 @@ def _remove_release(path, root, selection, *, physical=None):
         if ([IO.Path]::GetFullPath($destination) -ne $target) { throw 'Release alias changed after physical cleanup' }
         Remove-Item -LiteralPath $alias -Force -ErrorAction Stop
     }
-    @{removed=$target; alias=$alias; exists=((Test-Path -LiteralPath $target) -or (Test-Path -LiteralPath $alias))} | ConvertTo-Json -Compress
-    ''', {'path': str(path), 'root': str(root), 'physical': str(physical or path), 'selection': str(selection)})
+    @{removed=$target; alias=$alias; bytes_removed=($items | Where-Object { -not $_.PSIsContainer } | Measure-Object Length -Sum).Sum;
+      exists=((Test-Path -LiteralPath $target) -or (Test-Path -LiteralPath $alias))} | ConvertTo-Json -Compress
+    ''', {'path': str(path), 'root': str(root), 'physical': str(physical or path), 'selection': str(selection)}, timeout=timeout)
 
 
-def prune(selection, rollback_python, targets, *, roots=None, extra_roots=(), project_adapter=None,
-          test_run_records=(), evidence_review=None):
-    """The sole removal route. Caller cannot substitute a saved keep-list or deleter."""
+def prune(selection, rollback_python, targets=None, *, keep_releases=(), deadline=None):
+    """Rotate installation directories; historical audits never precede deletion."""
     root = Path(selection).resolve().parent / 'releases'
-    result = {'deleted': [], 'retained': [], 'errors': [], 'inventories': []}
-    discovery = {}
-    initial_candidates = None
+    result = {'deleted': [], 'retained': [], 'errors': [], 'inventories': [], 'removals': []}
+    started = perf_counter()
+    deadline = min(deadline if deadline is not None else started + 600, started + 600)
+    if targets is None:
+        targets = [p for p in root.iterdir() if p.is_dir() and re.fullmatch(r'\d+\.\d+\.\d+(?:[ab]\d+)?', p.name)]
+    targets = [Path(p).absolute() for p in targets]
     for raw in targets:
-        path = Path(raw).absolute()
+        path = raw
         physical = path.resolve()
         linked = path.is_junction() or path.is_symlink()
         if (path.parent != root or not re.fullmatch(r'\d+\.\d+\.\d+(?:[ab]\d+)?', path.name)
                 or physical.name != path.name or (physical.parent != root and not linked)):
             raise ValueError('Cleanup accepts only exact direct version directories under ' + str(root))
-        if initial_candidates is not None and str(path.resolve()) not in initial_candidates:
-            result['retained'].append(str(path))
-            continue
         try:
-            report = inventory(selection, rollback_python, roots=roots, extra_roots=extra_roots,
-                               project_adapter=project_adapter, test_run_records=test_run_records,
-                               evidence_review=evidence_review, _discovery=discovery)
+            if perf_counter() >= deadline:
+                raise TimeoutError('Release rotation reached its ten-minute limit')
+            report = installed_inventory(selection, rollback_python, keep_releases=keep_releases, deadline=deadline)
             result['inventories'].append(report)
-            if initial_candidates is None:
-                initial_candidates = set(report['candidates'])
-                # First walk may take time. Refresh known records before even
-                # the first removal, so an early observed goal cannot go stale.
-                if str(path.resolve()) in initial_candidates:
-                    report = inventory(selection, rollback_python, roots=roots, extra_roots=extra_roots,
-                                       project_adapter=project_adapter, test_run_records=test_run_records,
-                                       evidence_review=evidence_review, _discovery=discovery)
-                    result['inventories'].append(report)
-            initial_candidates.intersection_update(report['candidates'])
+            if perf_counter() >= deadline:
+                raise TimeoutError('Release rotation reached its ten-minute limit')
         except (OSError, ValueError, TypeError, subprocess.TimeoutExpired) as exc:
             result['errors'].append({'path': str(path), 'reason': str(exc)})
             break
@@ -662,12 +666,18 @@ def prune(selection, rollback_python, targets, *, roots=None, extra_roots=(), pr
             result['retained'].append(str(path))
             continue
         try:
-            removed = (_remove_release(path, root, selection, physical=physical) if linked else
-                       _remove_release(path, root, selection))
+            remaining = deadline - perf_counter()
+            if remaining <= 0:
+                raise TimeoutError('Release rotation reached its ten-minute limit')
+            removed = _remove_release(path, root, selection, timeout=min(120, remaining),
+                                      **({'physical': physical} if linked else {}))
             if removed.get('exists') is not False or path.exists() or physical.exists():
                 raise OSError('Removal did not confirm absence')
             result['deleted'].append(str(path))
+            result['removals'].append(removed)
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
             result['errors'].append({'path': str(path), 'reason': str(exc)})
             break  # A rejection/partial failure is not an invitation to retry elsewhere.
+    result['seconds'] = round(perf_counter() - started, 3)
+    result['remaining'] = [str(p) for p in targets if str(p) not in result['deleted'] + result['retained']]
     return result

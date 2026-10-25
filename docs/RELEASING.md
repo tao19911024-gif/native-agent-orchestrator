@@ -21,7 +21,10 @@ runtime selection are separate operations.
    tag. Mark Python alpha versions as prereleases. Record the source repository,
    full commit, tag, version, build command, package hashes and test results.
 7. Complete storage disposition. Retain compact evidence and remove the clean
-   build checkout and disposable test outputs after verification.
+   build checkout and disposable test outputs after verification. Rotate unused
+   installations with the release-rotation skill; retain current, one qualified
+   rollback and explicit current-task dependencies. Publication alone does not
+   change the default selection.
 
 If a published release needs correction, issue a new version. A maintenance
 folder may hold build outputs and evidence; builds read the clean tagged checkout.
@@ -122,6 +125,8 @@ Restore any changed project runtime pointers and new-work launch settings from
 the release record. Tasks started with the new release retain that environment
 for their own recovery. Apply [storage retention](STORAGE_RETENTION.md) to build
 outputs and older releases after checking their recorded dependencies.
-Close completed build and test output first. Then run authorized retention once
-with the full verified invocation and all obsolete candidates. Retain its
-command, scan statistics and final disposition with the private release record.
+Close completed build and test output first. Then run `--prune-unused` with the
+qualified rollback and explicit current-task holds. Routine rotation does not
+scan historical archives. Stop the operation after ten minutes and retain its
+command, actual removals, bytes, timings and remaining holds with the private
+release record. Follow [the release-rotation skill](../skills/foundry-release-rotation/SKILL.md).
