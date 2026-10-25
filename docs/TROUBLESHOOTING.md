@@ -61,6 +61,7 @@ If the README quickstart already created the project, continue at
 | `candidate_verified` | The goal verified a committed candidate through its coding and review lifecycle. Inspect the candidate diff and project acceptance result |
 | `task_acceptance: not_evaluated` | The project has no recorded acceptance observation for that result. Run its acceptance checks and record the maintainer's decision, or configure its observation hook |
 | `Foundry code index unavailable` | Execution uses scoped direct reads. Configure `FOUNDRY_CODEGRAPH_ARGV` when the project requires indexed navigation |
+| Codex reports `Reconnecting... n/m` with retries remaining | The current native turn is retrying. Keep its existing operation handle; inspect the terminal result when the client finishes |
 | `automatic_delivery_unavailable` | Follow the retained command handle or read its exact task status. Hosted execution custody and chat delivery are separate host capabilities |
 
 ## Evidence for a problem report

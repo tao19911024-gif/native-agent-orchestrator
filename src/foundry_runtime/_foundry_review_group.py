@@ -55,6 +55,7 @@ import time
 from contextvars import copy_context
 
 from . import _foundry_goal_telemetry as _telemetry
+from ._compute_selection import compute_kwargs
 
 
 class Panel:
@@ -87,6 +88,7 @@ class Panel:
             predecessors = []
             selected_request = requests[name]
             previous_backend = None
+            previous_compute = None
             previous_transition = None
             if resume:
                 # Read all history before starting either review. Incomplete
@@ -99,9 +101,12 @@ class Panel:
                     saved_transition = (policy.get('shadow_identity') or {}).get('review_transition')
                     if saved_transition not in {None, *(row.get('runtime_transition') for row in accepted)}:
                         raise ValueError('review history transition differs from recorded assignments')
-                    if previous_backend is not None and (previous_backend != policy['backend'] or previous_transition != saved_transition):
+                    saved_compute = policy.get('requested_compute') or {}
+                    if previous_backend is not None and (previous_backend != policy['backend'] or
+                            previous_compute != saved_compute or previous_transition != saved_transition):
                         selected_request = requests[name]
                     previous_backend = policy['backend']
+                    previous_compute = saved_compute
                     previous_transition = saved_transition
                     shadow = {'review_predecessors': predecessors, 'review_request_sha256': _request_hash(selected_request)}
                     if saved_transition is not None:
@@ -132,7 +137,10 @@ class Panel:
                             self.results[name] = saved
                     selected_request = (factory.review_repair_request(selected_request, saved['schema_error'], source=source)
                         if saved['schema_error'] and saved['persistent'] else requests[name])
-            if previous_backend is not None and (previous_backend != options.get('backend', 'codex') or previous_transition != transition):
+            selected_compute = compute_kwargs(options.get('model'), options.get('effort'),
+                                              backend=options.get('backend', 'codex')) or {}
+            if previous_backend is not None and (previous_backend != options.get('backend', 'codex') or
+                    previous_compute != selected_compute or previous_transition != transition):
                 selected_request = requests[name]
             self.requests[name] = selected_request
             self.pending[name] = (executable, slot / ('attempt-%06d' % (len(attempts) + 1)),
@@ -169,6 +177,7 @@ class Panel:
             value = self.members[name](actual)
         if self.validate:
             self.validate(value)
+        self.results[name] = {'value': value, 'session': self.members[name].native_session(actual)}
         return value
 
     def native_session(self, request):
@@ -178,8 +187,9 @@ class Panel:
         return self.members[name].native_session(self.active_requests[name])
 
     def cancel(self, reason):
-        for member in self.members.values():
-            member.cancel(reason)
+        for name, member in self.members.items():
+            if name not in self.results:
+                member.cancel(reason)
 
     def drain(self):
         snapshots = {}

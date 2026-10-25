@@ -179,3 +179,33 @@ def reviewers(checkpoint, saved, *, role, provider, migrate, completed=()):
         if chosen != current:
             transfers.setdefault(name, []).append(chosen)
     return transfers
+
+
+def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolve):
+    """Launch and recovery share the recorded model/provider selection policy."""
+    from ._compute_selection import independent_reviewers
+    quota_fallback = bool((manifest.get('manager_state') or {}).get('quota_fallback'))
+    staffing = manifest.get('task_staffing') or {}
+    source = staffing.get('review_source_detail') or {}
+    explicit = (source.get('model') == 'explicit' if source else
+                ((staffing.get('sources') or {}).get('reviewers') or
+                 (compute_assignment or {}).get('selection', {}).get('source')) == 'explicit') and not quota_fallback
+    if explicit:
+        return settings  # The shared final admission reports an explicit conflict.
+    try:
+        independent_reviewers(settings, excluded, explicit=True)
+        return settings
+    except ValueError:
+        pass
+    permitted = (('codex',) if quota_fallback else tuple({r['backend'] for r in manifest.get('reviewers') or settings})
+                 if source.get('backend') == 'explicit' else ('claude', 'codex'))
+    executables = {r['backend']: r['executable'] for r in settings
+                   if r.get('executable') and r['backend'] in permitted}
+    for provider in permitted:
+        if provider not in executables:
+            try:
+                executables[provider] = str(resolve(provider))
+            except (OSError, ValueError, RuntimeError):
+                pass
+    selected = independent_reviewers(settings, excluded, available_backends=executables)
+    return [{**row, 'executable': row.get('executable') or executables.get(row['backend'])} for row in selected]
