@@ -24,7 +24,7 @@ def estate(tmp_path, monkeypatch):
     selection = write(home / 'current.json', {'python': str(versions[3] / 'Scripts/python.exe')})
     evidence = home / 'evidence'
     evidence.mkdir()
-    monkeypatch.setattr(retention, 'host_snapshot', lambda: {'processes': [], 'registrations': []})
+    monkeypatch.setattr(retention, 'host_snapshot', lambda **kwargs: {'processes': [], 'registrations': []})
     return home, selection, versions, evidence
 
 
@@ -151,51 +151,27 @@ def test_review_cannot_follow_manifest_change_during_long_scan(estate, monkeypat
         retention.inventory(selection, versions[2] / 'Scripts/python.exe', roots=[evidence], evidence_review=review)
 
 
-@pytest.mark.parametrize('change', ['record', 'checkpoint', 'native', 'reopen', 'pth'])
-def test_batch_refreshes_changed_entries_and_dependencies_before_each_delete(estate, monkeypatch, change):
-    home, selection, versions, evidence = estate
-    path = write(evidence / 'TASK/goal-old/manifest.json', {'tag': 'TASK',
-        'runtime_provenance': {'python': str(versions[3] / 'Scripts/python.exe')}})
-    adapter = authority_adapter(evidence, 'closed' if change == 'reopen' else 'running')
-    walks, removals = [], []
-    original = retention._walk
-    def counted(*args, **kwargs):
-        walks.append(1)
-        yield from original(*args, **kwargs)
-    def remove(target, root, current):
-        assert target == versions[0] and current == selection
+@pytest.mark.parametrize('change', ['task_hold', 'pth'])
+def test_rotation_refreshes_task_holds_and_python_dependencies_without_archive_walk(estate, monkeypatch, change):
+    _, selection, versions, _ = estate
+    holds, removals = [], []
+    monkeypatch.setattr(retention, '_walk', lambda *a, **k: pytest.fail('daily rotation must not walk archives'))
+    def remove(target, root, current, **kwargs):
         removals.append(target)
-        shutil.rmtree(target)  # Only pytest fixture data.
-        executable = str(versions[1] / 'Scripts/python.exe')
-        if change == 'record':
-            write(path, {'runtime_provenance': {'python': executable}})
-        elif change == 'checkpoint':
-            write(path.with_name('coding-checkpoint.json'), {'executable': executable})
-        elif change == 'native':
-            native = evidence / 'new-native'
-            write(native / 'native-manifest.json', {'executable': executable})
-            write(path.with_name('coding-checkpoint.json'), {'manager': {'native_dir': str(native)}})
-        elif change == 'reopen':
-            adapter.goal_authority().resolve_task('TASK').status = 'running'
-            write(path, {'tag': 'TASK', 'runtime_provenance': {'python': executable}})
+        shutil.rmtree(target)
+        if change == 'task_hold':
+            holds.append(versions[1])
         else:
             pth = versions[3] / 'Lib/site-packages/shared.pth'
             pth.parent.mkdir(parents=True)
             pth.write_text(str(versions[1] / 'Lib/site-packages'))
         return {'exists': False}
-    monkeypatch.setattr(retention, '_walk', counted)
     monkeypatch.setattr(retention, '_remove_release', remove)
-    result = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2],
-                             roots=[evidence], project_adapter=adapter)
-    entries_changed = change in ('checkpoint', 'native')
-    assert walks == ([1, 1] if entries_changed else [1])
+    result = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2], keep_releases=holds)
     assert removals == [versions[0]]
     assert result['deleted'] == [str(versions[0])] and result['retained'] == [str(versions[1])]
     assert not result['errors']
-    assert [r['scan']['discovery'] for r in result['inventories']] == [
-        'full tree', 'known-record refresh',
-        'known-record refresh + changed directories' if entries_changed else 'known-record refresh']
-    assert result['inventories'][1]['scan']['directories'] == 0
+    assert all(r['scan']['directories'] == 0 for r in result['inventories'])
 
 
 def test_live_external_python_pth_keeps_shared_release_and_not_prefix_neighbour(estate, monkeypatch):
@@ -354,48 +330,49 @@ def test_registration_arguments_and_checkpoint_executables_are_dependencies(esta
 def test_prune_rechecks_processes_before_each_target_and_never_replays_saved_plan(estate, monkeypatch):
     _, selection, versions, evidence = estate
     snapshots, removals = [], []
-    def snapshot():
+    def snapshot(**kwargs):
         snapshots.append(1)
-        return {'registrations': [], 'processes': [] if len(snapshots) <= 2 else [
+        return {'registrations': [], 'processes': [] if len(snapshots) <= 1 else [
             {'ProcessId': 42, 'CommandLine': str(versions[1] / 'Scripts/python.exe')}]}
-    def remove(path, root, current):
+    def remove(path, root, current, **kwargs):
         assert path == versions[0] and root == path.parent
         removals.append(path)
         shutil.rmtree(path)  # Only this pytest fixture; native production remover is not invoked.
         return {'exists': False}
     monkeypatch.setattr(retention, 'host_snapshot', snapshot)
     monkeypatch.setattr(retention, '_remove_release', remove)
-    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2], roots=[evidence])
-    assert len(snapshots) == 3 and removals == [versions[0]]
+    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2])
+    assert len(snapshots) == 2 and removals == [versions[0]]
     assert report['deleted'] == [str(versions[0])] and report['retained'] == [str(versions[1])]
 
 
-def test_unknown_goal_prevents_remover_and_failure_does_not_try_another_executor(estate, monkeypatch):
+def test_historical_records_do_not_block_rotation_and_rejection_is_not_retried(estate, monkeypatch):
     _, selection, versions, evidence = estate
-    def refused(*_):
+    write(evidence / 'old-fixture/manifest.json', {'run_id': 'old', 'order': {'path': 'order'}})
+    calls = []
+    def refused(*args, **kwargs):
+        calls.append(args[0])
         raise OSError('blocked by policy')
+    monkeypatch.setattr(retention, '_walk', lambda *a, **k: pytest.fail('archive walk'))
     monkeypatch.setattr(retention, '_remove_release', refused)
-    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2], roots=[evidence])
-    assert len(report['errors']) == 1 and len(report['inventories']) == 2 and not report['deleted']
-    write(evidence / 'goal-unknown/manifest.json', {'run_id': 'one', 'order': {'path': 'order'}})
-    monkeypatch.setattr(retention, '_remove_release', lambda *_: pytest.fail('unknown goal runtime cannot be deleted'))
-    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2], roots=[evidence])
-    assert len(report['retained']) == 2 and not report['errors']
+    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2])
+    assert len(report['errors']) == len(report['inventories']) == 1 and not report['deleted']
+    assert calls == [versions[0]]
 
 
 def test_paths_outside_direct_release_children_are_refused(estate):
     home, selection, versions, evidence = estate
     for path in (home, home / 'scratch/runtime', versions[0] / 'Scripts', versions[0] / '../..'):
         with pytest.raises(ValueError, match='exact direct version'):
-            retention.prune(selection, versions[2] / 'Scripts/python.exe', [path], roots=[evidence])
+            retention.prune(selection, versions[2] / 'Scripts/python.exe', [path])
 
 
-def test_cli_uses_one_inventory_and_preserves_extra_roots(monkeypatch, capsys):
+def test_cli_rotation_plan_uses_only_current_task_holds(monkeypatch, capsys):
     seen = []
-    monkeypatch.setattr(retention, 'inventory', lambda *a, **k: seen.append((a, k)) or {'keep': []})
+    monkeypatch.setattr(retention, 'installed_inventory', lambda *a, **k: seen.append((a, k)) or {'keep': []})
     assert release_selection.main(['--selection', 'current.json', '--retention-plan',
         '--rollback-python', 'old/python.exe', '--evidence-root', 'external']) == 0
-    assert seen == [(('current.json', 'old/python.exe'), {'extra_roots': ['external']})]
+    assert seen == [(('current.json', 'old/python.exe'), {'keep_releases': []})]
     assert json.loads(capsys.readouterr().out) == {'keep': []}
 
 
@@ -567,31 +544,20 @@ def test_attribute_failure_reports_gap_and_still_reads_later_sibling(estate, mon
     assert 'attribute read failed' in gaps[0]['reason']
 
 
-def test_new_registered_root_extends_discovery_and_blocks_its_runtime(estate, monkeypatch):
+def test_explicit_history_audit_refreshes_new_registered_root(estate, monkeypatch):
     home, selection, versions, evidence = estate
     added = home / 'new-project'
-    write(added / 'goal-new/manifest.json', {
-        'runtime_provenance': {'python': str(versions[0] / 'Scripts/python.exe')}})
-    calls, walks = [], []
+    write(added / 'goal-new/manifest.json', {'runtime_provenance': {'python': str(versions[0] / 'Scripts/python.exe')}})
+    calls = []
     def roots(*args):
         calls.append(1)
         return ([evidence] if len(calls) == 1 else [evidence, added]), []
-    original = retention._walk
-    def walk(roots, *args, **kwargs):
-        walks.append(list(roots))
-        yield from original(roots, *args, **kwargs)
-    def remove(path, *args):
-        shutil.rmtree(path)
-        return {'exists': False}
     monkeypatch.setattr(retention, 'known_roots', roots)
-    monkeypatch.setattr(retention, '_walk', walk)
-    monkeypatch.setattr(retention, '_remove_release', remove)
-    result = retention.prune(selection, versions[2] / 'Scripts/python.exe', versions[:2])
-    assert not result['errors']
-    assert result['retained'] == [str(versions[0])]
-    assert result['deleted'] == [str(versions[1])]
-    assert walks == [[evidence], [added]]
-    assert result['inventories'][1]['scan']['added_roots'] == [str(added)]
+    discovery = {}
+    retention.inventory(selection, versions[2] / 'Scripts/python.exe', _discovery=discovery)
+    report = retention.inventory(selection, versions[2] / 'Scripts/python.exe', _discovery=discovery)
+    assert str(versions[0]) not in report['candidates']
+    assert report['scan']['added_roots'] == [str(added)]
 
 
 def test_reordering_or_removing_roots_does_not_drop_observed_dependencies(estate, monkeypatch):
@@ -794,3 +760,66 @@ def test_receipt_owned_fixture_needs_no_content_read_but_host_request_does(estat
     assert report['candidates'] == [str(versions[1])]
     assert manifest not in reads and request in reads
     assert report['classified_history'][0]['reason'] == 'pytest fixture'
+
+
+def test_rotation_stops_at_total_deadline_and_keeps_current_rollback_and_task_hold(estate, monkeypatch):
+    _, selection, versions, _ = estate
+    clock = [0.0]
+    monkeypatch.setattr(retention, 'perf_counter', lambda: clock[0])
+    removed = []
+    def remove(path, root, current, **kwargs):
+        assert 0 < kwargs['timeout'] <= 120
+        removed.append(path)
+        shutil.rmtree(path)
+        clock[0] = 601
+        return {'exists': False}
+    monkeypatch.setattr(retention, '_remove_release', remove)
+    report = retention.prune(selection, versions[2] / 'Scripts/python.exe', keep_releases=[versions[1]])
+    assert removed == [versions[0]] and report['errors']
+    assert all(p.exists() for p in versions[1:])
+    assert report['remaining'] == list(map(str, versions[1:]))
+
+
+def test_rotation_plan_distinguishes_explicit_hold_from_historical_fixture(estate, monkeypatch):
+    _, selection, versions, evidence = estate
+    write(evidence/'old/manifest.json', {'runtime_provenance': {'python': str(versions[0]/'Scripts/python.exe')}})
+    monkeypatch.setattr(retention, '_walk', lambda *a, **k: pytest.fail('archive walk'))
+    report = retention.installed_inventory(selection, versions[2]/'Scripts/python.exe', keep_releases=[versions[1]])
+    assert report['candidates'] == [str(versions[0])]
+    assert report['scan']['directories'] == 0
+
+
+def test_idle_task_hold_preserves_its_python_environment_dependency(estate):
+    _, selection, versions, _ = estate
+    pth = versions[1] / 'Lib/site-packages/shared.pth'
+    pth.parent.mkdir(parents=True)
+    pth.write_text(str(versions[0] / 'Lib/site-packages'))
+    report = retention.installed_inventory(selection, versions[2]/'Scripts/python.exe', keep_releases=[versions[1]])
+    assert not report['candidates']
+
+
+def test_cli_history_audit_preserves_explicit_evidence_arguments(monkeypatch, capsys):
+    seen = []
+    monkeypatch.setattr(retention, 'inventory', lambda *a, **k: seen.append(k) or {})
+    assert release_selection.main(['--selection', 'current.json', '--audit-history',
+        '--rollback-python', 'old/python.exe', '--evidence-root', 'external']) == 0
+    assert seen == [{'extra_roots': ['external']}]
+
+
+def test_cli_rotates_all_unused_installed_versions(monkeypatch, capsys):
+    seen = []
+    monkeypatch.setattr(retention, 'prune', lambda *a, **k: seen.append((a, k)) or {})
+    assert release_selection.main(['--selection', 'current.json', '--prune-unused',
+        '--rollback-python', 'old/python.exe', '--keep-release', 'held']) == 0
+    assert seen == [(('current.json', 'old/python.exe', None), {'keep_releases': ['held']})]
+
+
+def test_relative_target_is_not_reported_remaining_after_deletion(estate, monkeypatch):
+    home, selection, versions, _ = estate
+    monkeypatch.chdir(home)
+    def remove(path, *args, **kwargs):
+        shutil.rmtree(path)
+        return {'exists': False}
+    monkeypatch.setattr(retention, '_remove_release', remove)
+    report = retention.prune(selection, versions[2]/'Scripts/python.exe', ['releases/0.1.0a1'])
+    assert report['deleted'] == [str(versions[0])] and report['remaining'] == []

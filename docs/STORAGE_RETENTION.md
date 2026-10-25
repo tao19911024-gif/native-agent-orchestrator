@@ -1,154 +1,91 @@
-# Storage retention and cleanup
+# Storage retention
 
-The release operator owns installed environments. Task owners own their working
-changes, recovery records and acceptance evidence. The contributor who creates
-test or research output owns its disposition. These owners use existing release
-selection, task provenance and evidence records; there is no second cleanup
-scheduler or task-state store.
+Runtime installations are versioned directories. Keep the selected runtime,
+one qualified rollback and versions explicitly required by current execution or
+retained recovery work. Preserve source, release distributions and task evidence
+separately from disposable installations.
 
-## Maintenance sequence
+## Release rotation
 
-Use this order for experiment closeout and release maintenance:
+Use [the release-rotation skill](../skills/foundry-release-rotation/SKILL.md) for
+publishing, adopting and cleaning runtime versions.
 
-1. Start with the creating operation's output list, completed test receipts and
-   existing dependency observations. Inspect those exact paths first. Remove
-   finished, reproducible test copies and build environments after preserving
-   commands, source revisions, results and original failures. A receipt proves
-   that its test run ended; resolve any current task or recovery references
-   before removing its temporary root.
-2. Complete storage disposition in the same operation that created the output.
-   Record each created environment or output root when it is created. At
-   closeout, record `keep`, `remove` or `archive`, the actual result, and any
-   retained dependency's owner and removal condition. Keep these records with
-   the existing experiment or release evidence. For new goals, use the existing
-   disposable-scratch declaration described below.
-3. For authorized release deletion, reuse the complete, previously verified
-   invocation: interpreter, project adapter, selection, qualified rollback,
-   evidence roots, test receipts and reviewed evidence. Confirm that its inputs
-   still describe the current operation. Save the exact invocation and pass all
-   obsolete candidates in one prune operation. Use planning separately when
-   dependencies or deletion scope still need investigation.
-4. Use that operation's scan statistics to locate remaining traversal cost.
-   Compare directory counts and timings with the prior result. Do not start
-   another archive-wide scan solely to obtain a size breakdown. Investigate the
-   largest reported root using its recorded ownership and completion evidence.
+1. Build and verify a new version following [RELEASING.md](RELEASING.md).
+2. After acceptance, save the previous selection and select the new runtime.
+   The previously selected qualified version becomes the rollback version.
+3. Resolve current task holds from existing project ownership records. Follow
+   the task's current execution or active round; an old root provenance record
+   alone does not retain an installation after the execution has been upgraded.
+   Pass required version directories with `--keep-release`.
+4. Check live processes and Foundry scheduled registrations. Retire completed,
+   nonrunning registrations through the existing hosting owner after matching
+   their request and completion identities. Keep unfinished registrations.
+5. Remove installed directories outside the current, rollback and task holds.
+   Run one rotation operation and retain its handle. The total rotation budget
+   is ten minutes; on expiry stop and report completed and remaining work.
+6. Save removed paths, bytes, timings and retained reasons with the private
+   release record. Close completed build/test output in the same release.
 
-Keep the native operation handle until completion and inspect its saved output.
-After an error, reconcile the previous outcome and correct the reported input
-before retrying. Do not resubmit an unchanged operation while its first instance
-is running. If the host denies deletion, record the exact path and denial; do
-not retry through another shell, executable or a directory move.
+Publication and default selection remain separate. A candidate installation
+without a current task owner does not receive an additional permanent slot.
+Published assets and immutable source tags remain available after its disposable
+installation is removed.
 
-## Keep, remove, or archive
+## Commands
 
-| Material | Disposition |
-| --- | --- |
-| Selected production environment | Keep at its recorded path |
-| One qualified rollback environment | Keep until its replacement is qualified |
-| Runtime, native client or evidence used by active tasks | Keep; do not move, truncate or replace |
-| Old runtime referenced by unresolved recovery | Determine the exact dependency and recovery owner; retain that environment while resolving it |
-| Source, Git history, uncommitted changes, authoritative descriptors | Keep; do not classify as generated output |
-| Completed test environment, build tree, pytest scratch or duplicate extracted distribution | Remove when its owner has finished and required evidence is retained |
-| Test results, original failures, release hashes and commands | Retain compact primary evidence; do not preserve the entire test environment merely to keep a result |
-| Completed research transcripts and large historical evidence | Archive to a suitable volume after checking recovery references and retaining a restore manifest |
-| Running task logs, checkpoints, native sessions and databases | Owned by the task; not generic cache cleanup |
+The existing entry point manages installation directories:
 
-Age or a directory name alone does not establish that a task is closed. A live
-process is not the only dependency: queued hosted launches, project selection,
-recorded interpreter paths and recoverable goals also matter. Conversely, an
-old reference in a completed synthetic test is not a reason to retain all
-production versions forever. Use the test receipt or reviewed primary evidence
-to resolve that exact reference.
+```powershell
+$TaskHolds = @('--keep-release', 'C:/AgentRuntime/releases/0.1.0a99')
+& $RuntimePython -m foundry_runtime.release_selection `
+  --selection $SelectionFile --rollback-python $RollbackPython `
+  --retention-plan @TaskHolds
 
-## Before creating more output
+& $RuntimePython -m foundry_runtime.release_selection `
+  --selection $SelectionFile --rollback-python $RollbackPython `
+  --prune-unused @TaskHolds
+```
 
-Check available space and the expected peak footprint for large tests, builds
-and copies. Reuse an idle compatible environment, or select another scratch
-volume. Keep build products out of Git. A storage observation does not cancel
-work, impose a model-call limit, or change a running task's environment.
+Use an empty `$TaskHolds` array when no additional version is required. The plan
+and deletion inspect only installed versions, explicit task holds, current
+selection, rollback, scheduled registrations, live processes and their Python
+environment dependencies. `--prune-release <registered-version-directory>` limits
+removal to an exact version; `--prune-unused` rotates all unheld versions.
 
-At experiment completion and release qualification, classify created outputs.
-Delete disposable outputs after preserving useful results. A retained exception
-must name its owner, dependency and removal condition. Revisit these exceptions
-at the next related maintenance or release operation. Do not create recurring
-archives containing another copy of an unchanged environment.
+Use an interpreter outside the removal targets. A maintenance operator may use
+the reviewed authoritative source with its exact commit recorded; production
+installations retain their released bytes. No model execution is required.
 
-## Existing release maintenance command
+Registered version directories may be junctions to relocated installations. Pass
+the registered entry. The existing native remover binds its physical target,
+checks current host references and removes the physical installation and its
+alias. Both paths must be absent for completed deletion. A host denial or partial
+failure stops the operation; never retry through another executor or move.
 
-Use a selected, installed interpreter and explicit paths. For a dependency
-investigation, run the planner:
+## Historical investigation
+
+Archive-wide discovery is an explicit investigation, separate from daily
+rotation. It does not run before a version directory is deleted:
 
 ```powershell
 & $RuntimePython -m foundry_runtime.release_selection `
-  --selection $SelectionFile --retention-plan `
-  --rollback-python $RollbackPython
+  --selection $SelectionFile --rollback-python $RollbackPython `
+  --audit-history --evidence-root 'C:/Projects/extra-evidence'
 ```
 
-The result is an inventory, not deletion approval or proof that every task is
-closed. Add `--evidence-root` for task records outside the discovered roots.
-Use `--test-run-record` for completed pytest evidence, or `--evidence-review`
-for reviewed legacy records, as described by the command's `--help`.
+`--test-run-record` and `--evidence-review` apply to this diagnostic. Keep its
+private records and timings. Do not launch a historical audit to obtain ordinary
+version sizes or repeat it when a rotation dependency is missing. Resolve only
+the affected task/version from its existing owner record.
 
-After resolving the reported dependencies and authorizing deletion, reuse the
-complete invocation with
-`--prune-release <exact-obsolete-release-directory>` instead of
-`--retention-plan`. The existing mechanism refreshes its inventory. Do not
-replace it with a version-number, modification-time or blanket-directory delete.
+## Output disposition
 
-For an already authorized cleanup, pass all exact obsolete release candidates
-with repeated `--prune-release` arguments in one invocation, along with the
-available `--test-run-record` and `--evidence-review` inputs. The operation
-discovers the directory tree, then rereads records and their current dependencies
-before removal. It also compares the observed directories' modification times
-and enumerates changed directories and newly discovered child trees. New goals
-and hosted requests under an already known evidence root therefore join the same
-dependency assessment. Unchanged archived directories reuse their discovery.
-If project registration adds evidence roots during that operation, it scans the
-added roots (including new roots nested under an already scanned root) and merges
-their records before considering removal. Reordered roots do not
-restart discovery; removing a registration does not discard its already
-observed dependencies. This discovery state lives only within the operation.
-An already observed directory or record removed between refreshes is absent,
-rather than unreadable. A recreated directory is discovered on a later refresh.
-Permission errors and missing native dependencies of a record that still exists
-remain reported gaps.
-A separate planning invocation followed by pruning performs two initial full
-discoveries; use direct pruning when the deletion scope is already authorized.
-A saved planning report is not a fresh dependency observation. Save the command
-and structured result outside the source repository. Restore all required
-evidence-root options when reusing an earlier command, including explicit
-targets of junctions that leave the registered evidence roots.
-
-Version entries registered directly under `releases` may point to relocated
-physical installations. Pass the registered entry to `--prune-release`.
-Inventory keeps the physical path as its candidate identity and records
-`release_aliases`; process arguments, scheduled actions and Python environment
-references match both forms. Removal rechecks that the entry still points to
-the observed physical version, performs the existing dependency checks, removes
-the physical directory and then removes its alias. Both paths must be absent
-for a completed deletion. A failure remains recorded and stops the operation.
-
-Discovery reads the entire evidence tree, including nested source and test
-copies. Four bounded readers perform directory enumeration, attribute reads and
-link resolution; dependency classification stays on the caller thread. A failed
-entry remains a reported gap while other entries are still inspected. There are
-no directory-name exclusions or depth limits. Warm filesystem cache timings do
-not predict the cost of a first scan of a large archive. Keep compact test
-receipts and remove completed disposable copies as part of experiment closeout
-to avoid repeatedly scanning regenerated trees.
-
-The structured result's `scan.roots` rows report enumerated directories,
-discovered records and cumulative reader seconds for each physical evidence
-root. Aliases share one row; nested roots receive their own subtree's counts.
-Reader seconds sum work across concurrent readers and are not wall-clock time.
-During refresh, these rows describe directory enumeration; `scan.records`
-includes all known records reread by the operation, and `scan.seconds` also
-includes directory-stamp checks and dependency classification.
-
-Completed pytest receipts classify fixture manifests by their resolved path,
-so those manifest bodies need not be read. Hosted requests still require content
-inspection even inside a fixture tree. Exact operator-reviewed records retain
-their hash checks; a test receipt does not bypass an existing exact review.
+Keep source changes, immutable tags, release packages, checksums, original
+failures and compact verification. Delete completed disposable environments,
+build trees and test scratch after preserving the results needed to reproduce
+them. Register exact output roots with the creating operation before expansion.
+Do not move or delete running task logs, native sessions, checkpoints or databases.
+A retained installation must name its current owner and removal condition.
 
 ## Scratch cleanup and archive verification
 
