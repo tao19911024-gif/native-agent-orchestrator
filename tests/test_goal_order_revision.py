@@ -193,6 +193,9 @@ def test_outer_goal_uses_one_active_round_revision_authority(external, tmp_path,
 @pytest.mark.parametrize('migrate', [False, True])
 def test_nested_awaiting_revision_uses_answer_successor(external, tmp_path, monkeypatch, backend, answer, migrate):
     from foundry_runtime import _foundry_manager as manager
+    from foundry_runtime import foundry_native_support
+    import sys
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
     folder, manifest, order, decision = revision_case(external, tmp_path)
     manifest.update(manager_phase='awaiting_input')
     manifest['manager_state']['backend'] = backend
