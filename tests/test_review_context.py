@@ -145,8 +145,9 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
     assert sorted(slot for slot, _ in calls) == [0, 1], str(interrupted.value)
     from foundry_runtime import _followup, cli
     feedback = _followup.status(folder)['feedback']
-    assert feedback['candidate_commit'] == head and feedback['outcome_status'] is None
-    assert feedback['artifacts']['outcome'] is None
+    assert feedback['candidate_commit'] == head and feedback['outcome_status'] == 'review_blocked'
+    assert feedback['artifacts']['outcome'] == goal._fact(folder / 'outcome.json')
+    assert json.loads((folder / 'outcome.json').read_bytes())['review_completion_required'] is True
     assert feedback['artifacts']['review_checkpoint'] == goal._fact(checkpoint)
     assert feedback['continuation']['status'] == 'review_completion_required'
     command = feedback['continuation']['invocation']['argv']

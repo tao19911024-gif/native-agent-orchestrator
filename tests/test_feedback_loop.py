@@ -112,6 +112,20 @@ def test_partial_review_keeps_its_existing_recovery_route(tmp_path):
     assert len(view["findings"]) == 1
 
 
+def test_review_admission_refusal_keeps_checkpoint_recovery_command(tmp_path):
+    folder = retained(tmp_path)
+    result = json.loads((folder / 'outcome.json').read_bytes())
+    result.update(status='review_blocked', reviews=[], review_completion_required=True,
+                  reason='Reviewer model matches an observed coding participant')
+    goal._write(folder / 'outcome.json', result)
+    view = _followup.status(folder)['feedback']
+    assert view['continuation']['status'] == 'review_completion_required'
+    command = view['continuation']['invocation']
+    assert command['runtime_python'] == 'D:/retained/python.exe'
+    assert command['argv'][-2:] == ['--recover-goal', str(folder)]
+    assert '--amend-from' not in command['argv']
+
+
 @pytest.mark.parametrize("severity", ["P2", "P1"])
 def test_generated_command_closes_review_feedback_through_original_session(
         external, manager_io, tmp_path, monkeypatch, severity):

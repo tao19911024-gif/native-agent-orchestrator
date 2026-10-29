@@ -69,7 +69,7 @@ jobs:
             tests/test_launch_context.py `
             tests/test_failed_manager_handback.py tests/test_completed_turn_recovery.py `
             tests/test_goal_preflight_recovery.py tests/test_goal_order_revision.py tests/test_execution_stop.py `
-            tests/test_project_default_provider.py tests/test_goal_scratch.py `
+            tests/test_project_default_provider.py tests/test_claude_staffing.py tests/test_goal_scratch.py `
             tests/test_goal_checkpoint_publication.py tests/test_review_authorship_recovery.py `
             tests/test_project_hooks_deadline.py tests/test_root_exit_cleanup.py `
             tests/test_worker_scratch_environment.py `

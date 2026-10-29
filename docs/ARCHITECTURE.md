@@ -41,6 +41,16 @@ forms expose their defaults through the existing `ProjectExecution` contract.
 The existing goal preparation records the selected provider and its `project`
 source. Recovery and amendments retain their recorded configuration.
 
+The same project contract exposes `default_staffing` for omitted compute,
+manager, native-team and reviewer profiles. New Claude staffing separates the
+Sonnet implementation session from Opus coordination and selects Opus plus the
+catalogue-resolved Codex Sol tier for independent review. The goal controller
+reselects conflicting automatic review slots; it retains completed verdicts.
+Reviewer escalation uses existing tier decisions, correction rounds and
+`review_transfers`, including a single higher-tier attempt after a measured Sol
+quota refusal. Review launch failures retain an outcome and the existing review
+checkpoint for recovery.
+
 ## One lifecycle
 
 An approved order enters the project's preflight, then the existing dispatch or

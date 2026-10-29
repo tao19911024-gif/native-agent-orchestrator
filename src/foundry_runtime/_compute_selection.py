@@ -76,7 +76,7 @@ def execution_evidence(coding):
             'basis': 'observed editing participants; coordinator model is not substituted for missing authorship'}
 
 
-def escalation(current, evidence, *, prior_findings=(), findings=()):
+def escalation(current, evidence, *, prior_findings=(), findings=(), provider_limit=False):
     """One-tier decision for the existing next-attempt owner, never a retry loop."""
     from ._model_catalogue import tier_for_model
     counts = {}
@@ -99,6 +99,8 @@ def escalation(current, evidence, *, prior_findings=(), findings=()):
                       for f in findings if f.get('file')
                       if (match := re.search(r'contradict(?:ing|ory) evidence|evidence conflict|证据矛盾|证据冲突', f.get('summary', ''), re.I))]
     signals += ['contradiction:' + f['file'] + ':' + f['summary'] for f in contradictions]
+    if provider_limit:
+        signals.append('provider_limit')
     tier = tier_for_model(current)
     ladder = ESCALATION_TIERS.get(BACKEND.get(tier), ())
     if not signals or tier not in ladder:
@@ -107,7 +109,8 @@ def escalation(current, evidence, *, prior_findings=(), findings=()):
     return {'from_model': current, 'model': model(target), 'effort': 'high', 'signals': signals,
             'contradiction_matches': contradictions,
             'action': 'escalate' if target != tier else 'expert_consultation_required',
-            'reason': 'Repeated named assertion, blocking finding, or reviewer-identified evidence contradiction; infrastructure failures are excluded.'}
+            'reason': ('Measured provider limit on the selected model.' if provider_limit else
+                       'Repeated named assertion, blocking finding, or reviewer-identified evidence contradiction; infrastructure failures are excluded.')}
 
 
 def independent_reviewers(assignments, implementation_models, *, explicit=False, available_backends=None, count=2):
@@ -182,6 +185,7 @@ TASK_KINDS = {
 REVIEW_PROFILES = {
     "claude": (("opus", "high"), ("sonnet", "high")),
     "opus-astra": (("opus", "high"), ("astra", "high")),
+    "opus-sol": (("opus", "high"), ("sol", "high")),
 }
 
 
@@ -215,8 +219,7 @@ def review_assignments(value):
         rows.append({**row, **pair})
     return rows
 
-# Ordinary single execution uses Sonnet (operator revision 2026-10-10).
-# Adaptive coordination/critical task kinds retain Opus at profile expansion.
+# Sonnet owns implementation; the separate manager owns coordination.
 GOAL_PROFILES = {
     "claude": {"coding": ("sonnet", "high"), "review": ("opus", "high"), "correction": ("sonnet", "high")},
     "sol-astra": {"coding": ("sol", "high"), "review": ("astra", "high"), "correction": ("astra", "high")},
@@ -230,9 +233,6 @@ GOAL_PROFILES = {
 def profile_pair(name, role, *, team_profile=None, task_kind=None):
     """One profile slot as the (model, effort) its vendor currently serves."""
     tier, effort = GOAL_PROFILES[name][role]
-    if (name == 'claude' and role in ('coding', 'correction')
-            and (team_profile == 'adaptive' or task_kind in ('cross-module', 'ui-live'))):
-        tier = 'opus'
     return model(tier), effort
 
 
@@ -382,7 +382,8 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
                 "for trivial changes or decisions needing your expertise; briefly state why. "
                 "Assign code fact gathering/investigator and mechanical extraction to Haiku, implementation "
                 "and causal analysis to Sonnet, and difficult "
-                "expert reasoning to Fable. The manager retains Opus. Explicitly select the role model, "
+                "expert reasoning to Fable. The separate Foundry manager retains Opus and does not edit. "
+                "The implementation lead uses Sonnet. Explicitly select the role model, "
                 "do not inherit the leader model. "
                 "Give each member a concrete deliverable, relevant source references, ownership and acceptance "
                 "criteria. Resume existing agents with SendMessage and changed facts only for fixes to their own deliverable; "
@@ -663,7 +664,7 @@ def resolve_goal_profile(name, *, backend="codex", role_compute=None,
             pair = dict(zip(("model", "effort"), profile_pair(name, role, team_profile=team_profile, task_kind=task_kind)))
         options.update({prefix + "_" + key: value for key, value in pair.items()})
         roles[role] = {"backend": provider, **pair, "source": source}
-    return options, {"profile": name, "profile_version": 5, "roles": roles,
+    return options, {"profile": name, "profile_version": 6, "roles": roles,
                      "correction_policy": ("fixed" if name == "sol-claude" and
                          roles["correction"]["source"] == "profile" else
                          "review-guided" if roles["correction"]["source"] == "profile" else "explicit"),

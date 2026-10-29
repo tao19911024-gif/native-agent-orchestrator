@@ -43,6 +43,48 @@ the project setting. Without `default_provider`, task-kind behavior is unchanged
 Descriptors and project adapters expose the same optional `default_provider`
 and `default_disposable_scratch` fields through `ProjectExecution` and
 `goal_defaults`. Adapters without those attributes retain the existing defaults.
+
+Projects can also declare `default_staffing` on the descriptor or adapter:
+
+```json
+{
+  "default_provider": "claude",
+  "default_staffing": {
+    "compute_profile": "claude",
+    "manager_profile": "opus",
+    "team_profile": "adaptive",
+    "review_profile": "opus-sol"
+  }
+}
+```
+
+Each field supplies an omitted CLI choice. Explicit CLI profiles and model pairs
+take precedence; a compute profile applies only to its coding provider. Recovery,
+amendments and runtime boundary continuations keep their recorded assignments.
+`--print-staffing` reports the resolved choices and their source before execution.
+
+New Claude profiles use Sonnet for implementation and correction, including
+adaptive and cross-module work. The separate Opus manager delegates edits and
+tests to that worker. Claude goals default to Opus plus Codex Sol review;
+`--provider claude` selects admission and coding, while `--review-profile`
+selects the reviewer pair. `--review-profile claude` explicitly selects the
+Claude-only pair. A known Claude coding model selects the Claude coding
+transport when its provider and launcher are omitted.
+
+`opus-sol` resolves both tiers through the existing vendor catalogue. The Sol
+slot therefore follows vendor model upgrades when a new goal is staffed.
+Recorded assignments keep their concrete model IDs. Automatic reviewer choices
+are reselected when their models participated in coding; a separate coordinator
+is not an implementation participant. Explicit reviewer models remain pinned.
+
+Automatic Codex reviewers use the existing escalation and tier-state decisions
+between correction rounds. Repeated named failures, repeated P0/P1 findings or
+evidence contradictions can promote Sol to Astra; a cleared signal restores its
+recorded baseline. A measured Sol provider-limit refusal with completed process
+cleanup permits one Astra attempt through the existing review-transfer path.
+Completed sibling verdicts and previous receipts are retained. A second provider
+failure remains available for explicit recovery. Outcomes record the slot,
+reason and source receipt or round in `review_tier_decisions`.
 Adapter values follow the same provider and boolean contracts; invalid values
 are reported during new-goal configuration. Use `--no-disposable-scratch` to
 override an enabled project storage default for one new goal.
@@ -161,7 +203,8 @@ See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-
 for completion, recovery, report retention and cleanup accounting.
 
 `--provider codex` or `--provider claude` selects the provider for a new task.
-For a goal, it applies to coding and review roles. Native clients own their
+For a goal, it selects admission and coding; independent review has its own
+profile or explicit assignment. Native clients own their
 authentication and account configuration.
 
 A new Codex-executed goal starts with a persistent Claude Opus manager. Install

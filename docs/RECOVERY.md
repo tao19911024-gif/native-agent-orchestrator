@@ -148,6 +148,18 @@ checkpoint remains unchanged. Completed eligible slots retain their verdicts;
 only unfinished slots receive replacement assignments. Explicit model choices
 and provider transfers retain their recorded selection rules.
 
+A review that cannot start records `review_completion_required`, its reason and
+the candidate in the outcome, with the initial failure retained in
+`review-refusal.json`. Recovery completes the existing review checkpoint before
+corrections. Transferring one unfinished slot applies before independence
+selection for the remaining automatic slots. Completed verdicts and the frozen
+checkpoint remain available throughout that transition.
+
+New staffing separates the non-editing coordinator from observed coding
+participants. Its automatic reviewer choices and tier decisions are described in
+[Configuration](CONFIGURATION.md). Older checkpoints retain their recorded
+participant exclusions and explicit choices.
+
 Review exclusions include model-bearing coding responses, native model-usage
 observations and acknowledged team assignments. These participation records
 remain distinct from observed editing authors. Configured roles without usage

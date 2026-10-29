@@ -143,10 +143,11 @@ def test_standalone_review_transfer_preserves_declared_author_exclusion(external
     InterruptedAnalyst.interrupted = False
     before = list(calls)
     checkpoint = (folder / 'review-checkpoint.json').read_bytes()
+    refusal = (folder / 'outcome.json').read_bytes()
     with pytest.raises(goal.GoalBlocked, match='Reviewer model matches'):
         goal.recover_goal(order, folder, handoff_role='review-0', target_provider='claude')
     assert calls == before
-    assert not (folder / 'outcome.json').exists()
+    assert (folder / 'outcome.json').read_bytes() == refusal
     result = goal.recover_goal(order, folder, handoff_role='review-0', target_provider='codex')
     assert result['status'] == 'candidate_verified'
     assert len(calls) == len(before) + 2

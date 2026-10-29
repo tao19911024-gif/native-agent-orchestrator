@@ -781,7 +781,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 checkpoint['implementation_evidence']['review_exclusion_basis'] = 'recorded coding assignment fallback; editing authorship unverified'
             checkpoint['implementation_evidence']['review_exclusion_models'] = list(dict.fromkeys([
                 *checkpoint['implementation_evidence'].get('review_exclusion_models', checkpoint['implementation_evidence']['implementation_models']),
-                *manifest.get('coordination_models', [])]))
+                *(manifest.get('coordination_models', [])
+                  if (compute_assignment or {}).get('profile_version', 0) < 6 else [])]))
             current_reviews = reviewers or [{'backend': backend, **(analyst_compute or {})}] * 2
             try:
                 reviewers = select_reviewers(current_reviews,

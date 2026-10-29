@@ -208,6 +208,13 @@ def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolv
             except (OSError, ValueError, RuntimeError):
                 pass
     pending = list(range(len(settings))) if pending is None else list(pending)
+    from ._model_catalogue import BACKEND
+    def canonical(value):
+        value = value.removesuffix('[1m]')
+        return model(value) if value in BACKEND else value
+    blocked = {canonical(value) for value in excluded}
+    pending = [index for index in pending if canonical(settings[index]['model']) in blocked
+               or settings[index]['backend'] not in permitted]
     if not pending:
         return settings
     reserved = [row['model'] for index, row in enumerate(settings) if index not in pending]
