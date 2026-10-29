@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.0a103 — 2026-10-28
+
+- Remove the obsolete directory-timestamp cache from explicit history audits.
+  Each audit reads its requested roots afresh, including records created with
+  unchanged directory timestamps. Routine version rotation continues without
+  archive traversal.
+
 - Separate Sonnet implementation from Opus coordination for new Claude goals.
   Add project staffing defaults and the catalogue-resolved `opus-sol` review
   profile; infer the coding transport from a known explicit model family.

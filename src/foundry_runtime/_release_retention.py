@@ -52,14 +52,14 @@ def _reviewed_evidence(path):
     return rows
 
 
-def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=None, refresh=False):
+def _walk(roots, gaps, metrics=None):
     """Unbounded depth, physical-directory deduplication for junctions and cycles."""
     if metrics is None:
         metrics = {'directories': 0, 'records': 0}
     # Canonicalize roots and actual links, not every ordinary descendant. On
     # Windows resolve() opens path handles; repeating it dominated archive I/O.
     pending = [Path(p).resolve() for p in roots]
-    allowed = [Path(p).resolve() for p in allowed_roots] if allowed_roots is not None else list(pending)
+    allowed = list(pending)
     # Attribute overlapping roots to the most specific physical root. Aliases
     # share one row, just as they share directory discovery.
     allowed = sorted(set(allowed), key=lambda p: (-len(p.parts), str(p)))
@@ -71,12 +71,7 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
     def entries_at(directory):
         started = perf_counter()
         children, records, errors = [], [], []
-        stamp = None
         try:
-            # Capture before enumeration so an entry added during this read is
-            # still discovered by the next refresh of this operation.
-            if directory_stamps is not None:
-                stamp = directory.stat().st_mtime_ns
             with os.scandir(directory) as entries:
                 for entry in entries:
                     try:
@@ -90,12 +85,10 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
                         elif entry.name in ('manifest.json', 'request.json'):
                             records.append(Path(entry.path))
                     except (OSError, RuntimeError) as exc:
-                        if not (refresh and isinstance(exc, FileNotFoundError)):
-                            errors.append((entry.path, exc))
+                        errors.append((entry.path, exc))
         except (OSError, RuntimeError) as exc:
-            if not (refresh and isinstance(exc, FileNotFoundError)):
-                errors.append((str(directory), exc))
-        return directory, stamp, children, records, errors, perf_counter() - started
+            errors.append((str(directory), exc))
+        return directory, children, records, errors, perf_counter() - started
 
     # Only filesystem reads overlap. Classification and keep-list decisions stay
     # on the caller thread. Bounded batches avoid retaining an entire archive.
@@ -115,18 +108,13 @@ def _walk(roots, gaps, metrics=None, *, allowed_roots=None, directory_stamps=Non
                     continue
                 batch.append((directory, owner))
             for (_, owner), result in zip(batch, readers.map(entries_at, (p for p, _ in batch))):
-                directory, stamp, children, records, errors, seconds = result
+                directory, children, records, errors, seconds = result
                 metrics['directories'] += 1
                 cost = root_metrics[owner]
                 cost['directories'] += 1
                 cost['discovered_records'] += len(records)
                 cost['reader_seconds'] += seconds
-                # Changed known directories are separate refresh roots. Only
-                # new child trees need recursive discovery from this directory.
-                pending.extend(child for child in children if not refresh or
-                               directory_stamps is None or str(child) not in directory_stamps)
-                if directory_stamps is not None and stamp is not None:
-                    directory_stamps[str(directory)] = stamp
+                pending.extend(children)
                 for source, error in errors:
                     gaps.append({'source': str(source), 'reason': 'unreadable evidence directory: ' + str(error)})
                 for path in records:
@@ -310,7 +298,7 @@ def _retired_owner(path, record, adapter, authority):
 
 
 def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project_adapter=None,
-              test_run_records=(), evidence_review=None, _discovery=None, keep_releases=(), deadline=None):
+              test_run_records=(), evidence_review=None, keep_releases=(), deadline=None):
     """Fresh observations only. Unknown lifetime/provenance protects all possible releases."""
     started = perf_counter()
     metrics = {'directories': 0, 'records': 0, 'directory_readers': 4}
@@ -357,65 +345,13 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     if not Path(rollback_python).is_file():
         gaps.append({'source': str(rollback_python), 'reason': 'rollback interpreter missing'})
 
-    # A serialized prune operation discovers the archive once, then refreshes
-    # changed directory entries and rereads every discovered record, including
-    # previously non-goal records and current checkpoint/native references.
-    refreshing = _discovery is not None and 'paths' in _discovery
-    metrics['discovery'] = 'known-record refresh' if refreshing else 'full tree'
+    # Explicit audits read the requested namespace afresh. Directory timestamps
+    # can coalesce across mutations and cannot establish unchanged contents.
+    # Routine rotation supplies no archive roots through installed_inventory.
+    metrics['discovery'] = 'full tree'
     root_names = [str(p.resolve()) for p in roots]
-    if refreshing:
-        paths = _discovery['paths']
-        stamps = _discovery['directories']
-        changed = []
-
-        def directory_stamp(item):
-            name, before = item
-            try:
-                return name, Path(name).stat().st_mtime_ns != before, None
-            except FileNotFoundError:
-                # Retain the prior stamp so recreation is observed on the next
-                # refresh; removed evidence has no present directory to read.
-                return name, False, None
-            except OSError as exc:
-                return name, False, str(exc)
-
-        directories = list(stamps.items())
-        with ThreadPoolExecutor(max_workers=4) as readers:
-            for start in range(0, len(directories), 32):
-                for name, differs, error in readers.map(directory_stamp, directories[start:start + 32]):
-                    if error:
-                        gaps.append({'source': name, 'reason': 'unreadable evidence directory: ' + error})
-                    elif differs:
-                        changed.append(Path(name))
-        known = set(map(Path, _discovery['roots']))
-        added = list(dict.fromkeys(Path(p) for p in root_names if Path(p) not in known))
-        if added:
-            # Registration may add projects during a long walk. Extend this
-            # operation's discovery, then reread all records; never discard it
-            # or omit a new root merely because its ancestor was scanned before.
-            _discovery['roots'].extend(map(str, added))
-            metrics['added_roots'] = list(map(str, added))
-        if changed or added:
-            observed = set(paths)
-            for path in _walk([*changed, *added], gaps, metrics,
-                              allowed_roots=_discovery['roots'], directory_stamps=stamps, refresh=True):
-                if path not in observed:
-                    paths.append(path)
-                    observed.add(path)
-            metrics['discovery'] = ('known-record refresh + added roots' if added
-                                    else 'known-record refresh + changed directories')
-            metrics['changed_directories'] = len(changed)
-        # Reordering is immaterial. Removed registrations do not erase records
-        # already observed by this operation; their dependencies are reread too.
-        metrics['records'] = len(paths)
-    else:
-        if _discovery is not None:
-            _discovery.update(paths=[], roots=root_names, directories={})
-        paths = (_walk(roots, gaps, metrics, directory_stamps=(
-            _discovery['directories'] if _discovery is not None else None)) if roots else ())
+    paths = _walk(roots, gaps, metrics) if roots else ()
     for path in paths:
-        if _discovery is not None and not refreshing:
-            _discovery['paths'].append(path)
         try:
             resolved_path = path.resolve()
             observation = observations.get(str(resolved_path))
@@ -494,9 +430,7 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
                 unknown.append({'source': str(path), 'reason': 'unfinished goal lacks authoritative runtime provenance; '
                     'no trustworthy activation/lifetime interval, so every installed release is a possible dependency'})
         except (OSError, ValueError, TypeError, AttributeError) as exc:
-            if not (refreshing and isinstance(exc, FileNotFoundError)
-                    and exc.filename is not None and Path(exc.filename) == path):
-                gaps.append({'source': str(path), 'reason': 'unreadable evidence: ' + str(exc)})
+            gaps.append({'source': str(path), 'reason': 'unreadable evidence: ' + str(exc)})
 
     # A long archive scan must not carry a retired registration across a reopen.
     if project_adapter is not None:
@@ -556,14 +490,14 @@ def inventory(selection, rollback_python, *, roots=None, extra_roots=(), project
     return {'observed_utc': datetime.now(timezone.utc).isoformat(), 'read_only': True, 'scan': metrics,
         'selection': str(Path(selection).resolve()), 'rollback_python': str(rollback_python),
         'evidence_roots': [str(p.absolute()) for p in roots], 'scan_depth': 'unbounded; resolved-directory deduplication',
-        'discovery_roots': list(_discovery['roots']) if _discovery is not None else root_names,
+        'discovery_roots': root_names,
         'unfinished_goals': unfinished, 'hosted_registrations': [r['path'] for r in registered],
         'unknown_provenance': unknown, 'gaps': gaps,
         'classified_history': classified, 'release_aliases': aliases,
         'interpreters_and_dependencies': [{'path': p, 'reasons': reasons} for p, reasons in sorted(keep.items())],
         'keep': [{'release': p, 'reasons': reasons} for p, reasons in sorted(versions.items()) if reasons],
         'candidates': [p for p, reasons in sorted(versions.items()) if not reasons],
-        'note': 'Observation only; saved JSON is never deletion authorization. Serialized prune discovers the archive once, refreshes changed directories and newly registered roots, then rereads discovered records and current dependencies before every candidate.'}
+        'note': 'Observation only; saved JSON is never deletion authorization. Explicit history audits enumerate their requested roots afresh. Routine rotation reads installed directories and current references without scanning archives.'}
 
 
 def installed_inventory(selection, rollback_python, *, keep_releases=(), deadline=None):

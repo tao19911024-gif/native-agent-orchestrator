@@ -78,6 +78,12 @@ private records and timings. Do not launch a historical audit to obtain ordinary
 version sizes or repeat it when a rotation dependency is missing. Resolve only
 the affected task/version from its existing owner record.
 
+Each explicit history audit enumerates its current requested roots afresh.
+Directory timestamps do not establish unchanged contents: filesystem updates can
+coalesce those timestamps while adding records. The audit uses the existing
+bounded directory readers and physical-path deduplication. Routine installed
+version rotation supplies no history roots and performs no archive traversal.
+
 ## Output disposition
 
 Keep source changes, immutable tags, release packages, checksums, original
