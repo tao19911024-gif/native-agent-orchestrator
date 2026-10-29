@@ -169,7 +169,8 @@ def test_quota_upgrade_keeps_completed_review_and_original_refusal(external, tmp
 
 
 @pytest.mark.parametrize('source', ['project', 'explicit'])
-def test_repeated_review_finding_upgrades_only_automatic_codex_slot(tmp_path, monkeypatch, source):
+@pytest.mark.parametrize('signal', ['finding', 'assertion'])
+def test_repeated_review_finding_upgrades_only_automatic_codex_slot(tmp_path, monkeypatch, source, signal):
     from foundry_runtime import _foundry_goal_auto as auto
     order = tmp_path / 'TASK_fixture.md'; order.write_text('fixture')
     calls = []
@@ -179,7 +180,11 @@ def test_repeated_review_finding_upgrades_only_automatic_codex_slot(tmp_path, mo
         folder.mkdir()
         result = {'status': 'review_blocked' if len(calls) <= 2 else 'candidate_verified',
             'candidate_commit': str(len(calls)), 'coding_session': 'fixture',
-            'reviews': [{'verdict': 'BLOCK', 'findings': [finding]}]}
+            'reviews': [{'verdict': 'BLOCK', 'findings': [finding] if signal == 'finding' else []}]}
+        if signal == 'assertion':
+            result['review_execution_evidence'] = {'review-1': {'test_failures': [{
+                'session_id': str(len(calls)), 'call_id': 'focused-test', 'test_id': 'test_writer.py::test_balance',
+                'model': options['reviewers'][1]['model']}]}}
         goal._write(folder / 'manifest.json', {'requested_compute': {'coding': {'model': 'custom-worker'}},
                                               'reviewers': options['reviewers']})
         goal._write(folder / 'outcome.json', result)
@@ -195,9 +200,26 @@ def test_repeated_review_finding_upgrades_only_automatic_codex_slot(tmp_path, mo
     assert calls[2]['reviewers'][0]['model'] == model('opus')
     assert calls[2]['reviewers'][1]['model'] == model('astra' if source == 'project' else 'sol')
     if source == 'project':
-        assert result['review_tier_decisions'][0]['signals'] == ['finding:writer.py:same ownership failure']
+        assert result['review_tier_decisions'][0]['signals'] == ([
+            'finding:writer.py:same ownership failure'] if signal == 'finding' else ['test:test_writer.py::test_balance'])
     else:
         assert 'review_tier_decisions' not in result
+
+
+def test_review_assertion_observation_uses_existing_receipt_and_request_identity(tmp_path):
+    from foundry_runtime import _foundry_goal_usage as usage
+    folder = tmp_path / 'call'; folder.mkdir()
+    goal._write(folder / 'receipt.json', {'call_id': 'request', 'attempt_id': 'native-attempt',
+        'tool_events': [{'id': 'command-1', 'type': 'command_execution',
+                         'aggregated_output': 'FAILED test_writer.py::test_balance - AssertionError: balance'}]})
+    snapshot = {'calls': [{'backend': 'codex', 'reviewer_slot': 'review-1', 'call_id': 'request',
+                          'evidence': str(folder), 'requested_compute': {'model': model('sol')}}]}
+    evidence = usage.review_execution_evidence(snapshot)['review-1']
+    assert evidence['test_failures'] == [{'call_id': 'command-1', 'test_id': 'test_writer.py::test_balance',
+                                        'model': model('sol'), 'session_id': 'native-attempt'}]
+    assert json.loads(usage._reference(evidence['receipts'][0]))['attempt_id'] == 'native-attempt'
+    snapshot['calls'][0]['call_id'] = 'different-request'
+    assert usage.review_execution_evidence(snapshot) == {}
 
 
 def test_quota_transfer_survives_correction_and_is_reported_once(tmp_path, monkeypatch):

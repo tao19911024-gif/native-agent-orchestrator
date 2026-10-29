@@ -989,6 +989,9 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             outcome["coding_session"] = checkpoint["coding_session"]
         if manifest.get('review_tier_decisions'):
             outcome['review_tier_decisions'] = manifest['review_tier_decisions']
+        review_evidence = goal_usage.review_execution_evidence(native)
+        if review_evidence:
+            outcome['review_execution_evidence'] = review_evidence
     except (GoalBlocked, RuntimeError, OSError) as exc:
         if not resume and not retained_only:
             outcome = {'status': 'review_blocked', 'candidate_commit': context['candidate_commit'],

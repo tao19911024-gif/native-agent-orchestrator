@@ -239,10 +239,18 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                         if reviewer['backend'] != 'codex':
                             continue
                         name = 'review-' + str(index)
-                        decision = escalation(reviewer['model'], result.get('implementation_evidence', {}),
+                        evidence = (result.get('review_execution_evidence') or {}).get(name) or {}
+                        current_failures = evidence.get('test_failures', [])
+                        prior_evidence = ((block_window[0]['result'].get('review_execution_evidence') or {}).get(name) or {}
+                                          if len(block_window) == 2 else {})
+                        active = {row.get('test_id') for row in current_failures}
+                        evidence = {**evidence, 'active_test_failures': [
+                            *[row for row in prior_evidence.get('test_failures', []) if row.get('test_id') in active],
+                            *current_failures]}
+                        decision = escalation(reviewer['model'], evidence,
                                               prior_findings=previous, findings=findings)
                         saved = tier_state(states.get(name), reviewer, decision,
-                                           evidence=result.get('implementation_evidence', {}), findings=findings)
+                                           evidence=evidence, findings=findings)
                         change = decision if decision and decision['action'] == 'escalate' else saved.get('tier_reset')
                         if change and change['model'] != reviewer['model']:
                             reviewer.update(model=change['model'], effort=change['effort'])

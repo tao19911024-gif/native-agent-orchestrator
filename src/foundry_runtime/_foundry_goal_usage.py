@@ -112,6 +112,36 @@ def review_participation(coding, recorded):
             'participant_sources': sources, 'gaps': gaps}
 
 
+def review_execution_evidence(snapshot):
+    """Project named review-test failures from the native owner's settled receipts."""
+    from ._context_signals import test_failures
+    slots = {}
+    for call in (snapshot or {}).get('calls', []):
+        name = call.get('reviewer_slot')
+        if not name or call.get('backend') != 'codex' or not call.get('evidence'):
+            continue
+        try:
+            path = Path(call['evidence']) / 'receipt.json'
+            raw = path.read_bytes()
+            receipt = json.loads(raw)
+            if receipt.get('call_id') != call.get('call_id'):
+                continue
+            model = (call.get('requested_compute') or {}).get('model')
+            failures = [{'call_id': event['id'], 'test_id': test, 'model': model,
+                         'session_id': receipt['attempt_id']}
+                        for event in receipt.get('tool_events', [])
+                        if event.get('type') == 'command_execution' and event.get('id')
+                        for test in test_failures(event.get('aggregated_output', ''))]
+            if failures:
+                row = slots.setdefault(name, {'test_failures': [], 'receipts': [],
+                    'basis': 'named assertion outputs in native review receipts; model is the requested assignment'})
+                row['test_failures'].extend(failures)
+                row['receipts'].append({'path': str(path), 'sha256': hashlib.sha256(raw).hexdigest()})
+        except (OSError, ValueError, KeyError, TypeError):
+            continue  # Missing observations do not change the review verdict.
+    return slots
+
+
 def coding_usage(parent):
     """One row per native turn. Conflicting snapshots stay unknown, never sum."""
     try:
