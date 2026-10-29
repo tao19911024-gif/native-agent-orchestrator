@@ -30,7 +30,7 @@ def _analyst_executable(backend: str = "codex") -> Path:
 
 def add_arguments(ap) -> None:
     ap.add_argument("--provider", choices=("codex", "claude"),
-                    help="explicit provider for a new task, including admission, coding and review; no quota check required")
+                    help="provider for new admission and coding; --review-profile selects independent reviewers")
     ap.add_argument("--foundry-usage", nargs="+", metavar="RECORD",
                     help="read delivery baseline and usage from goal directories, manifests, outcomes or dispatch receipts; no model calls or writes")
     ap.add_argument("--foundry-goal", action="store_true",
@@ -127,6 +127,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     task_kind = getattr(a, "task_kind", None)
     launcher_explicit = getattr(a, "launcher_explicit", False)
     project_provider = getattr(a, 'project_default_provider', None)
+    project_staffing = getattr(a, 'project_default_staffing', {})
     kind_chooses_provider = (a.foundry_goal and not amend_from and not provider and not launcher_explicit and not project_provider
             and profile in (None, "claude")
             and not any(name and not name.startswith("claude-") for name in (a.coding_model, auto_model)))
@@ -151,14 +152,12 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     if provider and recovery:
         ap.error("Recovery uses the recorded provider; omit --provider")
     if provider == "claude":
-        if a.analyst_backend not in (None, "claude") or review_profile not in (None, "claude"):
-            ap.error("--provider claude selects Claude for every role")
         if profile not in (None, "claude"):
             ap.error("--provider claude requires a Claude compute profile")
         if a.foundry_goal and not amend_from:
             profile = profile or "claude"
         if (a.foundry_goal or review) and not amend_from and not any((a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
-            review_profile = review_profile or "claude"
+            review_profile = review_profile or project_staffing.get('review_profile') or "opus-sol"
     coding_backend = "claude" if getattr(a, "launcher", None) == "claude" else "codex"
     if review_profile and (not (a.foundry_goal or review) or recovery):
         ap.error("--review-profile selects new goal/review assignments; recovery uses recorded reviewers")
@@ -284,6 +283,16 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 prior.get('delivery_context', {}).get('mode') == 'review-only' and not prior.get('manager_state'))):
             task_kind = task_kind or DEFAULT_TASK_KIND
             kind_row = TASK_KINDS[task_kind]
+            project_compute = project_staffing.get('compute_profile')
+            if project_compute and (requested_provider or coding_backend) != (
+                    'claude' if project_compute == 'claude' else 'codex'):
+                project_compute = None
+            if not profile and project_compute and not a.coding_model:
+                profile = project_compute
+            manager_profile = manager_profile or project_staffing.get('manager_profile')
+            team_profile = team_profile or project_staffing.get('team_profile')
+            if not review_profile and not any((a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
+                review_profile = project_staffing.get('review_profile')
             admission_provider = requested_provider or "claude"
             admission_source = "explicit" if requested_provider else "kind"
             if supplied_admission:
@@ -310,19 +319,25 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 staffing_sources.update(coding='project', correction='project')
                 if not team_profile:
                     staffing_sources['team'] = 'project'
+            for part, flag in (('manager', 'manager_profile'), ('team', 'team_profile'),
+                               ('reviewers', 'review_profile')):
+                if project_staffing.get(flag) and not getattr(a, flag):
+                    staffing_sources[part] = 'project'
             review_source_detail = {
-                "backend": "explicit" if a.analyst_backend or a.review_profile or requested_provider or
+                "backend": "explicit" if a.analyst_backend or a.review_profile or
+                    (requested_provider == 'codex' and not review_profile) or
                     (task_kind == "ui-live" and a.analyst_model and backend == "codex") else "kind",
-                "model": "explicit" if review_profile or a.compute_profile or a.analyst_model else "kind"}
+                "model": ("explicit" if a.review_profile or a.analyst_model or (a.compute_profile and not review_profile) else
+                          "project" if project_staffing.get('review_profile') else "kind")}
             profile = profile or ("claude" if coding_backend == "claude" else
                                   "sol-claude" if kind_row["compute_profile"] == "claude" else
                                   kind_row["compute_profile"])
             compute_source = ("explicit" if a.compute_profile or requested_provider or launcher_explicit
-                              else 'project' if project_provider else "kind")
+                              else 'project' if project_provider or project_compute else "kind")
             # New Codex execution starts with Opus coordination. A provider
             # selection is not evidence that Claude quota is unavailable;
             # measured refusal transfers the retained manager in the goal owner.
-            manager_profile = 'opus' if coding_backend == 'codex' else manager_profile or kind_row["manager_profile"]
+            manager_profile = 'opus' if coding_backend == 'codex' else manager_profile or 'opus'
             if coding_backend == 'codex' and getattr(a, 'manager_profile', None) == 'astra':
                 staffing_sources['manager'] = 'operator-rule'
             team_profile = team_profile or kind_row["team_profile"]
@@ -330,7 +345,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                     and not any((a.analyst_model, a.analyst_effort, a.analyst_exe))
                     and a.analyst_backend in (None, "claude")):
                 if not (backend == "codex" and (a.analyst_backend == "codex" or requested_provider == "codex")):
-                    review_profile = kind_row["review_profile"]
+                    review_profile = "opus-sol" if coding_backend == 'claude' else kind_row["review_profile"]
             if (backend == "codex" and not review_profile and not any((a.analyst_model, a.analyst_effort))
                     and (a.analyst_backend == "codex" or requested_provider == "codex")
                     and BACKEND[GOAL_PROFILES[profile]["review"][0]] == "claude"):

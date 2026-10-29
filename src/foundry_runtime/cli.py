@@ -132,7 +132,18 @@ def _selected_main(owner, a, ap, project, project_adapter):
     from ._project_execution import goal_defaults
     defaults = (goal_defaults(project if project is not None else project_adapter)
         if a.foundry_goal and not (a.amend_from or a.recover_goal or getattr(a, '_boundary_continuation', None)) else {})
-    a.project_default_provider = (defaults.get('provider')
+    a.project_default_staffing = defaults.get('staffing', {})
+    from ._model_catalogue import BACKEND, tier_for_model
+    model_provider = BACKEND.get(tier_for_model(a.coding_model or a.auto_amend_model))
+    profile_provider = 'claude' if a.compute_profile == 'claude' else 'codex' if a.compute_profile else None
+    if model_provider and (a.provider or profile_provider) not in (None, model_provider):
+        ap.error('--coding-model must match the selected coding provider')
+    if model_provider and a.launcher and model_provider != ('claude' if a.launcher == 'claude' else 'codex'):
+        ap.error('--coding-model must match the selected coding launcher')
+    default_profile = a.project_default_staffing.get('compute_profile')
+    default_provider = defaults.get('provider') or (
+        'claude' if default_profile == 'claude' else 'codex' if default_profile else None)
+    a.project_default_provider = (default_provider
         if not any((a.provider, a.launcher, a.compute_profile, a.coding_model, a.auto_amend_model)) else None)
     if a.disposable_scratch is None:
         a.disposable_scratch = defaults.get('disposable_scratch', False)
@@ -142,7 +153,8 @@ def _selected_main(owner, a, ap, project, project_adapter):
         a.provider = "claude"
     if a.provider == "claude" and a.launcher not in (None, "claude"):
         ap.error("--provider claude uses --launcher claude")
-    a.launcher = a.launcher or ("claude" if (a.provider or a.project_default_provider) == "claude"
+    selected_provider = a.provider or model_provider or profile_provider or a.project_default_provider
+    a.launcher = a.launcher or ("claude" if selected_provider == "claude"
                               else "app-server" if a.foundry_goal or project else "exec")
     policy = policy_from_arguments(a, ap)
     a.app_server_policy = policy

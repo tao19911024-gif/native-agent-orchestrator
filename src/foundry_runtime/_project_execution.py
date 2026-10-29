@@ -55,6 +55,10 @@ class ProjectExecution:
         return self.project.get('default_provider')
 
     @property
+    def default_staffing(self):
+        return self.project.get('default_staffing', {})
+
+    @property
     def default_disposable_scratch(self):
         return self.project.get('default_disposable_scratch', False)
 
@@ -207,7 +211,18 @@ def goal_defaults(project):
         raise ValueError('default_provider must be codex or claude')
     if type(scratch) is not bool:
         raise ValueError('default_disposable_scratch must be a boolean')
-    return {'provider': provider, 'disposable_scratch': scratch}
+    staffing = getattr(project, 'default_staffing', {})
+    from ._compute_selection import GOAL_PROFILES, REVIEW_PROFILES
+    choices = {'compute_profile': GOAL_PROFILES, 'review_profile': REVIEW_PROFILES,
+               'manager_profile': ('opus', 'astra'), 'team_profile': ('none', 'adaptive')}
+    if not isinstance(staffing, dict) or any(
+            key not in choices or not isinstance(value, str) or value not in choices[key]
+            for key, value in staffing.items()):
+        raise ValueError('default_staffing needs supported compute, review, manager or team profiles')
+    profile = staffing.get('compute_profile')
+    if provider and profile and provider != ('claude' if profile == 'claude' else 'codex'):
+        raise ValueError('default_staffing compute profile must match default_provider')
+    return {'provider': provider, 'disposable_scratch': scratch, 'staffing': dict(staffing)}
 
 
 def validate_execution(project):

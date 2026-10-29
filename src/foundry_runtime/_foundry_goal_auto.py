@@ -110,6 +110,13 @@ def finish(owner, root, manifest, result):
              "usage_scope": "per-round references, not a cumulative or full-account total"}
     owner._write(root / "usage.json", usage)
     result = {**result, "rounds": manifest["rounds"], "task_usage": owner._fact(root / "usage.json")}
+    if manifest.get('review_tier_decisions'):
+        decisions = list(manifest['review_tier_decisions'])
+        for row in result.get('review_tier_decisions', []):
+            # Keep distinct parent rounds; omit only their un-enriched child copy.
+            if not any(all(saved.get(key) == value for key, value in row.items()) for saved in decisions):
+                decisions.append(row)
+        result['review_tier_decisions'] = decisions
     try:
         report = {"delivery": goal_usage.delivery(result, manifest.get("delivery_context")),
                   "usage_reference": result["task_usage"], "actual_account_charge": "unknown"}
@@ -182,7 +189,14 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                 # Its retained manager now owns continuation, not the initial default.
                 options.pop('manager_profile', None)
             if child_manifest.get("reviewers") is not None:
-                options = {**options, "reviewers": child_manifest["reviewers"]}
+                options = {**options, "reviewers": [
+                    {key: value for key, value in
+                     ((child_manifest.get('review_transfers') or {}).get('review-' + str(index)) or [row])[-1].items()
+                     if key in ('backend', 'model', 'effort', 'executable')}
+                    for index, row in enumerate(child_manifest['reviewers'])]}
+            if child_manifest.get('review_tier_decisions'):
+                manifest.setdefault('review_tier_decisions', []).extend(
+                    {'after_round': len(rounds), **decision} for decision in child_manifest['review_tier_decisions'])
             manifest.update({k: child_manifest[k] for k in ("worktree", "base_commit", "tag") if k in child_manifest})
             rounds.append(round_record(owner, folder))
             if result["status"] != "review_blocked":
@@ -217,6 +231,35 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                     options['execution_decision'] = saved
                     if saved.get('tier_reset'):
                         manifest.setdefault('tier_escalations', []).append({'after_round': len(rounds)-1, **saved['tier_reset']})
+                review_source = (options.get('task_staffing') or {}).get('review_source_detail') or {}
+                if (options.get('compute_assignment') or {}).get('profile_version', 0) >= 6 and review_source.get('model') in ('kind', 'project', 'provider-default'):
+                    states = dict((options.get('execution_decision') or {}).get('review_tiers') or {})
+                    reviewers = [dict(row) for row in options.get('reviewers', [])]
+                    for index, reviewer in enumerate(reviewers):
+                        if reviewer['backend'] != 'codex':
+                            continue
+                        name = 'review-' + str(index)
+                        evidence = (result.get('review_execution_evidence') or {}).get(name) or {}
+                        current_failures = evidence.get('test_failures', [])
+                        prior_evidence = ((block_window[0]['result'].get('review_execution_evidence') or {}).get(name) or {}
+                                          if len(block_window) == 2 else {})
+                        active = {row.get('test_id') for row in current_failures}
+                        evidence = {**evidence, 'active_test_failures': [
+                            *[row for row in prior_evidence.get('test_failures', []) if row.get('test_id') in active],
+                            *current_failures]}
+                        decision = escalation(reviewer['model'], evidence,
+                                              prior_findings=previous, findings=findings)
+                        saved = tier_state(states.get(name), reviewer, decision,
+                                           evidence=evidence, findings=findings)
+                        change = decision if decision and decision['action'] == 'escalate' else saved.get('tier_reset')
+                        if change and change['model'] != reviewer['model']:
+                            reviewer.update(model=change['model'], effort=change['effort'])
+                            promoted = True
+                            manifest.setdefault('review_tier_decisions', []).append({
+                                'after_round': len(rounds)-1, 'slot': name, **change})
+                        states[name] = saved
+                    options['reviewers'] = reviewers
+                    options['execution_decision'] = {**(options.get('execution_decision') or {}), 'review_tiers': states}
             if len(block_window) == 2 and (options.get('manager_state') or {}).get('quota_fallback'):
                 manifest['handover_deferred'] = {
                     'reason': 'measured Claude quota unavailable; retain Codex execution until manager recovery',

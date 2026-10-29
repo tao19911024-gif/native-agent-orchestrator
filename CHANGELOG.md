@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Separate Sonnet implementation from Opus coordination for new Claude goals.
+  Add project staffing defaults and the catalogue-resolved `opus-sol` review
+  profile; infer the coding transport from a known explicit model family.
+- Preserve eligible review slots during automatic reselection and apply single
+  slot handoffs before selecting remaining defaults. Record review admission
+  failures with a recoverable outcome and their original refusal.
+- Reuse tier-state decisions for automatic Codex reviewers between correction
+  rounds. Retain completed sibling verdicts when a measured Sol quota refusal
+  permits one Astra attempt, and record the transition in the outcome.
+
 - Admit an explicit contract revision after a failed worker has settled at the
   manager feedback boundary. Verify the retained checkpoint through the existing
   dispatch completion owner before publishing the revision.

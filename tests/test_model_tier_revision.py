@@ -25,9 +25,9 @@ def test_declared_deliverable_uses_same_rules_for_both_providers(tool, field):
     assert not check('sonnet', 'legacy lookup', version=1)
 
 
-@pytest.mark.parametrize('team,kind,wanted', [(None, 'small', 'sonnet'), ('adaptive', 'small', 'opus'),
-                                          (None, 'cross-module', 'opus'), (None, 'ui-live', 'opus')])
-def test_ordinary_execution_does_not_downgrade_coordination(monkeypatch, team, kind, wanted):
+@pytest.mark.parametrize('team,kind,wanted', [(None, 'small', 'sonnet'), ('adaptive', 'small', 'sonnet'),
+                                          (None, 'cross-module', 'sonnet'), (None, 'ui-live', 'sonnet')])
+def test_implementation_stays_sonnet_with_separate_coordination(monkeypatch, team, kind, wanted):
     monkeypatch.setattr(compute, 'model', lambda tier: 'claude-' + tier + '-99')
     options, record = compute.resolve_goal_profile('claude', backend='claude', coding_backend='claude',
                                                  team_profile=team, task_kind=kind)

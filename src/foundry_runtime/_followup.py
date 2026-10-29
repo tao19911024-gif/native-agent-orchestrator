@@ -237,6 +237,12 @@ def _goal_status(folder):
     outcome = json.loads(raw)
     if not isinstance(outcome, dict) or not isinstance(outcome.get('status'), str):
         raise ValueError('goal outcome has no status')
+    if outcome.get('review_completion_required'):
+        from ._executor_lifecycle import observe_locked_byte
+        controller = observe_locked_byte(folder.with_name('.' + folder.name + '.owner.lock'))
+        if controller['state'] == 'held':
+            return {**report, 'coding_recovery': None, 'status': 'pending', 'event_id': None,
+                    'controller_observation': controller, 'phase': 'review'}
     from ._foundry_goal_delivery import review_feedback
     try:
         report['feedback'] = review_feedback(outcome_path)

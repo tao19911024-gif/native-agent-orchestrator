@@ -45,7 +45,7 @@ def review_feedback(outcome_path):
                           'rounds': manifest.get('rounds', []),
                           'usage': outcome.get('task_usage'), 'delivered': outcome.get('artifacts', [])},
             'continuation': {'status': 'no_recorded_findings'}}
-    if not outcome:
+    if not outcome or outcome.get('review_completion_required'):
         view['continuation'] = {'status': 'review_completion_required'}
         try:
             view['continuation']['invocation'] = recovery_invocation(

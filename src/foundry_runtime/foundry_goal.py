@@ -901,6 +901,50 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             if retained_only and any(name not in analyst.results for name in names):
                 raise GoalBlocked('retained review is incomplete; no model calls were made', 'review_blocked')
             outcomes = review_group.prewarm(names, requests, analyst)
+            source = ((manifest.get('task_staffing') or {}).get('review_source_detail') or {}).get('model')
+            automatic = source in ('kind', 'project', 'provider-default')
+            if not retained_only and automatic and (checkpoint.get('compute_assignment') or {}).get('profile_version', 0) >= 6:
+                from ._compute_selection import escalation, independent_reviewers
+                from ._model_catalogue import tier_for_model
+                retry = []
+                choices = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
+                for index, name in enumerate(names):
+                    error = outcomes[name][1]
+                    evidence = getattr(error, 'evidence', None)
+                    if (not evidence or choices[index]['backend'] != 'codex'
+                            or tier_for_model(choices[index]['model']) != 'sol'):
+                        continue
+                    receipt_path = Path(evidence) / 'receipt.json'
+                    if not receipt_path.is_file():
+                        continue
+                    receipt = json.loads(receipt_path.read_bytes())
+                    if receipt.get('outcome') != 'provider_limit' or not (receipt.get('cleanup') or {}).get('cleanup_verified'):
+                        continue
+                    decision = escalation(choices[index]['model'], {}, provider_limit=True)
+                    chosen = {**choices[index], 'model': decision['model'], 'effort': decision['effort']}
+                    candidate = [{key: value for key, value in (chosen if slot == index else row).items()
+                                  if key in ('backend', 'model', 'effort', 'executable')}
+                                 for slot, row in enumerate(choices)]
+                    try:
+                        independent_reviewers(candidate, [*participation.get('review_exclusion_models',
+                            participation.get('implementation_models', [])), *declared_authors], explicit=True)
+                    except ValueError:
+                        continue
+                    transfers.setdefault(name, []).append(chosen)
+                    manifest.setdefault('review_tier_decisions', []).append({
+                        'slot': name, **decision, 'receipt': _fact(receipt_path)})
+                    retry.append(name)
+                if retry:
+                    manifest['review_transfers'] = transfers
+                    _write(folder / 'manifest.json', manifest)
+                    previous_panel = analyst
+                    analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
+                        folder / 'reviews', tree, resume=True,
+                        validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                        rejected_review=InvalidReview, transfers=transfers)
+                    for name, saved in previous_panel.results.items():
+                        analyst.results.setdefault(name, {**saved, 'session': previous_panel.native_session(requests[name])})
+                    outcomes.update(review_group.prewarm(retry, requests, analyst))
             reviews, sessions = [], []
             for name in names:
                 value, error = outcomes[name]
@@ -943,6 +987,19 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                 outcome["project_acceptance"] = {"status": "not_evaluated", "source": "project_check", "error": str(exc)}
         if checkpoint.get("coding_session"):
             outcome["coding_session"] = checkpoint["coding_session"]
+        if manifest.get('review_tier_decisions'):
+            outcome['review_tier_decisions'] = manifest['review_tier_decisions']
+        review_evidence = goal_usage.review_execution_evidence(native)
+        if review_evidence:
+            outcome['review_execution_evidence'] = review_evidence
+    except (GoalBlocked, RuntimeError, OSError) as exc:
+        if not resume and not retained_only:
+            outcome = {'status': 'review_blocked', 'candidate_commit': context['candidate_commit'],
+                       'coding': checkpoint['coding'], 'reviews': [], 'reason': str(exc),
+                       'review_completion_required': True}
+            if manifest.get('review_tier_decisions'):
+                outcome['review_tier_decisions'] = manifest['review_tier_decisions']
+        raise
     finally:
         # A failed recovery must not replace a prior measured snapshot with an
         # empty one (e.g. the native executable changed before initialization).
@@ -950,6 +1007,9 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             _record_usage(folder, checkpoint["coding_usage"], native, outcome,
                           native_team=checkpoint.get("native_team"),
                           context=checkpoint.get("delivery_context"))
+        if outcome is not None and outcome.get('review_completion_required'):
+            _write(folder / 'review-refusal.json', outcome)
+            _publish_outcome(folder, outcome)
     if not retained_only and _candidate(tree) != outcome["candidate_commit"]:
         raise GoalBlocked("candidate changed during independent review", "review_blocked")
     _publish_outcome(folder, outcome)
@@ -1237,8 +1297,10 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
             if fact != _fact(fact["path"]):
                 raise GoalBlocked("retained coding evidence changed")
         if (folder / "outcome.json").exists():
-            return json.loads((folder / "outcome.json").read_bytes())
-        resumable = (folder / 'reviews').exists()
+            saved_outcome = json.loads((folder / "outcome.json").read_bytes())
+            if not saved_outcome.get('review_completion_required'):
+                return saved_outcome
+        resumable = (folder / 'reviews').exists() or (folder / 'review-refusal.json').exists()
         from ._followup import announce
         if not retained_only:
             announce(folder, manifest)
