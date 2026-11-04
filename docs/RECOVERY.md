@@ -48,6 +48,14 @@ a new example directory.
 
 ## Recover a goal
 
+An abandoned execution closed through reconciliation remains closed. To begin
+an explicitly new goal for the same order, use the normal project invocation
+with `--foundry-goal` and a new goal directory, without `--recover-goal` or an
+old `--execution-intent-id`. The new goal retains its run identity for retries
+and allocates numbered dispatch evidence in the existing task directory.
+Original journals, logs and reports remain available. An unresolved execution
+continues through reconciliation and recovery before new work.
+
 Read the exact goal returned by the launch:
 
 ```powershell

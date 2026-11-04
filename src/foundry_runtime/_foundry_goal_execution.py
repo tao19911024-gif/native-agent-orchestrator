@@ -302,6 +302,13 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 try:
                     with owner._run_lock(manager_state['native_dir'], reuse_owned=True) if manager_state.get('handoff') else nullcontext():
                         response = measured('coordinate', lambda: _foundry_manager.turn(manager_state, tree, packet, operator_update=queued))
+                    guidance, manager_state, usage, packet = response
+                    packet, queued = incorporate(manifest['intervention']['root'], packet)
+                    if queued:
+                        manifest.update(manager_state=manager_state, live_manager_packet=packet)
+                        _write(evidence_dir / 'manager-usage.json', usage)
+                        _write(evidence_dir / 'manifest.json', manifest)
+                        continue
                     break
                 except _foundry_manager.ManagerQuotaUnavailable as exc:
                     manifest = measured('transfer_manager', lambda: transfer_manager(owner, evidence_dir, manifest, provider='codex', migrate=False,
@@ -533,6 +540,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         if revision_update:
                             manifest['manager_order_revision'] = manager_packet['order_revision']['evidence']
                         answer_events(manifest, manager_packet, guidance)
+                        manager_packet, late_update = incorporate(manifest['intervention']['root'], manager_packet)
                         manifest['coordination_models'] = list(dict.fromkeys(m for m in [*manifest.get('coordination_models', []), manager_state.get('model')] if m))
                         tier = manager_packet.get('tier_escalation') or {}
                         if tier and guidance.get('expert_consultation'):
@@ -545,10 +553,12 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                            'opus_coordination' if manager_state['backend'] == 'claude' else 'codex_coordination'),
                                 'last_decision': guidance['evidence']}
                         manifest.update(manager_state=manager_state, manager_packet=manager_packet, execution_decision=execution_decision,
-                                        manager_phase={'review': 'review_pending', 'deliver_artifacts': 'artifacts_pending',
+                                        manager_phase='feedback_pending' if late_update else {'review': 'review_pending', 'deliver_artifacts': 'artifacts_pending',
                                                        'await_input': 'awaiting_input'}.get(guidance['action'], 'delegation_ready'))
                         _write(evidence_dir / 'manager-usage.json', manager_usage)
                         _write(evidence_dir / 'manifest.json', manifest)
+                        if late_update:
+                            continue
                         if guidance['action'] == 'await_input':
                             raise GoalBlocked(guidance['instruction'], 'awaiting_input')
                         if guidance['action'] == 'deliver_artifacts':
@@ -631,6 +641,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                 **({'disposable_scratch': manifest['disposable_scratch']}
                                    if manifest.get('disposable_scratch') else {})}
                             result = dispatch.dispatch_order(order, predispatch_receipt=receipt_path,
+                                                             goal_run_id=run_id,
                                                              **({"execution_decision": dispatch_decision} if dispatch_decision else {}),
                                                              **policy, **(coding_compute or {}))
                         else:

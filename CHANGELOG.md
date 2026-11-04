@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Start distinct persistent goals after abandoned executions are closed, with
+  numbered dispatch evidence and unchanged historical journals. Identical goal
+  retries reuse their successor; new goals can select their current assignment.
+- Consume operator updates arriving during coordination before applying the
+  returned decision. Retain the updated feedback phase across recovery and
+  process live updates before steering the worker.
+
 ## 0.1.0a105 — 2026-11-04
 
 - Coalesce unchanged tool observations across live coordination using the request,

@@ -507,7 +507,7 @@ def _project_adapter(project):
 def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
                    execution_intent_id=None, model=None, effort=None,
                    app_server_policy=None, predispatch_receipt=None, native_team=None, execution_decision=None,
-                   continuation_prompt=None, project=None, launch_context=None):
+                   continuation_prompt=None, project=None, launch_context=None, goal_run_id=None):
     """Serialize canonical LINE, gate frozen authority, then own one native root."""
     selection = {**compute_kwargs(model, effort, backend="claude" if launcher == "claude" else "codex"), **team_kwargs(native_team)}
     if launcher not in {"exec", "app-server", "claude"}:
@@ -538,6 +538,7 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
     binding = admitted_binding(authority.common_dir, tag, binding)
     with ExecutionIntent.open(authority.common_dir, tag, binding,
                               intent_id=execution_intent_id,
+                              goal_run_id=goal_run_id,
                               source_verifier=adapter.recovery_source_verifier) as intent, observed_start(intent), deadline.scope(intent.frozen.get('task_deadline_at')):
         if intent.state == "completed":
             return _intent_outcome(intent, replayed=True)
@@ -575,8 +576,14 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
                 number = max([0, *attempts]) + 1
                 log = log.with_name(f"{stem}_retry{number}.log")
                 out = out.with_name(f"{stem.replace('dispatch', 'last_message', 1)}_retry{number}.md")
-            if any(path.exists() for path in (out, log, log.with_suffix(".cleanup.json"))):
-                raise FileExistsError("prior dispatch evidence exists; use its original session")
+            # Admission owns execution identity. Distinct admitted executions
+            # share the task directory and retain every earlier evidence family.
+            number = 0
+            claimed_stem = log.stem
+            while any(folder.glob(log.stem + '.*')) or any(folder.glob(out.stem + '.*')):
+                number += 1
+                log = folder / (claimed_stem + '_new' + str(number) + '.log')
+                out = folder / (log.stem.replace('dispatch', 'last_message', 1) + '.md')
             from ._launch_context import capture, bind_coding_model
             launch_context = intent.frozen.get('launch_context')
             if launch_context is None:

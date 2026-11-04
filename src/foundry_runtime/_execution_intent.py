@@ -143,12 +143,13 @@ def _verify_terminal(record, evidence, returncode):
 class ExecutionIntent:
     @classmethod
     def open(cls, common_dir: Path, task_key: str, frozen: dict, *, intent_id=None,
-             recovery=None, read_only=False, source_verifier=None):
+             recovery=None, read_only=False, source_verifier=None, goal_run_id=None):
         return cls(common_dir, task_key, frozen, intent_id=intent_id,
-                   recovery=recovery, read_only=read_only, source_verifier=source_verifier)
+                   recovery=recovery, read_only=read_only, source_verifier=source_verifier,
+                   goal_run_id=goal_run_id)
 
     def __init__(self, common_dir, task_key, frozen, *, intent_id=None, recovery=None,
-                 read_only=False, source_verifier=None):
+                 read_only=False, source_verifier=None, goal_run_id=None):
         if not isinstance(task_key, str) or not re.fullmatch(r"[A-Z0-9][A-Z0-9_.-]{0,63}", task_key):
             raise ValueError("task_key must be the canonical uppercase LINE identity")
         self.common_dir = _local_ntfs(Path(common_dir))
@@ -168,6 +169,7 @@ class ExecutionIntent:
         self._record, self._sequence, self._last_hash = {}, 0, None
         self._history_version = 2 if self._frozen.get('launcher') == 'app-server' else 1
         self._read_only = read_only
+        self._goal_run_id = goal_run_id
         if recovery is not None and (not isinstance(recovery, _recovery_authorization.RecoveryAuthorization)
                                      or self._frozen.get("operation") != "resume"):
             raise IntentConflict("recovery requires a validated resume authorization")
@@ -259,6 +261,14 @@ class ExecutionIntent:
         try:
             histories = self._task_dir / "intents"
             histories.mkdir(exist_ok=True)
+            if self._goal_run_id and self._expected_id is None and not self._read_only and self.path.is_dir():
+                prior, _, _ = self._read(self.path)
+                if prior['state'] == 'closed' and prior['frozen'] == self.frozen:
+                    # A new goal has a persisted identity. Its retries select the
+                    # same successor; the closed journal remains terminal.
+                    self._frozen = {**self._frozen, 'goal_run_id': self._goal_run_id}
+                    self.intent_id = _identity(self.task_key, self._frozen)
+                    self.path = histories / self.intent_id
             legacy = None
             predecessor = None
             for path in sorted(histories.iterdir()):
@@ -276,6 +286,8 @@ class ExecutionIntent:
                         raise IntentConflict("unresolved intent for this task blocks another worktree: " + path.name)
                     if _same_invocation(record['frozen'], self._frozen):
                         raise IntentConflict('recovered invocation grants no replay; provide a new amendment')
+                elif record['state'] == 'closed':
+                    continue  # Closed work does not freeze the next goal's assignment.
                 elif ('app_server_policy' not in record['frozen']
                       and 'app_server_policy' in self._frozen
                       and record['frozen'] == {k: v for k, v in self._frozen.items() if k != 'app_server_policy'}):
@@ -336,7 +348,8 @@ class ExecutionIntent:
             if self._record["state"] == "completed":
                 self._verify_completion(self._record)
             if self._record['state'] == 'closed':
-                raise IntentConflict('intent was closed without execution; use a new task or amendment')
+                raise IntentConflict('intent is closed; start a new goal with --foundry-goal and the same '
+                                     'project/order, without --recover-goal or --execution-intent-id')
             if self._recovery is not None:
                 self._verify_recovery_link()
             return self
