@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.1.0a105 — 2026-11-04
+
+- Coalesce unchanged tool observations across live coordination using the request,
+  result and member identity. Preserve new results, changed working contents and
+  explicit operator input; ignore outer blank lines in repeated protocol reports.
+- Recognize recurring candidate trees and blocking findings during automatic
+  correction, retaining new measured failures and existing escalation opportunities.
+- Publish an operator question when coordination repeats an expert question whose
+  valid answer it already received against unchanged evidence. Retain native
+  receipts and resume through the existing explicit-answer lifecycle.
+- Select goal recovery before project launch defaults when `--recover-goal` is
+  supplied, including retained-only inspection without a separate mode flag.
+
 ## 0.1.0a104 — 2026-11-04
 
 - Consume live manager readiness decisions after the current native worker turn

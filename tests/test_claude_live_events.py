@@ -105,7 +105,7 @@ def test_readiness_closes_after_result_and_retains_late_events(action):
 
 def test_new_head_rearms_same_live_message():
     observed = ['old-head']
-    with live_scope(lambda rows: 'answer', observe_head=lambda: observed[0]):
+    with live_scope(lambda rows: 'answer', observe_source=lambda: observed[0]):
         events = LiveEvents()
     row = {'method': 'item/completed', 'params': {'threadId': 'root', 'turnId': 'turn',
         'item': {'type': 'agentMessage', 'id': 'first', 'text': 'FOUNDRY_DELIVERABLE_DONE Ready'}}}

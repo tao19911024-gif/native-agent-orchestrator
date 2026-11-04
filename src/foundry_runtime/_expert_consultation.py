@@ -91,6 +91,7 @@ def consult(turn, state, workspace, question, source):
 
 def coordinate(turn, state, workspace, packet, *, operator_update=False, pending_only=False):
     original, usage, admitted, consulting = packet, None, None, False
+    operator_retry = operator_update
     try:
         pending = state.get('expert_pending_request')
         question = pending['question'] if pending else review_request(packet)
@@ -114,10 +115,20 @@ def coordinate(turn, state, workspace, packet, *, operator_update=False, pending
                 return decision, next_state, usage, accepted
             consulting = True
             previous = packet.get('expert_consultation')
-            answer = (previous if state.get('effective_coordination') == 1 and not operator_update
+            consumed = accepted.get('expert_consultation')
+            if (not operator_retry and state.get('effective_coordination') == 1
+                    and reusable_answer(consumed, question, state, workspace)):
+                next_state.pop('expert_pending_request', None)
+                return {**decision, 'action': 'await_input', 'instruction_source': 'host',
+                        'instruction': 'The same expert question was requested again after its answer was received, '
+                                       'with unchanged evidence. Specify the unresolved point or authorize a new attempt.',
+                        'expert_request': None, 'expert_consultation': consumed,
+                        'consultation_stop': 'repeated_answer'}, next_state, usage, accepted
+            answer = (previous if state.get('effective_coordination') == 1 and not operator_retry
                       and reusable_answer(previous, question, state, workspace) else
                       consult(turn, state, workspace, question, decision['evidence']))
             consulting = False
+            operator_retry = False
             # Existing manager conversation consumes the answer and keeps the
             # user's newest packet; expert advice never becomes operator authority.
             state = next_state

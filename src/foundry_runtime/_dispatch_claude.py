@@ -173,7 +173,7 @@ class ClaudeLive:
         self.result_ready = False
         self.outbox = []
         self.unacknowledged = {}
-        self.tool_names = {}
+        self.tool_requests = {}
         self.closed = False
 
     def _log(self, text):
@@ -234,7 +234,8 @@ class ClaudeLive:
             content = message.get('content') or []
             for block in content if isinstance(content, list) else []:
                 if isinstance(block, dict) and block.get('type') == 'tool_use' and block.get('id'):
-                    self.tool_names[(member, block['id'])] = block.get('name')
+                    self.tool_requests[(member, block['id'])] = {
+                        'tool': block.get('name'), **({'input': block['input']} if 'input' in block else {})}
             text = '\n'.join(b.get('text', '') for b in content if isinstance(b, dict) and b.get('type') == 'text')
             if identity and text:
                 completed({'type': 'agentMessage', 'id': identity, 'text': text})
@@ -243,8 +244,9 @@ class ClaudeLive:
             for block in content if isinstance(content, list) else []:
                 if isinstance(block, dict) and block.get('type') == 'tool_result' and block.get('tool_use_id'):
                     completed({'type': 'toolResult', 'id': block['tool_use_id'],
-                        'tool': self.tool_names.pop((member, block['tool_use_id']), None),
-                        'result': {'error': True} if block.get('is_error') else block.get('content')})
+                        **self.tool_requests.pop((member, block['tool_use_id']), {}),
+                        'result': {'is_error': True, 'content': block.get('content')}
+                                  if block.get('is_error') else block.get('content')})
         if kind == 'system' and row.get('subtype') == 'task_notification' and identity:
             completed({'type': 'memberResult', 'id': identity})
 

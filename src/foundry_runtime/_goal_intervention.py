@@ -20,6 +20,20 @@ from threading import Lock
 _live = ContextVar('foundry_live_manager', default=None)
 
 
+def tool_observation(item):
+    """Compare observed requests/results, without treating a new item ID as work."""
+    if item.get('type') == 'toolResult' and item.get('tool') and 'input' in item and item.get('result') is not None:
+        request = {'tool': item['tool'], 'input': item['input']}
+        result = item['result']
+    elif item.get('type') == 'commandExecution' and 'command' in item and 'aggregatedOutput' in item:
+        request = {key: item.get(key) for key in ('command', 'cwd')}
+        result = {key: item.get(key) for key in ('aggregatedOutput', 'exitCode', 'status')}
+    else:
+        return None  # Missing request/result information remains actionable.
+    digest = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return digest(request), digest(result)
+
+
 def protocol_markers(text):
     """Recognize leading protocol markers, excluding fenced examples."""
     markers, fence = set(), None
@@ -47,8 +61,8 @@ def protocol_markers(text):
 
 
 @contextmanager
-def live_scope(decide, *, capture=None, claude=False, undelivered=None, observe_head=None):
-    token = _live.set((decide, capture, claude, undelivered, observe_head))
+def live_scope(decide, *, capture=None, claude=False, undelivered=None, observe_source=None):
+    token = _live.set((decide, capture, claude, undelivered, observe_source))
     try:
         yield
     finally:
@@ -62,7 +76,7 @@ class LiveEvents:
     """
     def __init__(self, decide=None, threshold=None):
         from ._context_signals import CompactionResidual
-        inherited, self.capture, self.claude_enabled, self.undelivered, self.observe_head = _live.get() or (None, None, False, None, None)
+        inherited, self.capture, self.claude_enabled, self.undelivered, self.observe_source = _live.get() or (None, None, False, None, None)
         self.decide = decide if decide is not None else inherited
         self.events = queue.Queue()
         self.event_lock = Lock()
@@ -75,6 +89,8 @@ class LiveEvents:
         self.evidence_generation = 0
         self.observed_items = set()
         self.wait_states = {}
+        self.tool_states = {}
+        self.source_state = None
         self.executor = None
         self.pending = None
         self.pending_rows = []
@@ -115,7 +131,15 @@ class LiveEvents:
                     scope = (params.get('threadId'),
                              tuple(sorted(item.get('receiverThreadIds') or [])))
                     if result is None:
-                        self.evidence_generation += 1
+                        observation = tool_observation(item)
+                        if observation is None:
+                            self.evidence_generation += 1
+                        else:
+                            request, result = observation
+                            scope = (params.get('threadId'), request)
+                            if self.tool_states.get(scope) != result:
+                                self.tool_states[scope] = result
+                                self.evidence_generation += 1
                     elif result['state'] == 'observed':
                         if self.wait_states.get(scope) != result['signature']:
                             self.wait_states[scope] = result['signature']
@@ -132,8 +156,15 @@ class LiveEvents:
         with self.event_lock:
             if key not in self.seen:
                 self.seen.add(key)
-                head = self.observe_head() if self.observe_head is not None else None
-                message_key = (root, self.evidence_generation, head, text,
+                source = self.observe_source() if self.observe_source is not None else None
+                source_key = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+                if self.observe_source is not None and source is None:
+                    source_key = key  # Unknown source is not evidence of no change.
+                elif source is not None:
+                    if self.source_state is not None and self.source_state != source_key:
+                        self.evidence_generation += 1
+                    self.source_state = source_key
+                message_key = (root, self.evidence_generation, source_key, text.strip(),
                                json.dumps(item.get('questions'), sort_keys=True, ensure_ascii=False))
                 if message_key in self.seen_messages:
                     return sample
