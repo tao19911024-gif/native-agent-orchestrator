@@ -12,7 +12,8 @@ from foundry_runtime._followup import status
 
 
 @pytest.mark.parametrize('action', ['await_input', 'review', 'deliver_artifacts'])
-def test_live_readiness_ends_worker_without_another_manager_call(external, manager_io, tmp_path, monkeypatch, action):
+@pytest.mark.parametrize('publication_crash', [False, True])
+def test_live_readiness_ends_worker_without_another_manager_call(external, manager_io, tmp_path, monkeypatch, action, publication_crash):
     tree, scope, order, _ = external
     requests, decisions = manager_io
     decision = {'action': action, 'instruction': 'Commander ruling required' if action == 'await_input' else 'Use the completed result', 'artifacts': []}
@@ -53,10 +54,21 @@ for index,line in enumerate(sys.stdin):
         return {'status': 'candidate_verified'}
     monkeypatch.setattr(goal, '_finish_review', finish)
     folder = tmp_path / 'goal'
-    result = goal.run_goal(order, folder, Path(sys.executable), coding_launcher='claude',
-        project_record=scope.record(), manager_state={'backend': 'claude', 'model': None, 'effort': None,
-            'native_dir': str(tmp_path / 'manager'), 'live_coordination': 1, 'claude_live_events': 1,
-            'artifact_delivery': True})
+    def run():
+        return goal.run_goal(order, folder, Path(sys.executable), coding_launcher='claude',
+            project_record=scope.record(), manager_state={'backend': 'claude', 'model': None, 'effort': None,
+                'native_dir': str(tmp_path / 'manager'), 'live_coordination': 1, 'claude_live_events': 1,
+                'artifact_delivery': True})
+    if publication_crash:
+        with monkeypatch.context() as patch:
+            def crash(*args, **kwargs):
+                raise RuntimeError('fixture interrupted live checkpoint publication')
+            patch.setattr(goal, '_publish_coding_checkpoint', crash)
+            with pytest.raises(RuntimeError, match='fixture interrupted live checkpoint'):
+                run()
+        result = goal.recover_goal(order, folder)
+    else:
+        result = run()
     assert len(calls.read_text().splitlines()) == 1
     assert len(requests) == 2  # Initial assignment plus exactly one live decision.
     expected = {'await_input': 'awaiting_input', 'review': 'candidate_verified', 'deliver_artifacts': 'artifacts_delivered'}
