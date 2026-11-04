@@ -170,22 +170,25 @@ def test_quota_upgrade_keeps_completed_review_and_original_refusal(external, tmp
 
 @pytest.mark.parametrize('source', ['project', 'explicit'])
 @pytest.mark.parametrize('signal', ['finding', 'assertion'])
-def test_repeated_review_finding_upgrades_only_automatic_codex_slot(tmp_path, monkeypatch, source, signal):
+def test_repeated_review_finding_upgrades_only_automatic_codex_slot(external, tmp_path, monkeypatch, source, signal):
     from foundry_runtime import _foundry_goal_auto as auto
     order = tmp_path / 'TASK_fixture.md'; order.write_text('fixture')
     calls = []
+    tree = external[0]
     finding = {'severity': 'P1', 'file': 'writer.py', 'summary': 'same ownership failure'}
     def run(order, folder, executable, **options):
         calls.append(options)
         folder.mkdir()
+        (tree / 'writer.py').write_text('correction = ' + str(len(calls)))
+        git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'progressing correction')
         result = {'status': 'review_blocked' if len(calls) <= 2 else 'candidate_verified',
-            'candidate_commit': str(len(calls)), 'coding_session': 'fixture',
+            'candidate_commit': git(tree, 'rev-parse', 'HEAD'), 'coding_session': 'fixture',
             'reviews': [{'verdict': 'BLOCK', 'findings': [finding] if signal == 'finding' else []}]}
         if signal == 'assertion':
             result['review_execution_evidence'] = {'review-1': {'test_failures': [{
                 'session_id': str(len(calls)), 'call_id': 'focused-test', 'test_id': 'test_writer.py::test_balance',
                 'model': options['reviewers'][1]['model']}]}}
-        goal._write(folder / 'manifest.json', {'requested_compute': {'coding': {'model': 'custom-worker'}},
+        goal._write(folder / 'manifest.json', {'worktree': str(tree), 'requested_compute': {'coding': {'model': 'custom-worker'}},
                                               'reviewers': options['reviewers']})
         goal._write(folder / 'outcome.json', result)
         return result
@@ -222,21 +225,24 @@ def test_review_assertion_observation_uses_existing_receipt_and_request_identity
     assert usage.review_execution_evidence(snapshot) == {}
 
 
-def test_quota_transfer_survives_correction_and_is_reported_once(tmp_path, monkeypatch):
+def test_quota_transfer_survives_correction_and_is_reported_once(external, tmp_path, monkeypatch):
     from foundry_runtime import _foundry_goal_auto as auto
     order = tmp_path / 'TASK_fixture.md'; order.write_text('fixture')
     calls = []
+    tree = external[0]
     decision = {'slot': 'review-1', 'from_model': model('sol'), 'model': model('astra'),
                 'effort': 'high', 'action': 'escalate', 'signals': ['provider_limit'],
                 'receipt': {'path': 'retained-native-refusal', 'sha256': 'a' * 64}}
     def run(order, folder, executable, **options):
         calls.append(options)
         folder.mkdir()
+        (tree / 'writer.py').write_text('correction = ' + str(len(calls)))
+        git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'progressing correction')
         final = len(calls) == 2
         result = {'status': 'candidate_verified' if final else 'review_blocked',
-            'candidate_commit': str(len(calls)), 'coding_session': 'fixture',
+            'candidate_commit': git(tree, 'rev-parse', 'HEAD'), 'coding_session': 'fixture',
             'reviews': [{'verdict': 'PASS' if final else 'BLOCK', 'findings': []}]}
-        manifest = {'reviewers': options['reviewers']}
+        manifest = {'worktree': str(tree), 'reviewers': options['reviewers']}
         if not final:
             manifest.update(review_transfers={'review-1': [{**options['reviewers'][1], 'model': model('astra')}]},
                             review_tier_decisions=[decision])
