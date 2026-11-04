@@ -6,6 +6,8 @@ The owner parameter supplies the runner's persistence and dispatch seams.
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -36,10 +38,23 @@ def outcome_path(root, manifest):
     return (Path(manifest['active_round']) if manifest.get('runtime_upgrades') else root)/'outcome.json'
 
 
-def block_identity(owner, outcome):
+def block_identity(owner, outcome, worktree):
     findings = {owner._json_bytes(f).decode("utf-8") for r in [*outcome["reviews"], {"findings": outcome.get("host_findings", [])}]
                 for f in r["findings"] if f["severity"] in _BLOCKING_SEVERITIES}
-    return outcome["candidate_commit"], tuple(sorted(findings))
+    candidate = outcome['candidate_commit']
+    try:
+        tree = owner._git(worktree, 'rev-parse', candidate + '^{tree}').decode().strip()
+        if re.fullmatch(r'[0-9a-f]{40,64}', tree):
+            candidate = tree
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        pass  # Historical/unavailable trees retain the recorded commit identity.
+    measured = sorted({failure['test_id'] for failure in
+        (outcome.get('implementation_evidence') or {}).get('active_test_failures', []) if failure.get('test_id')})
+    closure = outcome.get('candidate_closure') or {}
+    observed = {key: closure.get(key) for key in ('status', 'returncode')}
+    observed.update({key: (closure.get(key) or {}).get('sha256') for key in ('stdout', 'stderr')})
+    evidence = owner._json_bytes({'tests': measured, 'closure': observed}).decode('utf-8')
+    return candidate, tuple(sorted(findings)), evidence
 
 
 
@@ -303,11 +318,11 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                         "correction": {"backend": "claude", **correction, "source": "handover"}, "handover": {
                         "backend": "claude", "model": model("opus"), "effort": "high", "source": "handover"}}}
                 continue
-            identity = block_identity(owner, result)
+            identity = block_identity(owner, result, manifest['worktree'])
             if options.get("amend_from"):
                 prior = json.loads(Path(options["amend_from"]).read_bytes())
                 if prior["status"] == "review_blocked":
-                    seen.add(block_identity(owner, prior))
+                    seen.add(block_identity(owner, prior, manifest['worktree']))
             if identity in seen and not promoted:
                 result = {**result, "auto_amend_stop": "unchanged candidate and blocking findings repeated"}
                 break

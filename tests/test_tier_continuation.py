@@ -225,19 +225,21 @@ def test_write_keywords_in_reads_are_not_author_evidence():
 
 
 @pytest.mark.parametrize('backend,initial,top', [('claude', 'sonnet', 'opus'), ('codex', 'sol', 'astra')])
-def test_auto_amend_upgrades_consults_then_preserves_existing_no_progress_exit(tmp_path, monkeypatch, backend, initial, top):
+def test_auto_amend_upgrades_consults_then_preserves_existing_no_progress_exit(external, tmp_path, monkeypatch, backend, initial, top):
     import sys
     from foundry_runtime import foundry_goal as goal, _foundry_goal_auto as auto
     from foundry_runtime._model_catalogue import model
+    from test_installed_runtime import git
+    tree = external[0]
     calls = []
     order = tmp_path / 'TASK_fixture.md'
     order.write_text('fixture')
     def run(order, folder, executable, **options):
         calls.append(options)
         folder.mkdir()
-        result = {'status': 'review_blocked', 'candidate_commit': 'same', 'coding_session': 'fixture',
+        result = {'status': 'review_blocked', 'candidate_commit': git(tree, 'rev-parse', 'HEAD'), 'coding_session': 'fixture',
                   'reviews': [{'verdict': 'BLOCK', 'findings': [{'severity': 'P1', 'file': 'a.py', 'summary': 'same failure'}]}]}
-        goal._write(folder / 'manifest.json', {'requested_compute': {'coding': {'model': options['coding_model']}}})
+        goal._write(folder / 'manifest.json', {'worktree': str(tree), 'requested_compute': {'coding': {'model': options['coding_model']}}})
         goal._write(folder / 'outcome.json', result)
         return result
     monkeypatch.setattr(goal, '_run', run)

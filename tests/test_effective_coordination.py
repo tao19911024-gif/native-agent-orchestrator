@@ -72,11 +72,14 @@ def test_repeated_expert_question_reuses_only_unchanged_evidence(tmp_path, backe
             result = {'action': 'delegate', 'instruction': 'implement', 'expert_request': None}
         return result, current, {}, packet
     result = experts.coordinate(turn, state, tmp_path, {'stage': 'assign'}, operator_update=change == 'operator')
-    assert result[0]['instruction'] == 'implement'
-    assert len(calls) == (1 if change == 'none' else 2)
-    if change == 'none':
-        assert packets[1]['expert_consultation'] == packets[2]['expert_consultation']
+    if change in ('none', 'operator'):
+        assert result[0]['action'] == 'await_input'
+        assert result[0]['consultation_stop'] == 'repeated_answer'
+        assert len(calls) == 1 and len(packets) == 2
         assert calls[0]['evidence_snapshot'] == [fact(source)]
+    else:
+        assert result[0]['instruction'] == 'implement'
+        assert len(calls) == 2
 
 
 def test_changed_during_consultation_or_missing_receipt_is_not_reusable(tmp_path):

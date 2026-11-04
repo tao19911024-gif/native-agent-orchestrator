@@ -75,6 +75,11 @@ The controller uses retained project and role records. Its response identifies
 the next state and any `continuation_evidence` directory. Retain that directory
 as the binding for the continued goal.
 
+`--recover-goal` selects goal recovery before project launch defaults are resolved;
+the explicit `--foundry-goal` flag in the examples can be omitted. It never selects
+a fresh order dispatch. `--retained-only` reads the retained recovery result
+without starting model work.
+
 A live manager request for a commander ruling ends coordination after the
 current native turn settles and publishes the question in `outcome.json`.
 Reading status or recovering without an answer reuses that outcome. Submit the
@@ -85,6 +90,11 @@ an identical report against unchanged source, also publishes an awaiting-input
 question. The coding checkpoint retains the completed work. Inspect the stated
 observation, resolve the project prerequisite or provide an explicit instruction;
 restarting the goal does not provide new evidence.
+
+A repeated expert question whose answer was already received against unchanged
+evidence also publishes an awaiting-input question. Specify the unresolved point
+or authorize a new attempt with the existing answer command. A new question or
+changed named evidence follows the normal expert-consultation path.
 
 Completed Claude and Codex executions both restore manager feedback from their
 original execution journal. A verified retained native terminal can be reconciled
