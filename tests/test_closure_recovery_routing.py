@@ -138,6 +138,8 @@ from foundry_runtime import _foundry_goal_upgrade as u
 root=pathlib.Path(sys.argv[1]);(root/'manifest.json').write_text('{}')
 u.request=lambda a:(root,{'target':sys.argv[2]},'fixture')
 a=SimpleNamespace(upgrade_runtime=sys.argv[2])
+# Model a distinct controller installation while keeping the child portable.
+sys.executable=str(root/'controller-python.exe')
 raise SystemExit(u.route(a,['--not-a-foundry-option']))
 '''
     result=subprocess.run([sys.executable,'-X','utf8','-c',script,str(tmp_path),legacy],
