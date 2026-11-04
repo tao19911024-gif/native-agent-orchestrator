@@ -75,6 +75,23 @@ The controller uses retained project and role records. Its response identifies
 the next state and any `continuation_evidence` directory. Retain that directory
 as the binding for the continued goal.
 
+A live manager request for a commander ruling ends coordination after the
+current native turn settles and publishes the question in `outcome.json`.
+Reading status or recovering without an answer reuses that outcome. Submit the
+answer through the command above to continue the same native session.
+
+Repeated review of an unchanged dirty candidate, or the same assignment returning
+an identical report against unchanged source, also publishes an awaiting-input
+question. The coding checkpoint retains the completed work. Inspect the stated
+observation, resolve the project prerequisite or provide an explicit instruction;
+restarting the goal does not provide new evidence.
+
+Completed Claude and Codex executions both restore manager feedback from their
+original execution journal. A verified retained native terminal can be reconciled
+after interrupted completion publication. An attempt without terminal evidence
+uses its recorded interrupted-execution procedure; cleanup alone establishes
+process exit, not successful work. A closed historical intent remains closed.
+
 ## Correct a reviewed candidate
 
 Goal status includes `feedback`: the original task, reviewed candidate,

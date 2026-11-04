@@ -68,6 +68,68 @@ def test_answer_awaiting_turn_boundary_still_coalesces_identical_questions():
     live.close()
 
 
+def test_delivered_answer_does_not_rearm_same_question_without_evidence():
+    live = bridge()
+    live.observe(assistant())
+    live.live_events.drain(live)
+    live.live_events.pending.result(timeout=5)
+    live.live_events.drain(live)
+    live.result_ready = True
+    live.advance(SimpleNamespace(stdin=io.StringIO()))
+    live.observe(assistant('same-next-turn'))
+    assert live.live_events.events.empty()
+    live.observe({'type': 'user', 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'new-work'}]}})
+    live.observe(assistant('after-new-work'))
+    assert live.live_events.events.qsize() == 1
+    live.close()
+
+
+@pytest.mark.parametrize('action', ['await_input', 'review', 'deliver_artifacts'])
+def test_readiness_closes_after_result_and_retains_late_events(action):
+    captured = []
+    live = bridge(lambda rows: {'action': action, 'instruction': 'Hand back'}, captured.extend)
+    live.observe(assistant())
+    live.live_events.drain(live)
+    live.live_events.pending.result(timeout=5)
+    live.live_events.drain(live)
+    assert live.live_events.finished and not live.outbox
+    live.observe({'type': 'user', 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'new-work'}]}})
+    live.observe(assistant('late-question', 'FOUNDRY_MANAGER_QUESTION A different question'))
+    stream = io.StringIO()
+    live.advance(SimpleNamespace(stdin=stream))
+    assert not stream.closed  # Useful native work is still in its current turn.
+    live.result_ready = True
+    live.advance(SimpleNamespace(stdin=stream))
+    assert stream.closed and captured[0]['item_id'] == 'late-question'
+
+
+def test_new_head_rearms_same_live_message():
+    observed = ['old-head']
+    with live_scope(lambda rows: 'answer', observe_head=lambda: observed[0]):
+        events = LiveEvents()
+    row = {'method': 'item/completed', 'params': {'threadId': 'root', 'turnId': 'turn',
+        'item': {'type': 'agentMessage', 'id': 'first', 'text': 'FOUNDRY_DELIVERABLE_DONE Ready'}}}
+    events.observe(row, 'root')
+    events.observe({**row, 'params': {**row['params'], 'item': {**row['params']['item'], 'id': 'duplicate'}}}, 'root')
+    assert events.events.qsize() == 1
+    observed[0] = 'new-head'
+    events.observe({**row, 'params': {**row['params'], 'item': {**row['params']['item'], 'id': 'new-head'}}}, 'root')
+    assert events.events.qsize() == 2
+
+
+def test_identical_member_wait_across_turns_does_not_rearm_question():
+    events = LiveEvents(lambda rows: 'answer')
+    for turn, state in [('first', 'running'), ('second', 'running'), ('third', 'completed')]:
+        params = {'threadId': 'root', 'turnId': turn}
+        events.observe({'method': 'item/completed', 'params': {**params, 'item': {
+            'type': 'collabAgentToolCall', 'id': 'wait-' + turn, 'tool': 'wait',
+            'receiverThreadIds': ['member'], 'agentsStates': {'member': {'status': state}}}}}, 'root')
+        events.observe({'method': 'item/completed', 'params': {**params, 'item': {
+            'type': 'agentMessage', 'id': 'question-' + turn, 'text': 'FOUNDRY_MANAGER_QUESTION Same ruling'}}}, 'root')
+        assert events.events.qsize() == (1 if turn != 'third' else 2)
+    assert events.evidence_generation == 2
+
+
 @pytest.mark.parametrize('failure', ['manager', 'delivery', 'terminal'])
 def test_failures_and_terminal_race_retain_unanswered_rows(failure):
     retained = []

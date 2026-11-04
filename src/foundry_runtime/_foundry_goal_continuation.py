@@ -75,7 +75,7 @@ def retained_dispatch(owner, folder, manifest):
         journal, record = read_intent(package, project_record=manifest.get('project_record'))
         frozen = record['frozen']
         log = path.with_name(path.name.removesuffix('.package.json') + '.log')
-        if (package.get('tag') == manifest['tag'] and record.get('launcher') == 'app-server'
+        if (package.get('tag') == manifest['tag'] and record.get('launcher') in ('app-server', 'claude')
                 and Path(frozen['worktree']).resolve() == Path(manifest['worktree']).resolve()
                 and package.get('attempt_id') == record.get('attempt_id')
                 and (reference or frozen.get('order_sha256') == manifest['order']['sha256']
@@ -119,7 +119,7 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
     # result can be a provider failure and must reach the manager as that failure.
     rc = record['returncode']
     facts = [v for v in record['evidence'].values() if v is not None]
-    session = record['turn_binding']['thread_id']
+    session = (record.get('turn_binding') or {}).get('thread_id') or record['session_id']
     options = dict(manifest['manager_start']['options'])
     # The settled dispatch is the replacement worker. Its next turn resumes
     # this session even if publication stopped before consuming the transfer.
@@ -134,6 +134,8 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
             'stage': 'worker_returned', 'run_id': manifest['run_id'], 'coding_session': session,
             'worker_evidence': facts, 'returncode': rc,
             'observed_head': owner._git(manifest['worktree'], 'rev-parse', 'HEAD').decode().strip()}))
+    from ._foundry_goal_execution import apply_live_readiness
+    apply_live_readiness(manifest, checkpoint)
     owner._publish_coding_checkpoint(folder, manifest, checkpoint, checkpoint_path=checkpoint_path, publish=publish)
     return manifest
 

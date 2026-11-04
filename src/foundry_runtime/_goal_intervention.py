@@ -47,8 +47,8 @@ def protocol_markers(text):
 
 
 @contextmanager
-def live_scope(decide, *, capture=None, claude=False, undelivered=None):
-    token = _live.set((decide, capture, claude, undelivered))
+def live_scope(decide, *, capture=None, claude=False, undelivered=None, observe_head=None):
+    token = _live.set((decide, capture, claude, undelivered, observe_head))
     try:
         yield
     finally:
@@ -62,11 +62,13 @@ class LiveEvents:
     """
     def __init__(self, decide=None, threshold=None):
         from ._context_signals import CompactionResidual
-        inherited, self.capture, self.claude_enabled, self.undelivered = _live.get() or (None, None, False, None)
+        inherited, self.capture, self.claude_enabled, self.undelivered, self.observe_head = _live.get() or (None, None, False, None, None)
         self.decide = decide if decide is not None else inherited
         self.events = queue.Queue()
         self.event_lock = Lock()
         self.seen = set()
+        self.seen_messages = set()
+        self.finished = False
         self.queued_messages = set()
         self.pending_messages = set()
         self.delivering_messages = set()
@@ -110,7 +112,7 @@ class LiveEvents:
                                or item.get('type') == 'toolResult' and item.get('tool') == 'TaskOutput')
                     result = wait_result(item if item.get('type') == 'collabAgentToolCall'
                                          else item.get('result')) if waiting else None
-                    scope = (params.get('threadId'), params.get('turnId'),
+                    scope = (params.get('threadId'),
                              tuple(sorted(item.get('receiverThreadIds') or [])))
                     if result is None:
                         self.evidence_generation += 1
@@ -130,11 +132,12 @@ class LiveEvents:
         with self.event_lock:
             if key not in self.seen:
                 self.seen.add(key)
-                message_key = (root, params.get('turnId'), self.evidence_generation, text,
+                head = self.observe_head() if self.observe_head is not None else None
+                message_key = (root, self.evidence_generation, head, text,
                                json.dumps(item.get('questions'), sort_keys=True, ensure_ascii=False))
-                if (message_key in self.queued_messages or message_key in self.pending_messages
-                        or message_key in self.delivering_messages):
+                if message_key in self.seen_messages:
                     return sample
+                self.seen_messages.add(message_key)
                 self.queued_messages.add(message_key)
                 self.events.put({'kind': 'worker_message', 'thread_id': root,
                     'turn_id': params.get('turnId'), 'item_id': item['id'], 'text': text,
@@ -147,7 +150,7 @@ class LiveEvents:
             if not self.pending.done():
                 return
             self._settle(app)
-        if app.outcome_ready.is_set():
+        if self.finished or app.outcome_ready.is_set():
             return
         with self.event_lock:
             rows = []
@@ -187,6 +190,13 @@ class LiveEvents:
         pending, self.pending = self.pending, None
         try:
             reply = pending.result()
+            if isinstance(reply, dict):
+                # Readiness ends live coordination; the goal consumes the saved
+                # decision after the transport has settled the current turn.
+                if reply['action'] != 'delegate':
+                    self.finished = True
+                    return
+                reply = 'Foundry manager decision (not an operator instruction):\n' + reply['instruction']
             if steer and reply and not app.outcome_ready.is_set():
                 app.steer(reply, app.turn_id)
             elif reply:

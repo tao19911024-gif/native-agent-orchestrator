@@ -59,6 +59,21 @@ interpreter, execution intent, and evidence. Manager, worker, expert, and review
 roles use that retained context. Receipts distinguish verified results, stopped
 execution, pending work, unknown outcomes, and project-owned acceptance.
 
+Live coordination uses the same manager decision contract as returned-worker
+coordination. Delegation can deliver guidance to the running worker. Awaiting
+input, review and artifact delivery finish live coordination and take effect
+after the current native turn and its cleanup settle. The controller persists
+the coding checkpoint before publishing a question or advancing the next stage.
+Recovery consumes a saved readiness decision without repeating the manager call.
+
+Protocol-message coalescing follows the observed commit and native evidence
+generation across message delivery. Repeated review refusal compares the actual
+dirty source snapshot. Repeated completed delegation compares the semantic
+assignment, source snapshot and final report. Identical observations reach the
+existing awaiting-input outcome; changed contents, results or an explicit answer
+permit further work. Receipt timestamps and manager call identities do not
+establish progress.
+
 Continuation and recovery reconcile those same records. The
 [recovery guide](RECOVERY.md) covers completed sessions, unfinished goals, and
 interrupted attempts. A runtime or role transition records its selected successor

@@ -4,6 +4,19 @@ from pathlib import Path
 from ._runtime_provenance import observe
 from ._task_deadline import goal_scope
 
+
+def apply_live_readiness(manifest, checkpoint):
+    """Consume a saved live decision only after its worker completion settles."""
+    guidance = manifest.get('live_manager_decision') or {}
+    phases = {'await_input': 'awaiting_input', 'review': 'review_pending', 'deliver_artifacts': 'artifacts_pending'}
+    if checkpoint['returncode'] != 0 or guidance.get('action') not in phases:
+        return
+    decision = {**(manifest.get('execution_decision') or {}), 'manager': guidance}
+    manifest.update(execution_decision=decision, manager_phase=phases[guidance['action']])
+    checkpoint['options']['execution_decision'] = decision
+    return decision
+
+
 @goal_scope
 def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_worktree=None,
              backend="codex", analyst_model=None, analyst_effort=None,
@@ -309,11 +322,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             answer_events(manifest, manager_packet, guidance)
             observation['state'] = 'decision_available'
             _write(evidence_dir / 'manifest.json', manifest)
-            return ('Foundry manager decision (not an operator instruction):\n' + guidance['instruction'] +
-                    ('\nReturn your written result now for the manager readiness boundary.'
-                     if guidance['action'] in ('review', 'deliver_artifacts') else '') +
-                    ('\nThe manager requests a commander ruling; continue only independent assigned work.'
-                     if guidance['action'] == 'await_input' else ''))
+            return guidance
         except Exception as exc:
             observation['state'] = 'failed'
             manifest['live_manager_error'] = {'message': str(exc), 'events': events}
@@ -351,6 +360,27 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                               "observed_head": observed_head, "current_head": candidate})
         return candidate
 
+    def progress_snapshot():
+        from ._repository_observation import snapshot
+        try:
+            return snapshot(tree)
+        except (OSError, ValueError, RuntimeError):
+            return None
+
+    def repeated_work_question(question, source):
+        nonlocal phase
+        phase = 'coding'
+        manifest['manager_phase'] = 'awaiting_input'
+        manifest['assignment_refusal_question'] = {'question': question, 'source': source}
+        _write(evidence_dir / 'manifest.json', manifest)
+        raise GoalBlocked(question, 'awaiting_input')
+
+    # An explicit answer starts a new attempt; prior observations remain in the
+    # predecessor's immutable evidence, not as a reason to reject that answer.
+    if manager_answer is not None or (continuation or {}).get('answer') is not None:
+        manifest.pop('review_refusal_observation', None)
+        manifest.pop('worker_progress_observation', None)
+
     def review_or_feedback():
         nonlocal manager_packet
         try:
@@ -358,6 +388,16 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         except GoalBlocked as exc:
             if not manager_state or not (exc.workspace or {}).get('status_porcelain', '').strip():
                 raise
+            source = progress_snapshot()
+            observation = {'reason': str(exc), 'source': source,
+                'operator_answer': (execution_decision or {}).get('manager', {}).get('operator_answer')}
+            previous = manifest.pop('review_refusal_observation', None)
+            if source is not None:
+                manifest['review_refusal_observation'] = observation
+                if previous == observation:
+                    repeated_work_question(
+                        'Review was requested again for the same dirty candidate without new evidence. Commander ruling required.',
+                        'repeated_review_refusal')
             manager_packet = {**manager_packet, 'stage': 'worker_returned',
                 'review_refusal': {'reason': str(exc), 'workspace': exc.workspace,
                     'instruction': 'Review requires a committed, clean candidate. Resolve the project handoff/commit prerequisites through the worker, or request an operator decision; then route again.'}}
@@ -551,12 +591,14 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                     ('role_compute', 'coding_model', 'coding_effort') if k in execution_options})
                 if manager_state is not None or manifest.get('expert_state'):
                     manifest['manager_phase'] = 'dispatch_pending'
+                    manifest.pop('live_manager_decision', None)
                     _write(evidence_dir / 'manifest.json', manifest)
                 from ._goal_intervention import live_scope
                 try:
                     with live_scope(live_decision if (manager_state or {}).get('live_coordination') == 1 else None,
                                     capture=capture_live_events, undelivered=retain_live_decision,
-                                    claude=(manager_state or {}).get('claude_live_events') == 1):
+                                    claude=(manager_state or {}).get('claude_live_events') == 1,
+                                    observe_head=lambda: _git(tree, 'rev-parse', 'HEAD').decode().strip()):
                         if worker_recovery and not manager_repeat:
                             result = dispatch.resume_order(coding_session, tree, tag, manager_answer,
                                 recovery_file=recovery_file, **policy, **(coding_compute or {}))
@@ -679,9 +721,29 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                 'decision_id': hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()[:16],
                                 'status': 'manager_answer_required'} for decision in member_decisions]
                     manifest.update(manager_phase='feedback_pending', manager_packet=manager_packet)
+                    execution_decision = apply_live_readiness(manifest, checkpoint) or execution_decision
                     if manager_answer is not None:
                         manager_packet['operator_answer'] = manager_answer
                 owner._publish_coding_checkpoint(evidence_dir, manifest, checkpoint)
+                if manager_state is not None and rc == 0:
+                    guidance = (execution_decision or {}).get('manager') or {}
+                    source = progress_snapshot()
+                    previous = manifest.pop('worker_progress_observation', None)
+                    try:
+                        import hashlib
+                        report = hashlib.sha256(Path(output).read_bytes()).hexdigest()
+                    except OSError:
+                        report = None
+                    if guidance.get('action') == 'delegate' and source is not None and report is not None:
+                        observation = {'assignment': {key: guidance.get(key) for key in
+                            ('action', 'instruction', 'artifacts', 'operator_answer')},
+                            'source': source, 'report_sha256': report}
+                        manifest['worker_progress_observation'] = observation
+                        if previous == observation:
+                            repeated_work_question(
+                                'The same worker assignment returned the same result with unchanged source. Commander ruling required.',
+                                'repeated_worker_result')
+                    _write(evidence_dir / 'manifest.json', manifest)
                 if migrate_recovered_manager and rc == 0:
                     from ._foundry_goal_transitions import manager as transfer_manager
                     manifest = transfer_manager(owner, evidence_dir, manifest, provider=None,

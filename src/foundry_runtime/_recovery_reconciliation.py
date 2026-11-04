@@ -20,13 +20,29 @@ def settle_terminal(intent, log):
     from ._execution_intent import IntentConflict, _digest
     from .app_server_transport import AppServer
     record = intent.record
-    if (record['state'] not in ('active', 'unknown') or record.get('launcher') != 'app-server'
+    if (record['state'] not in ('active', 'unknown') or record.get('launcher') not in ('app-server', 'claude')
             or 'recovery_authorization' in record or 'recovery_consumption' in record):
-        raise IntentConflict('retained turn requires its original unresolved app-server attempt')
-    binding = record['turn_binding']
-    terminal, final_text, stopped = AppServer.retained_terminal(log, binding, record['frozen']['app_server_policy'])
-    if terminal['params']['turn']['status'] != 'completed':
-        raise IntentConflict('retained worker turn did not complete')
+        raise IntentConflict('retained turn requires its original unresolved native attempt')
+    if record['launcher'] == 'claude':
+        from ._dispatch_claude import verify_terminal, coding_report
+        terminal = json.loads(log.with_suffix('.terminal.json').read_bytes())
+        rc = terminal['native_returncode']
+        if type(rc) is not int:
+            raise IntentConflict('Claude native returncode is not recorded')
+        result = verify_terminal(terminal, session=record['session_id'], returncode=rc, attempt_id=record['attempt_id'])
+        final_text = coding_report(terminal['stdout']['path'], result)
+        binding = record
+    else:
+        binding = record['turn_binding']
+        terminal, final_text, stopped = AppServer.retained_terminal(log, binding, record['frozen']['app_server_policy'])
+        if terminal['params']['turn']['status'] != 'completed':
+            raise IntentConflict('retained worker turn did not complete')
+        rc = 0
+        terminal = {'schema_version': 'pdcl-app-server-terminal-1', 'binding': binding,
+            'terminal': terminal, 'returncode': rc, 'returncode_source': 'turn_status',
+            'native_returncode': None, 'app_server_policy': record['frozen']['app_server_policy'],
+            'expiration_cause': stopped.get('expiration_cause'),
+            'interrupt_result': stopped.get('interrupt_result', 'not_requested')}
     old_cleanup = json.loads(log.with_suffix('.cleanup.json').read_bytes())
     if (old_cleanup.get('job_active_processes') != 0 or any(old_cleanup.get(k) != binding[k]
             for k in ('attempt_id', 'root_pid', 'root_creation_time'))):
@@ -38,11 +54,6 @@ def settle_terminal(intent, log):
     cleanup = CleanupReceipt(**intent.record['cleanup'])
     terminal_path = Path(str(prefix) + '.terminal.json')
     result_path = Path(str(prefix) + '.result.md')
-    terminal = {'schema_version': 'pdcl-app-server-terminal-1', 'binding': binding,
-        'terminal': terminal, 'returncode': 0, 'returncode_source': 'turn_status',
-        'native_returncode': None, 'app_server_policy': record['frozen']['app_server_policy'],
-        'expiration_cause': stopped.get('expiration_cause'),
-        'interrupt_result': stopped.get('interrupt_result', 'not_requested')}
     package = log.with_suffix('.package.json').read_bytes()
     for path, raw in ((terminal_path, json.dumps(terminal, sort_keys=True).encode()),
                       (result_path, final_text.encode()),
@@ -55,7 +66,7 @@ def settle_terminal(intent, log):
                 stream.write(raw); stream.flush(); os.fsync(stream.fileno())
     evidence = {key: {'path': str(path.resolve()), 'sha256': _digest(path)} for key, path in
                 (('log', log), ('result', result_path), ('terminal', terminal_path), ('cleanup', cleanup_path))}
-    intent.finish(cleanup, returncode=0, evidence=evidence)
+    intent.finish(cleanup, returncode=rc, evidence=evidence)
     return intent.record
 
 

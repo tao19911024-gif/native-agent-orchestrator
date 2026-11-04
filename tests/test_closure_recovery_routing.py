@@ -129,7 +129,7 @@ def test_upgrade_retries_closure_without_another_manager_or_worker(answered_clos
 def test_upgrade_child_refusal_is_visible_through_hidden_process(tmp_path):
     # The target deliberately rejects an unknown CLI option before any project
     # admission. Reproduce redirected stdio through the real Windows relay.
-    legacy='D:/Foundry/releases/0.1.0a83/Scripts/python.exe'
+    legacy=sys.executable
     assert Path(legacy).is_file()
     script='''
 import pathlib,sys
