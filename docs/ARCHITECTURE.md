@@ -53,6 +53,14 @@ checkpoint for recovery.
 
 ## One lifecycle
 
+An explicitly closed abandoned execution retains its terminal journal. A new
+goal can use the same task and order: its persisted run ID selects a distinct
+execution when the original frozen identity is closed. Retries of that goal
+retain the same successor. Dispatch allocates numbered evidence families under
+the existing task mutex; old logs, reports, packages and cleanup remain intact.
+Completed invocation replay and unresolved-execution recovery keep their existing
+semantics.
+
 An approved order enters the project's preflight, then the existing dispatch or
 goal owner. The runtime records the selected project identity, native provider,
 interpreter, execution intent, and evidence. Manager, worker, expert, and review
@@ -65,6 +73,13 @@ input, review and artifact delivery finish live coordination and take effect
 after the current native turn and its cleanup settle. The controller persists
 the coding checkpoint before publishing a question or advancing the next stage.
 Recovery consumes a saved readiness decision without repeating the manager call.
+
+Operator input is incorporated before coordination and checked again before its
+returned decision advances execution. Updates arriving during a native call or
+quota wait return to the existing feedback phase before delegation, review,
+artifact delivery or awaiting-input publication. Live coordination consumes the
+same updates before steering. Work already owned by a native turn retains that
+turn's lifecycle.
 
 Protocol-message coalescing follows the observed working contents and native
 evidence generation across message delivery. Known tool observations compare the
