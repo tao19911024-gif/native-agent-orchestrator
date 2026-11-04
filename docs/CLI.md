@@ -20,10 +20,15 @@ environment's absolute interpreter path and `$ProjectConfig` for its descriptor.
 | Read one task's history | Add `--tag TASK1` to project status |
 | Read an exact dispatch receipt | `--foundry-project status --status-dispatch $PackagePath` |
 | Read an exact goal | `--foundry-project status --status-goal $GoalDirectory` |
+| Print its concise summary | Add `--summary` to exact goal status |
+| Include the selected default runtime | Add `--runtime-selection $SelectionFile` to exact goal status |
 
 Setup and status operations perform local inspection. `register` writes the
 descriptor; task dispatch is a separate invocation. Exact dispatch and goal
 status use their retained paths directly, without `--project-config`.
+The optional selection file is the existing release selector's JSON. Its default
+version is shown separately from the controller and worker versions recorded by
+the task. See [task observation](TASK_OBSERVATION.md).
 
 ## Execute one task
 
@@ -80,6 +85,8 @@ review of that candidate. See the [coding and review example](../examples/REVIEW
 | Continue an unfinished goal | Use the recorded goal invocation with `--recover-goal` and `--prompt-file` |
 | Correct retained review findings | Read goal status and run `feedback.continuation.invocation.powershell` |
 | Read delivery baseline and usage | `--foundry-usage $GoalDirectory` or paths to retained manifests and receipts |
+| Print a usage summary | `--foundry-usage $GoalDirectory --summary` |
+| Compare with a saved report | `--foundry-usage $GoalDirectory --usage-since $SavedReport --summary` |
 
 The [delivery baseline guide](DELIVERY_BASELINE.md) describes task, execution,
 candidate, check and review associations, sample selection and timing fields.

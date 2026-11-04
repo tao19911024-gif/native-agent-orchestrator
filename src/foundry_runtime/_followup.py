@@ -51,11 +51,85 @@ def identity(folder, manifest):
     return run_id
 
 
-def status(folder, *, plan=False):
+def status(folder, *, plan=False, runtime_selection=None):
     from ._followup_host import enrich
     report = _goal_status(folder)
+    report['summary'] = _summary(report, runtime_selection=runtime_selection)
     return enrich(report, [sys.executable, '-m', 'foundry_runtime', '--foundry-project',
                            'status', '--status-goal', report['goal']], plan=plan)
+
+
+def _current_dispatch(folder, manifest):
+    """Join only this goal's open packages and the journal's current attempt."""
+    from ._dispatch_package import read_intent
+    folder = Path(folder).resolve()
+    root = manifest.get('dispatch_evidence_root')
+    if not root:
+        return {'status': 'unrecorded', 'executions': []}
+    matches, errors = [], []
+    for path in Path(root).glob('dispatch*.package.json'):
+        try:
+            package = json.loads(path.read_bytes())
+            if package.get('goal') != {'directory': str(folder), 'run_id': identity(folder, manifest)}:
+                continue
+            _, record = read_intent(package)
+            if record.get('attempt_id') == package.get('attempt_id') and record['state'] in ('starting', 'active', 'unknown'):
+                matches.append(_dispatch_status(path))
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            errors.append({'path': str(path), 'error': str(exc)})
+    return {'status': 'ambiguous' if len(matches) > 1 else 'observed' if matches else 'none_observed',
+            'executions': matches, 'errors': errors}
+
+
+def _summary(report, *, runtime_selection=None):
+    """A consumer view of existing owners, not another task state."""
+    selected, errors = None, []
+    if runtime_selection:
+        try:
+            value = json.loads(Path(runtime_selection).read_text(encoding='utf-8-sig'))
+            selected = {key: value.get(key) for key in ('python', 'version')}
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            errors.append(str(exc))
+    dispatch = report.get('dispatch_observation', {})
+    executions = dispatch.get('executions', [])
+    worker = executions[0] if len(executions) == 1 else {}
+    queued = sum(row.get('status') == 'queued' for row in report.get('manager_interventions', []))
+    action, waiting = 'inspect_status', None
+    command = [sys.executable, '-m', 'foundry_runtime', '--foundry-project', 'status', '--status-goal', report['goal']]
+    if runtime_selection:
+        command += ['--runtime-selection', str(runtime_selection)]
+    if dispatch.get('status') == 'ambiguous':
+        action = 'inspect_dispatch_bindings'
+    elif report.get('status') == 'execution_stopped':
+        action = 'inspect_retained_execution'
+    elif report.get('status') == 'outcome_available':
+        action = 'inspect_delivery'
+        command = [sys.executable, '-m', 'foundry_runtime', '--foundry-usage', report['goal']]
+    elif worker.get('status') == 'pending':
+        waiting = 'provider_capacity' if worker.get('provider_observation', {}).get('status') == 'quota_blocked' else 'worker'
+        action = 'wait'
+    elif report.get('active_native_calls'):
+        action, waiting = 'wait', 'coordinator'
+    elif report.get('controller_observation', {}).get('state') == 'held':
+        action, waiting = 'wait', 'controller'
+    continuation = (report.get('feedback') or {}).get('continuation') or {}
+    invocation = continuation.get('invocation') or {}
+    if invocation.get('argv'):
+        action, waiting, command = 'continue_from_feedback', 'operator', invocation['argv']
+    elif report.get('outcome_status') == 'awaiting_input':
+        action, waiting = 'answer_input_request', 'operator'
+        invocation = report.get('input_continuation') or {}
+        command = invocation.get('argv') or command
+    return {'status': report['status'], 'phase': report.get('phase'),
+            'waiting_for': waiting, 'pending_operator_inputs': queued,
+            'dispatch_status': dispatch.get('status'),
+            'runtime': {'controller': report.get('runtime_observation'),
+                        'worker': worker.get('runtime_observation'),
+                        'observer_python': sys.executable, 'selected': selected},
+            'delivery': report.get('delivery'), 'next_action': action, 'next_command_argv': command,
+            'next_invocation': invocation or None,
+            'evidence': {'goal': report['goal'], 'outcome': report.get('outcome_path'),
+                         'dispatch': worker.get('dispatch')}, 'errors': errors}
 
 
 def _manager_wait(live_call, native_calls):
@@ -103,6 +177,12 @@ def _goal_status(folder):
     try:
         from ._foundry_goal_auto import active_round
         active_folder, active = active_round(folder, manifest)
+        report['phase'] = active.get('manager_phase')
+        report['runtime_observation'] = active.get('runtime_provenance')
+        report['dispatch_observation'] = _current_dispatch(active_folder, active)
+        executions = report['dispatch_observation']['executions']
+        if len(executions) == 1:
+            report['activity_observation'] = executions[0].get('activity_observation')
         from ._launch_context import compaction_observation
         launch = active.get('launch_context')
         reference = active.get('pending_dispatch')
@@ -237,6 +317,15 @@ def _goal_status(folder):
     outcome = json.loads(raw)
     if not isinstance(outcome, dict) or not isinstance(outcome.get('status'), str):
         raise ValueError('goal outcome has no status')
+    from ._foundry_goal_usage import delivery
+    report['delivery'] = delivery(outcome)
+    if outcome['status'] == 'awaiting_input':
+        from ._foundry_cli_help import recovery_invocation
+        try:
+            report['input_continuation'] = recovery_invocation(
+                manifest['order']['path'], folder, manifest, prompt_file='<answer.md>')
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            report['errors'].append('input continuation: ' + str(exc))
     if outcome.get('review_completion_required'):
         from ._executor_lifecycle import observe_locked_byte
         controller = observe_locked_byte(folder.with_name('.' + folder.name + '.owner.lock'))
@@ -291,6 +380,9 @@ def _dispatch_status(path):
     log = record.get('evidence', {}).get('log', {}).get('path') or str(path).removesuffix('.package.json') + '.log'
     report['activity_observation'] = execution_activity(log, record.get('frozen', {}).get('launcher'),
                                                        session=recorded_session(record))
+    from ._provider_activity import observe
+    report['provider_observation'] = observe(log, record.get('frozen', {}).get('launcher'))
+    report['runtime_observation'] = package.get('runtime_provenance')
     state = record['state']
     result = ('result_available' if state == 'completed' else
               'execution_stopped' if state in ('not_started', 'closed') or live['owner'] == 'exited' else

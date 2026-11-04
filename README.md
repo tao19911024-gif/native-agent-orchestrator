@@ -69,12 +69,16 @@ the generated configuration. Choose a new directory for `$ExampleRoot`.
 
 Continue with one of these workflows:
 
-| Workflow | Guide |
-| --- | --- |
-| Execute a task in the project just created | [Greeting task execution](examples/README.md#2-execute-the-task-with-codex) |
-| Stop at a checkpoint and continue the same session | [Session continuation](examples/CONTINUATION.md) |
-| Implement, commit, and independently review a task | [Coding and review with Codex and Claude](examples/REVIEW.md) |
-| Inspect recorded execution results | [Demonstration results](docs/DEMO.md) |
+| First-use route | Clients | Guide |
+| --- | --- | --- |
+| Execute one task with one worker | Codex | [Greeting task execution](examples/README.md#2-execute-the-task-with-codex) |
+| Implement a committed candidate and review it independently | Codex and Claude Code | [Coding and review](examples/REVIEW.md) |
+
+The [two first-use routes](docs/GETTING_STARTED.md#choose-a-first-use-route)
+provide initialization, execution and result commands. Continue a completed worker
+through [session continuation](examples/CONTINUATION.md). Inspect retained work
+through [task summaries](docs/TASK_OBSERVATION.md) and the
+[executed demonstration](docs/DEMO.md).
 
 Model-backed execution uses a separately installed and authenticated native
 client and that account's allowance. Installation, project registration, and
@@ -98,6 +102,7 @@ for platform and execution settings.
 - [Project showcase](docs/SHOWCASE.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Command reference](docs/CLI.md)
+- [Task status, incremental usage and delivery summaries](docs/TASK_OBSERVATION.md)
 - [Delivery baseline and record associations](docs/DELIVERY_BASELINE.md)
 - [Review feedback and correction](docs/FEEDBACK_LOOP.md)
 - [Review context references](docs/REVIEW_CONTEXT.md)
@@ -106,6 +111,7 @@ for platform and execution settings.
 - [Continuation and recovery](docs/RECOVERY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and lifecycle](docs/ARCHITECTURE.md)
+- [Long-task design comparison and next proposals](docs/LONG_TASK_DESIGN_REVIEW.md)
 - [Operating environment](docs/LIMITATIONS.md)
 - [Release history](CHANGELOG.md) and [downloads](https://github.com/tao19911024-gif/native-agent-orchestrator/releases)
 

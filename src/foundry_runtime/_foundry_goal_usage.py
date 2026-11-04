@@ -367,6 +367,12 @@ def delivery(outcome, context=None):
     except (TypeError, ValueError, KeyError):
         pass
     return {"coverage": "recorded_outcome" if outcome is not None else "no_outcome",
+            'levels': {
+                'execution': {'status': result.get('status'), 'evidence': (result.get('coding') or {}).get('evidence', [])},
+                'candidate_review': {'status': 'passed' if result.get('status') == 'candidate_verified' else
+                    'blocked' if any(row.get('verdict') == 'BLOCK' for row in result.get('reviews', [])) else 'not_completed',
+                    'candidate_commit': result.get('candidate_commit'), 'verdicts': [row['verdict'] for row in reviews]},
+                'project_acceptance': result.get('project_acceptance') or {'status': 'not_evaluated'}},
             "status": result.get("status"), "candidate_commit": result.get("candidate_commit"),
             "coding_session": result.get("coding_session"),
             **({"artifacts": result["artifacts"], "acceptance_pending": True} if result.get("status") == "artifacts_delivered" else {}),
@@ -393,7 +399,7 @@ def round_reports(rounds):
                     raise ValueError("delivery differs from round outcome")
                 # Outcome reviews and host findings own the facts; an older saved summary can
                 # retain timing/context without hiding newer review fields.
-                row["delivery"] = {**saved, "reviews": row["delivery"]["reviews"],
+                row["delivery"] = {**saved, "levels": row["delivery"]["levels"], "reviews": row["delivery"]["reviews"],
                                    "host_findings": row["delivery"]["host_findings"]}
                 for kind in ("coding", "reviews", "team_execution"):
                     if kind in retained:
@@ -538,17 +544,27 @@ def _native_attempts(calls, role, gaps):
 def _codex_sessions(calls, gaps, role='manager'):
     """Select one latest verified cumulative exec total per retained session."""
     from .foundry_codex import usage_observation
-    sessions = {}
-    selected = []
+    verified = []
     for call in calls:
         try:
-            observation = usage_observation(call)
+            verified.append(usage_observation(call))
+        except Exception as exc:
+            gaps.append({'kind': role + '_usage', 'call_id': call['call_id'], 'reason': str(exc)[:240]})
+    return _select_codex_sessions(verified, gaps, role)
+
+
+def _select_codex_sessions(observations, gaps, role='manager'):
+    """Select already verified snapshots, including sessions shared across roles."""
+    sessions = {}
+    selected = []
+    for observation in observations:
+        try:
             stamp = datetime.fromisoformat(observation['ended_utc'].replace('Z', '+00:00'))
             if stamp.tzinfo is None:
                 raise ValueError('Codex usage timestamp has no timezone')
             sessions.setdefault(observation['session_id'], []).append((stamp, observation))
         except Exception as exc:
-            gaps.append({'kind': role + '_usage', 'call_id': call['call_id'], 'reason': str(exc)[:240]})
+            gaps.append({'kind': role + '_usage', 'call_id': observation['call_id'], 'reason': str(exc)[:240]})
     for session, observations in sessions.items():
         try:
             ordered = sorted(observations, key=lambda row: row[0])
@@ -571,7 +587,7 @@ def _codex_sessions(calls, gaps, role='manager'):
     return selected
 
 
-def task_report(paths):
+def task_report(paths, *, since=None):
     """Read selected goal outcomes and their links without running or changing work.
 
     Automatic roots are containers, not another execution. Explicitly supplied
@@ -837,7 +853,7 @@ def task_report(paths):
             saved = report.get("delivery")
             if isinstance(saved, dict) and (saved.get("status"), saved.get("candidate_commit")) == (
                     outcome.get("status"), outcome.get("candidate_commit")):
-                row["delivery"] = {**saved, "reviews": row["delivery"]["reviews"],
+                row["delivery"] = {**saved, "levels": row["delivery"]["levels"], "reviews": row["delivery"]["reviews"],
                                    "host_findings": row["delivery"]["host_findings"]}
                 # Useful compact evidence survives a missing full usage file, but
                 # without call identities it cannot enter a deduplicated total.
@@ -888,8 +904,7 @@ def task_report(paths):
         row["coding_model_usage"] = _model_usage(dispatch_usage)
         row["coding"] = {k: v for k, v in dispatch_usage.items() if k != "observations"}
     reviews, duplicates = _native_attempts(review_calls, "review", gaps)
-    managers, manager_duplicates = _native_attempts(
-        [c for c in manager_calls if c.get('backend') == 'codex'], "manager", gaps)
+    managers, manager_duplicates = _native_attempts(manager_calls, "manager", gaps)
     for call in manager_calls:
         if call.get('backend') not in {'codex', 'claude'}:
             gaps.append({'kind': 'manager_identity', 'call_id': call.get('call_id'),
@@ -946,6 +961,21 @@ def task_report(paths):
                      "Manager and expert usage are separate: Codex reconciles attempts then selects the latest cumulative total per session; Claude uses cumulative sessions; unrecorded coordinator work, reviewer children and account charges are not included; "
                      "coding/review/provider counters stay separate; model shares include unknown-model coding groups and describe observed counters only; "
                      "no summed elapsed time, savings claim or task-wide acceptance verdict"}
+    from ._usage_summary import observations, summarize, incremental
+    report['usage_observations'] = observations(normalized,
+        {'review': review_usage.get('codex', []), 'manager': manager_sessions, 'expert': expert_sessions}, report,
+        attempts={'review': reviews, 'manager': managers, 'expert': experts})
+    report['summary'] = summarize(report['usage_observations'])
+    report['summary']['source_gap_count'] = len(gaps)
+    if report['coverage'] == 'partial':
+        report['summary']['coverage'] = 'partial'
+    report['summary']['deliveries'] = [{'reference': row['reference'], 'status': row.get('delivery', {}).get('status')}
+                                      for row in records if row.get('delivery')]
+    if since is not None:
+        baseline_path = Path(since).resolve(strict=True)
+        baseline_raw = baseline_path.read_bytes()
+        report['incremental_usage'] = incremental(report, json.loads(baseline_raw.decode('utf-8-sig')))
+        report['incremental_usage']['baseline'] = {'path': str(baseline_path), 'sha256': hashlib.sha256(baseline_raw).hexdigest()}
     from ._foundry_cost import report_cost
     try:
         report["api_price_equivalent"] = report_cost(report)

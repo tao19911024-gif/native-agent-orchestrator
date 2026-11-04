@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Show current goal execution, runtime provenance, pending operator input and
+  the recorded next invocation through a concise read-only status summary.
+- Summarize usage by role and provider and compare native identities against a
+  saved report with `--usage-since`, counting cumulative session growth once.
+- Display execution, candidate review and project acceptance as separate delivery
+  levels. Document direct single-client execution and managed independent review
+  as two first-use routes.
 - Start distinct persistent goals after abandoned executions are closed, with
   numbered dispatch evidence and unchanged historical journals. Identical goal
   retries reuse their successor; new goals can select their current assignment.

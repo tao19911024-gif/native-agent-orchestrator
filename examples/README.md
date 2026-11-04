@@ -37,7 +37,7 @@ This step performs local setup and inspection without invoking a model.
 Expected summary:
 
 ```text
-Runtime: foundry-runtime 0.1.0a92
+Runtime: foundry-runtime 0.1.0a105
 Workspace: <example-root>\project
 Baseline tests: PASS
 Registration: registered

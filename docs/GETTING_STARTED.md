@@ -28,7 +28,7 @@ with its interpreter:
 ```powershell
 python -m venv .venv
 $RuntimePython = (Resolve-Path .\.venv\Scripts\python.exe).Path
-$WheelPath = (Resolve-Path .\foundry_runtime-0.1.0a92-py3-none-any.whl).Path
+$WheelPath = (Resolve-Path .\foundry_runtime-0.1.0a105-py3-none-any.whl).Path
 & $RuntimePython -m pip install $WheelPath
 & $RuntimePython -I -m foundry_runtime --help
 ```
@@ -41,9 +41,9 @@ To use the release's examples, extract its source distribution, enter the
 extracted directory, and select the environment created above:
 
 ```powershell
-$SourceArchive = (Resolve-Path .\foundry_runtime-0.1.0a92.tar.gz).Path
+$SourceArchive = (Resolve-Path .\foundry_runtime-0.1.0a105.tar.gz).Path
 tar -xf $SourceArchive
-cd foundry_runtime-0.1.0a92
+cd foundry_runtime-0.1.0a105
 $ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-release-example'
 & $RuntimePython .\examples\quickstart.py $ExampleRoot
 ```
@@ -117,7 +117,61 @@ Use the project's own check command. The [configuration reference](CONFIGURATION
 explains fields, per-call inputs, launch settings, and observation hooks.
 Keep the descriptor stable throughout the task and its continuations.
 
-## Execute and inspect
+## Choose a first-use route
+
+Choose direct execution for a task handled by one authenticated client. Choose a
+goal for implementation, a committed candidate and independent review. Each route
+uses a separate example project and retains its own evidence.
+
+### One client and one worker
+
+With `$RuntimePython` selected above, run from the source checkout or extracted
+source distribution:
+
+```powershell
+$ExampleRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-direct-example'
+& $RuntimePython .\examples\quickstart.py $ExampleRoot --scenario execution
+$ProjectConfig = Join-Path $ExampleRoot 'project.json'
+$TaskOrder = Join-Path $ExampleRoot 'project\TASK1.md'
+& $RuntimePython -I -m foundry_runtime --project-config $ProjectConfig `
+  --order $TaskOrder --tag TASK1 --provider codex --launcher exec
+& $RuntimePython -I -m foundry_runtime --foundry-project status `
+  --project-config $ProjectConfig --tag TASK1
+```
+
+This route requires Codex CLI. The dispatcher prints the original session, log,
+report and package locations under the example's `runs/TASK1` directory. Check
+the task's four required behaviors using the generated project tests. See
+[direct execution](../examples/README.md#2-execute-the-task-with-codex).
+
+### Implementation and independent review
+
+This route requires authenticated Codex CLI and Claude Code. The example selects
+Codex coding explicitly and retains Claude Opus coordination. Use a new directory:
+
+```powershell
+$ReviewRoot = Join-Path (Split-Path $PWD.Path -Parent) 'nao-review-example'
+& $RuntimePython .\examples\quickstart.py $ReviewRoot --scenario review
+$ProjectConfig = Join-Path $ReviewRoot 'project.json'
+$TaskOrder = Join-Path $ReviewRoot 'project\TASK1.md'
+$GoalDirectory = Join-Path $ReviewRoot 'goal'
+$GoalArguments = @('--project-config', $ProjectConfig, '--order', $TaskOrder,
+  '--tag', 'TASK1', '--provider', 'codex', '--launcher', 'exec',
+  '--foundry-goal', '--team-profile', 'none', '--goal-evidence', $GoalDirectory)
+& $RuntimePython -I -m foundry_runtime @GoalArguments --print-staffing
+& $RuntimePython -I -m foundry_runtime @GoalArguments
+& $RuntimePython -I -m foundry_runtime --foundry-project status `
+  --status-goal $GoalDirectory --summary
+```
+
+`--print-staffing` resolves client model catalogues and shows the assigned coding,
+coordinator and review roles before task execution. `--team-profile none` uses
+one coding worker while retaining coordination and independent review. The goal
+directory retains `manifest.json`, `outcome.json` and their evidence references.
+The summary distinguishes candidate review from project acceptance. See the
+[review workflow](../examples/REVIEW.md) and [task observation](TASK_OBSERVATION.md).
+
+## Execute in an existing project
 
 Install and authenticate the selected native client. For a task order in the
 project, select terminal Codex execution explicitly:
