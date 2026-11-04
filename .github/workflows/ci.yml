@@ -59,7 +59,9 @@ jobs:
       - name: Run offline installed-package tests
         run: |
           $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
-          & $RuntimePython -m pytest tests/test_installed_runtime.py tests/test_project_launch.py `
+          & $RuntimePython -m pytest tests/test_live_manager_boundaries.py tests/test_manager_progress.py `
+            tests/test_claude_live_events.py tests/test_closure_recovery_routing.py tests/test_manager_input_wait.py `
+            tests/test_installed_runtime.py tests/test_project_launch.py `
             tests/test_release_retention.py tests/test_release_selection.py `
             tests/test_delivery_baseline.py tests/test_unfinished_task_usage.py `
             tests/test_feedback_loop.py tests/test_hosted.py `
@@ -74,9 +76,13 @@ jobs:
             tests/test_project_hooks_deadline.py tests/test_root_exit_cleanup.py `
             tests/test_worker_scratch_environment.py `
             tests/test_managed_coding_handoff.py tests/test_artifact_directories.py `
+            tests/test_live_manager_events.py tests/test_live_waste_a63.py tests/test_live_coordination.py `
+            tests/test_live_call_observation.py tests/test_live_question_followup.py `
+            tests/test_live_quota_status.py tests/test_live_quota_return.py `
+            tests/test_project_intervention.py tests/test_review_convergence.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
             tests/test_acceptance_a96.py tests/test_acceptance_a69.py tests/test_acceptance_a67.py `
-            --junitxml ci-results/pytest.xml -q
+            --junitxml ci-results/pytest.xml -x -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Initialize example projects

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.1.0a104 — 2026-11-04
+
+- Consume live manager readiness decisions after the current native worker turn
+  settles. Publish commander questions as awaiting-input outcomes; route review
+  and artifact delivery through their existing stages without restarting workers.
+- Coalesce repeated worker protocol messages across manager delivery when the
+  observed commit and execution evidence remain unchanged. Preserve new questions,
+  tool results and terminal-race events through the existing goal records.
+- End repeated review of an unchanged dirty candidate and identical worker
+  assignments returning the same result against unchanged source. Retain the
+  completed checkpoint and request an explicit commander decision.
+- Restore completed Claude handbacks through the original execution journal,
+  including verified native terminals whose completion publication was interrupted.
+  Preserve failed return codes, session identity and original execution evidence.
+
 ## 0.1.0a103 — 2026-10-28
 
 - Remove the obsolete directory-timestamp cache from explicit history audits.

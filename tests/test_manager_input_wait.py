@@ -8,7 +8,7 @@ import pytest
 from test_installed_runtime import external, offline
 from test_settled_failure_recovery import failed_goal
 from foundry_runtime import foundry_goal as goal, foundry_native as native
-from foundry_runtime import _foundry_manager as manager, _code_index, _native_session
+from foundry_runtime import _foundry_manager as manager, _code_index, _native_session, foundry_native_support, _codex_command
 from foundry_runtime._foundry_response_contract import response_contract, validate_response_shape
 from foundry_runtime._followup import status
 
@@ -19,6 +19,9 @@ def manager_io(external, tmp_path, monkeypatch):
     spawn = native.OwnedProcess.spawn
     monkeypatch.setattr(_code_index, 'prepare', lambda *a, **k: None)
     monkeypatch.setattr(manager, 'resolve_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(goal, 'resolve_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(_codex_command, 'resolve_codex', lambda: pytest.fail('offline fixture attempted a native client lookup'))
     monkeypatch.setattr(goal, '_session_from_log', lambda _: 'original-worker')
     monkeypatch.setattr(_native_session, 'read_session_worktree', lambda _: external[0])
     def run(argv, **kwargs):

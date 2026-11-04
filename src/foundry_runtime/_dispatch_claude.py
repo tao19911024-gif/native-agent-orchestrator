@@ -258,6 +258,10 @@ class ClaudeLive:
             return
         if not self.result_ready:
             return
+        if self.live_events.finished:
+            self.close()
+            proc.stdin.close()
+            return
         if self.outbox:
             messages, rows = [], []
             for text, events in self.outbox:

@@ -159,7 +159,7 @@ def test_goal_status_includes_wait_projection(tmp_path, monkeypatch):
     assert (root/'manifest.json').read_bytes() == before
 
 
-def test_coalesce_only_identical_unanswered_messages_then_allow_new_ruling():
+def test_coalesce_identical_delivered_messages_until_new_evidence():
     started,release=Event(),Event();seen=[]
     def decide(rows):
         seen.extend(rows);started.set();assert release.wait(5)
@@ -174,5 +174,9 @@ def test_coalesce_only_identical_unanswered_messages_then_allow_new_ruling():
     assert events.events.qsize()==1
     release.set();events.pending.result(timeout=5);events.drain(app)
     events.pending.result(timeout=5);events.drain(app)
-    ask('5');events.drain(app);events.close(app)
+    ask('5');events.drain(app)
+    assert len(seen)==2 and events.pending is None
+    events.observe({'method':'item/completed','params':{'threadId':'root','turnId':'turn',
+        'item':{'type':'commandExecution','id':'new-check-result'}}},'root')
+    ask('6');events.drain(app);events.close(app)
     assert len(seen)==3 and all(row['received_at']>0 for row in seen)
