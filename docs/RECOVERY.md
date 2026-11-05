@@ -104,6 +104,15 @@ evidence also publishes an awaiting-input question. Specify the unresolved point
 or authorize a new attempt with the existing answer command. A new question or
 changed named evidence follows the normal expert-consultation path.
 
+New manager requests carry a versioned scope-question contract. Before requesting
+a scope or PERMIT decision, the worker investigates the complete proposed fix,
+trials the authorized portion and lists every currently known additional file
+with its reason and evidence in the existing handoff. The manager consolidates
+that list into one question through the existing input route. Investigation
+retains current editing permissions. A later question identifies genuinely new
+evidence and its newly required change. Retained requests without this contract
+preserve their recorded instructions.
+
 Completed Claude and Codex executions both restore manager feedback from their
 original execution journal. A verified retained native terminal can be reconciled
 after interrupted completion publication. An attempt without terminal evidence
@@ -160,6 +169,18 @@ Ordinary recovery routes through the recorded interpreter. Runtime upgrades use
 `--upgrade-runtime` at a settled goal boundary. Provider or role transfers use
 `--handoff-provider`, `--handoff-role`, and their retained recovery inputs.
 Inspect `--help` and the exact task's recovery advice for these operations.
+
+If amendment or recovery encounters a removed dependency inside the recorded
+runtime environment, the refusal includes an explicit invocation using
+`--upgrade-runtime current`. Supply the next-round decision in `--prompt-file`
+and invoke it through the selected installed runtime. The existing upgrade
+owner verifies the settled boundary and retains the original goal history.
+Missing project evidence continues through its original error path.
+
+Plain continuation retains the latest recorded session launch policy. When
+packages share a second-resolution timestamp, their existing continuation
+numbers determine publication order, including an explicit runtime upgrade's
+new settings.
 
 A settled failed coding turn in a managed goal can transfer with
 `--handoff-provider claude --handoff-role coding --prompt-file <answer>`

@@ -8,6 +8,14 @@ import pytest
 from test_installed_runtime import external, offline, git
 from foundry_runtime import cli, foundry_entry, foundry_goal as goal, _foundry_dispatch as dispatch
 from foundry_runtime import _app_server_policy as policy
+from foundry_runtime import _foundry_manager as manager
+
+
+@pytest.fixture(autouse=True)
+def local_manager_only(monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail('amendment fixture attempted a native manager call')
+    monkeypatch.setattr(manager, 'NativeAnalyst', forbidden)
 
 
 @pytest.mark.parametrize('launcher', ['exec', 'app-server', 'claude'])
@@ -22,13 +30,15 @@ def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, m
     manifest = {'order': goal._fact(order), 'worktree': str(tree), 'base_commit': base,
                 'coding_launcher': launcher, 'project_record': scope.record()}
     manager_packets = []
+    decision_receipt = tmp_path/'manager-decision.json'
+    goal._write(decision_receipt, {'action': 'delegate', 'instruction': 'Apply the operator additions'})
     if managed:
-        from foundry_runtime import _foundry_manager
         manifest['manager_state'] = {'native_dir': str(tmp_path/'manager'), 'last_call_id': None}
-        def manager_turn(state, worktree, packet, **kwargs):
-            manager_packets.append(packet)
-            return {'action': 'delegate', 'instruction': 'Apply the operator additions'}, state, {}, packet
-        monkeypatch.setattr(_foundry_manager, 'turn', manager_turn)
+    def manager_turn(state, worktree, packet, **kwargs):
+        manager_packets.append(packet)
+        return {'action': 'delegate', 'instruction': 'Apply the operator additions',
+                'evidence': goal._fact(decision_receipt)}, state, {}, packet
+    monkeypatch.setattr(manager, 'turn', manager_turn)
     (prior/'manifest.json').write_text(json.dumps(manifest))
     review = {'candidate_commit': head, 'packet_sha256': 'b'*64, 'verdict': 'PASS', 'findings': []}
     (prior/'outcome.json').write_text(json.dumps({'status': 'candidate_verified', 'candidate_commit': head,
@@ -47,13 +57,46 @@ def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, m
             '--launcher', launcher, '--prompt-file', str(prompt), '--goal-evidence', str(folder)]
     assert cli.main(argv) == 2
     assert len(received) == 1 and marker in received[0]
-    if managed:
-        assert manager_packets[0]['operator_answer'] == marker
+    assert manager_packets[0]['operator_answer'] == marker
     assert received[0].index('Prior findings') < received[0].index(marker)
     saved = json.loads((folder/'manifest.json').read_bytes())['amendment']
     prompt.unlink()
     assert saved['operator_additions'] == marker
     assert marker in goal.amendment_prompt(order, saved, None, project=scope)
+
+
+def test_removed_bundled_reviewer_names_explicit_upgrade(external, tmp_path, monkeypatch, capsys):
+    tree, scope, order, launches = external
+    base = git(tree, 'rev-parse', 'HEAD')
+    (tree/'candidate.txt').write_text('candidate')
+    git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'candidate')
+    head = git(tree, 'rev-parse', 'HEAD')
+    prior = tmp_path/'prior'; prior.mkdir()
+    old_runtime = tmp_path/'removed-runtime'
+    missing = old_runtime/'native/claude/version/digest/claude.exe'
+    manifest = {'order': goal._fact(order), 'worktree': str(tree), 'base_commit': base,
+        'coding_launcher': 'exec', 'project_record': scope.record(),
+        'runtime_provenance': {'environment': str(old_runtime), 'python': str(old_runtime/'Scripts/python.exe')},
+        'reviewers': [{'backend': 'claude', 'executable': str(missing), 'model': 'fixture-reviewer', 'effort': 'high'},
+                      {'backend': 'codex', 'executable': sys.executable, 'model': 'fixture-reviewer', 'effort': 'high'}]}
+    goal._write(prior/'manifest.json', manifest)
+    review = {'candidate_commit': head, 'packet_sha256': 'b'*64, 'verdict': 'PASS', 'findings': []}
+    goal._write(prior/'outcome.json', {'status': 'candidate_verified', 'candidate_commit': head, 'reviews': [review, review]})
+    before = {p: p.read_bytes() for p in prior.iterdir()}
+    prompt = tmp_path/'answer.md'; prompt.write_text('Apply the additional correction.')
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda backend: Path(sys.executable))
+    assert cli.main(['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
+        '--amend-from', str(prior/'outcome.json'), '--coding-session', 'fixture-session',
+        '--prompt-file', str(prompt), '--goal-evidence', str(tmp_path/'amended')]) == 2
+    error = capsys.readouterr().err
+    assert 'removed-runtime' in error
+    assert '--upgrade-runtime' in error and 'current' in error
+    invocation = json.JSONDecoder().raw_decode(error.split('in --prompt-file:\n', 1)[1])[0]
+    argv = invocation['argv']
+    assert argv[0] == sys.executable and '--amend-from' in argv
+    assert argv[argv.index('--amend-from') + 1] == str(prior/'outcome.json')
+    assert argv[argv.index('--prompt-file') + 1] == str(prompt)
+    assert not launches and {p: p.read_bytes() for p in prior.iterdir()} == before
 
 
 def test_capacity_policy_defaults_and_validation():

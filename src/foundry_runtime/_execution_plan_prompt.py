@@ -43,6 +43,19 @@ EVIDENCE_GUIDANCE = (
 )
 
 
+SCOPE_QUESTION_GUIDANCE = (
+    "Before asking for a scope or PERMIT decision, trace the complete proposed fix through its "
+    "affected owners, dependencies and required checks. Trial the authorized portion and inspect "
+    "the remaining changes sufficiently to list every currently known file outside PERMIT, with "
+    "the reason each is needed and the relevant evidence. Do not edit outside the currently "
+    "authorized scope during this trial. Put the complete known list, the proposed correction "
+    "and the required decision in one question through the existing input channel; do not split "
+    "known dependencies into successive questions. Genuinely new evidence may require a later "
+    "question explaining the newly discovered change. Reuse the current worker turn and its "
+    "handoff; no separate model call is required for this investigation. "
+)
+
+
 def execution_plan_prompt(body, decision, *, project_guidance=""):
     from ._goal_scratch import prompt
     body = prompt(body, decision or {})
@@ -65,6 +78,8 @@ def execution_plan_prompt(body, decision, *, project_guidance=""):
             "existing input channel. Continue work already within delegated scope. ")
     if decision.get('expert_consultation') or decision.get('manager', {}).get('expert_consultation'):
         guidance += 'Use the recorded expert answer and evidence; it is advice, not operator authority or final acceptance. '
+    if decision.get('manager', {}).get('scope_question_policy') == 1:
+        guidance += SCOPE_QUESTION_GUIDANCE
     if decision.get('manager', {}).get('live_coordination') == 1:
         guidance += (
             'The recorded Foundry manager owns task decomposition, design decisions and readiness. '

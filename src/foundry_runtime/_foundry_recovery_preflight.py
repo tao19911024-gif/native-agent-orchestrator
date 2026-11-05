@@ -107,6 +107,9 @@ def inspect_recovery(folder, manifest, order, *, answer_supplied=False, revision
         python = sys.executable
     environment = retained_environment(policy)
     report = {'runtime_python': python, 'environment': environment, 'evidence': str(folder)}
+    missing = [str(path) for path in (python, policy.get('executable')) if path and not Path(path).is_file()]
+    if missing:
+        report['missing_runtime_dependencies'] = missing
     conflicts = {}
     descriptor = ((manifest.get('project_record') or {}).get('context') or {}).get('descriptor')
     if descriptor:
@@ -195,6 +198,11 @@ def prepare(args, *, project_adapter=None):
             python=report.get('runtime_python'), prompt_file=args.prompt_file or None,
             extra_args=['--order-revision', args.order_revision] if args.order_revision else [])
         report['invocation']['verification'] = report['status']
+        if report['status'] == 'attention_required' and report.get('missing_runtime_dependencies'):
+            report['explicit_runtime_upgrade'] = recovery_invocation(args.order, folder, current,
+                python=sys.executable, prompt_file=args.prompt_file or '<prompt-file>',
+                extra_args=['--upgrade-runtime', 'current'])
+            report['explicit_runtime_upgrade']['verification'] = 'syntax_only; existing upgrade owner verifies the settled boundary'
         checks = {row['check']: row['status'] for row in report.get('checks', [])}
         if (report['status'] == 'attention_required'
                 and all(checks.get(name) == 'passed' for name in ('goal_contract', 'checkpoint', 'archived_history'))

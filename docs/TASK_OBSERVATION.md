@@ -17,6 +17,14 @@ attempt. Completed attempts, another goal with the same tag and superseded
 attempts are excluded from active work. Historical goals without this binding
 retain their original observations.
 
+`evidence.worker_live_event_log` is the absolute path for the uniquely bound
+current worker. Claude writes stream events to the matching `.claude.jsonl`;
+Codex app-server and exec use the recorded `.log`. The path is available before
+the writer creates the file. A watcher reads this field after launch and follows
+that file instead of predicting numbered continuation names. The field is `null`
+when no unique current execution is recorded. The full dispatch observation
+exposes the same path as `live_event_log`.
+
 For a deployment using the release selector, include its selection file:
 
 ```powershell

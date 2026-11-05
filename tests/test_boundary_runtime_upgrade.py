@@ -73,6 +73,60 @@ def test_upgrade_retains_identity_history_and_replays(boundary, outcome):
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize('runtime_dependency', [True, False])
+def test_missing_recovery_dependency_advice_preserves_existing_boundary(boundary, monkeypatch, capsys, runtime_dependency):
+    root, old, args, calls = boundary
+    environment = root.parent/'removed-runtime'
+    old['runtime_provenance']['environment'] = str(environment)
+    goal._write(root/'manifest.json', old)
+    before = (root/'manifest.json').read_bytes()
+    missing = (environment/'native/claude/version/digest/claude.exe' if runtime_dependency else
+               root.parent/'missing-business-evidence.txt')
+    def recover(*a, **kw):
+        missing.resolve(strict=True)
+    monkeypatch.setattr(goal, 'recover_goal', recover)
+    normal = list(args)
+    index = normal.index('--upgrade-runtime')
+    del normal[index:index + 2]
+    assert cli.main(normal) == 2
+    error = capsys.readouterr().err
+    assert ('--upgrade-runtime current route' in error) is runtime_dependency
+    if runtime_dependency:
+        invocation = json.JSONDecoder().raw_decode(error.split('in --prompt-file:\n', 1)[1])[0]
+        argv = invocation['argv']
+        assert argv[0] == sys.executable
+        assert argv[argv.index('--recover-goal') + 1] == str(root)
+        assert argv[argv.index('--upgrade-runtime') + 1] == 'current'
+    assert (root/'manifest.json').read_bytes() == before and not calls
+    # The existing upgrade route accepts the same settled boundary without the old executable.
+    assert cli.main(args) == 0 and len(calls) == 1
+
+
+def test_missing_native_policy_runtime_exposes_upgrade_in_preflight(boundary, capsys):
+    root, old, args, calls = boundary
+    runtime = root.parent/'removed-runtime'
+    old['runtime_provenance'].update(environment=str(runtime), python=str(runtime/'Scripts/python.exe'))
+    native = Path(old['manager_state']['native_dir'])
+    goal._write(root/'manifest.json', old)
+    goal._write(native/'native-manifest.json', {'executable': str(runtime/'native/claude/version/claude.exe'),
+        'runtime_provenance': old['runtime_provenance']})
+    before = {p: p.read_bytes() for p in (root/'manifest.json', root/'outcome.json', native/'native-manifest.json')}
+    normal = list(args)
+    index = normal.index('--upgrade-runtime')
+    del normal[index:index + 2]
+    assert cli.main(normal) == 2
+    report = json.loads(capsys.readouterr().err)
+    assert report['status'] == 'attention_required'
+    invocation = report['explicit_runtime_upgrade']
+    argv = invocation['argv']
+    assert argv[0] == sys.executable
+    assert argv[argv.index('--recover-goal') + 1] == str(root)
+    assert argv[argv.index('--prompt-file') + 1] == args[args.index('--prompt-file') + 1]
+    assert argv[argv.index('--upgrade-runtime') + 1] == 'current'
+    assert {p: p.read_bytes() for p in before} == before and not calls
+    assert cli.main(args) == 0 and len(calls) == 1
+
+
 def test_boundary_upgrade_refreshes_v19_team_without_rewriting_old_policy(boundary, monkeypatch):
     root, old, args, calls = boundary
     old['native_team'] = {'profile':'adaptive', 'version':19,
@@ -111,10 +165,15 @@ def test_upgrade_freezes_launch_before_publication_retry(boundary, monkeypatch):
 @pytest.mark.parametrize('threshold', [240000, 0])
 def test_boundary_launch_reaches_native_and_survives_plain_resume(
         external, manager_io, tmp_path, monkeypatch, threshold):
+    from types import SimpleNamespace
+    from foundry_runtime import _dispatch_package
     from foundry_runtime import app_server_transport as transport, foundry_entry, foundry_native_support
     from foundry_runtime import _native_session, _foundry_dispatch as dispatch
     from test_owned_goal_recovery import SERVER, SID
     tree, scope, order, _ = external
+    # Package timestamps have second precision; rapid continuations share one timestamp.
+    monkeypatch.setattr(_dispatch_package, 'time', SimpleNamespace(
+        strftime=lambda *args: '2026-11-04T12:00:00Z', gmtime=lambda: None))
     _, decisions = manager_io
     decisions.extend([{'action': 'delegate', 'instruction': 'initial work', 'artifacts': []},
                       {'action': 'deliver_artifacts', 'instruction': 'inspect', 'artifacts': ['candidate.txt']}])

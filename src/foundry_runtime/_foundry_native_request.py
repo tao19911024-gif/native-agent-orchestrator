@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from ._foundry_response_contract import CollaborationError, response_contract_for_request
-from ._execution_plan_prompt import WAIT_GUIDANCE, EVIDENCE_GUIDANCE
+from ._execution_plan_prompt import WAIT_GUIDANCE, EVIDENCE_GUIDANCE, SCOPE_QUESTION_GUIDANCE
 
 
 # Compatibility name for existing receipts. It is no longer a source-packet budget.
@@ -192,6 +192,8 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 'just to wait, repeat a question or investigate how to suspend. Continue independent authorized '
                 'work first if useful work remains. Ordinary delegate prose cannot suspend execution. '
                 'For await_input return artifacts=[] and expert_request=null when those fields are required.')
+        if kind == 'coordinate' and request.get('scope_question_policy') == 1:
+            instruction += ' ' + SCOPE_QUESTION_GUIDANCE
         if kind == "review":
             # The packet is frozen before native allocation. Historical packets
             # must render byte-for-byte for recovery's stdin hash comparison.

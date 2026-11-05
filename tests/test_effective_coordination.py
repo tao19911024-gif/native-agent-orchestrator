@@ -20,6 +20,29 @@ def fact(path):
 
 
 @pytest.mark.parametrize('backend', ['claude', 'codex'])
+def test_scope_question_contract_uses_one_existing_turn_and_preserves_old_requests(conversation, tmp_path, backend):
+    from foundry_runtime._execution_plan_prompt import execution_plan_prompt
+    state, calls, failures = conversation
+    failures.clear()
+    state.update(backend=backend, scope_question_policy=1)
+    packet = {'stage': 'coding_feedback', 'operator_answer': 'Use the complete affected-file list.'}
+    decision, _, _, _ = manager.turn(state, tmp_path, packet)
+    assert len(calls) == 1
+    request = calls[0][0]
+    assert request['scope_question_policy'] == decision['scope_question_policy'] == 1
+    native_prompt = build_prompt(request, backend, ValueError)
+    worker_prompt = execution_plan_prompt('Original order', {'manager': decision})
+    for prompt in (native_prompt.decode(), worker_prompt):
+        assert 'every currently known file outside PERMIT' in prompt
+        assert 'Do not edit outside the currently authorized scope' in prompt
+        assert 'Genuinely new evidence' in prompt
+    legacy = {key: value for key, value in request.items() if key != 'scope_question_policy'}
+    legacy_worker = {key: value for key, value in decision.items() if key != 'scope_question_policy'}
+    assert b'every currently known file outside PERMIT' not in build_prompt(legacy, backend, ValueError)
+    assert 'every currently known file outside PERMIT' not in execution_plan_prompt('Original order', {'manager': legacy_worker})
+
+
+@pytest.mark.parametrize('backend', ['claude', 'codex'])
 def test_native_packet_keeps_new_input_and_one_copy_of_evidence(conversation, tmp_path, backend):
     state, calls, failures = conversation
     failures.clear()
