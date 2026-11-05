@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a106 — 2026-11-04
 
 - Show current goal execution, runtime provenance, pending operator input and
   the recorded next invocation through a concise read-only status summary.
