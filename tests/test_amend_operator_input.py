@@ -8,6 +8,14 @@ import pytest
 from test_installed_runtime import external, offline, git
 from foundry_runtime import cli, foundry_entry, foundry_goal as goal, _foundry_dispatch as dispatch
 from foundry_runtime import _app_server_policy as policy
+from foundry_runtime import _foundry_manager as manager
+
+
+@pytest.fixture(autouse=True)
+def local_manager_only(monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail('amendment fixture attempted a native manager call')
+    monkeypatch.setattr(manager, 'NativeAnalyst', forbidden)
 
 
 @pytest.mark.parametrize('launcher', ['exec', 'app-server', 'claude'])
@@ -22,13 +30,15 @@ def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, m
     manifest = {'order': goal._fact(order), 'worktree': str(tree), 'base_commit': base,
                 'coding_launcher': launcher, 'project_record': scope.record()}
     manager_packets = []
+    decision_receipt = tmp_path/'manager-decision.json'
+    goal._write(decision_receipt, {'action': 'delegate', 'instruction': 'Apply the operator additions'})
     if managed:
-        from foundry_runtime import _foundry_manager
         manifest['manager_state'] = {'native_dir': str(tmp_path/'manager'), 'last_call_id': None}
-        def manager_turn(state, worktree, packet, **kwargs):
-            manager_packets.append(packet)
-            return {'action': 'delegate', 'instruction': 'Apply the operator additions'}, state, {}, packet
-        monkeypatch.setattr(_foundry_manager, 'turn', manager_turn)
+    def manager_turn(state, worktree, packet, **kwargs):
+        manager_packets.append(packet)
+        return {'action': 'delegate', 'instruction': 'Apply the operator additions',
+                'evidence': goal._fact(decision_receipt)}, state, {}, packet
+    monkeypatch.setattr(manager, 'turn', manager_turn)
     (prior/'manifest.json').write_text(json.dumps(manifest))
     review = {'candidate_commit': head, 'packet_sha256': 'b'*64, 'verdict': 'PASS', 'findings': []}
     (prior/'outcome.json').write_text(json.dumps({'status': 'candidate_verified', 'candidate_commit': head,
@@ -47,8 +57,7 @@ def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, m
             '--launcher', launcher, '--prompt-file', str(prompt), '--goal-evidence', str(folder)]
     assert cli.main(argv) == 2
     assert len(received) == 1 and marker in received[0]
-    if managed:
-        assert manager_packets[0]['operator_answer'] == marker
+    assert manager_packets[0]['operator_answer'] == marker
     assert received[0].index('Prior findings') < received[0].index(marker)
     saved = json.loads((folder/'manifest.json').read_bytes())['amendment']
     prompt.unlink()
