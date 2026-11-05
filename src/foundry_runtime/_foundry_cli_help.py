@@ -159,6 +159,29 @@ def announce_recovery_failure(order, evidence):
           json.dumps(advice, ensure_ascii=True, indent=2), file=sys.stderr)
 
 
+def announce_runtime_upgrade(order, folder, error, *, amend_from=None, session=None, prompt_file=None):
+    """Explain a removed recorded dependency without changing task selection."""
+    if not isinstance(error, FileNotFoundError) or not error.filename:
+        return
+    try:
+        manifest = _read_manifest(Path(folder) / 'manifest.json')
+        from ._foundry_goal_auto import active_round
+        _, current = active_round(Path(folder), manifest)
+        environment = (current.get('runtime_provenance') or {}).get('environment')
+        if not environment or not Path(error.filename).resolve().is_relative_to(Path(environment).resolve()):
+            return
+        mode = (['--amend-from', str(amend_from), '--coding-session', session] if amend_from else
+                ['--recover-goal', str(folder)])
+        invocation = _goal_invocation(order, manifest, mode, python=sys.executable,
+            prompt_file=str(prompt_file) if prompt_file else '<prompt-file>',
+            extra_args=['--upgrade-runtime', 'current'])
+    except (OSError, ValueError, TypeError, KeyError):
+        return
+    print('Recorded runtime dependency is missing. At the settled task boundary, use the explicit '
+          '--upgrade-runtime current route with the next-round decision in --prompt-file:\n' +
+          json.dumps(invocation, ensure_ascii=True, indent=2), file=sys.stderr)
+
+
 def announce_review_recovery(order, evidence):
     """Advisory only: the existing recover_goal owner validates and resumes it."""
     if evidence is None:

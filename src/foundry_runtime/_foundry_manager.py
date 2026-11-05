@@ -89,6 +89,7 @@ def configuration(profile, folder):
             'effective_coordination': 1,
             'claude_live_events': 1,
             'live_coordination': 1,
+            'scope_question_policy': 1,
             'expert': {'backend': BACKEND[profile], 'model': model('fable' if profile == 'opus' else 'astra'), 'effort': 'high'}}
 
 
@@ -178,6 +179,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
                        'history': [{k: v for k, v in row.items() if k != 'result'} for row in history]}
         packet = {**packet, 'manager_handoff': handoff}
     request = {'kind': 'coordinate', 'packet': packet, 'instruction_provenance': 1, 'operator_input': True}
+    if state.get('scope_question_policy') == 1:
+        request['scope_question_policy'] = 1
     request['review_precondition'] = ('Review requires a committed candidate and a clean worktree. '
         'Resolve project-specific pre-commit/handoff requirements before selecting review. '
         'A review_refusal is worker feedback to correct, not an operator instruction or a review verdict.')
@@ -300,6 +303,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
             decision['instruction_source'] = 'manager'
             # Copy only admitted operator input; never infer authority from model prose.
             decision['operator_answer'] = request['packet'].get('operator_answer')
+        if request.get('scope_question_policy') == 1:
+            decision['scope_question_policy'] = 1
         if 'artifacts' in result:
             decision['artifacts'] = result['artifacts']
         if 'member_tier_decisions' in result:

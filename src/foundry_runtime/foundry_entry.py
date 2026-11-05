@@ -256,7 +256,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 record_foundry_location(order, Path(result["continuation_evidence"]))
         except (OSError, RuntimeError, ValueError, ImportError, KeyError) as exc:
             print("REFUSE Foundry recovery: %s" % exc, file=sys.stderr)
-            from ._foundry_cli_help import announce_recovery_failure
+            from ._foundry_cli_help import announce_recovery_failure, announce_runtime_upgrade
+            announce_runtime_upgrade(order, recovery, exc, prompt_file=getattr(a, 'prompt_file', None))
             announce_recovery_failure(order, recovery)
             announce_review_recovery(order, recovery)
             return 2
@@ -487,6 +488,10 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             )
     except (OSError, RuntimeError, ValueError, ImportError) as exc:
         print("REFUSE Foundry: %s" % exc, file=sys.stderr)
+        if amend_from:
+            from ._foundry_cli_help import announce_runtime_upgrade
+            announce_runtime_upgrade(order, Path(amend_from).parent, exc, amend_from=amend_from,
+                                     session=coding_session, prompt_file=getattr(a, 'prompt_file', None))
         if evidence is not None:
             from ._foundry_cli_help import announce_recovery_failure
             announce_recovery_failure(order, evidence)

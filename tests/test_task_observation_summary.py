@@ -67,6 +67,25 @@ def test_other_goal_or_superseded_attempt_never_appears_current(observed, mismat
     assert report['summary']['runtime']['worker'] is None
 
 
+@pytest.mark.parametrize('launcher,suffix', [('claude', '.claude.jsonl'), ('app-server', '.log'), ('exec', '.log')])
+def test_watcher_reads_exact_current_resumed_log(observed, monkeypatch, launcher, suffix):
+    folder, _, add = observed
+    add('dispatch_resumed2', state='completed')
+    path = add('dispatch_resumed3')
+    record = package.read_intent(json.loads(path.read_bytes()))[1]
+    record['frozen']['launcher'] = launcher
+    log = folder.parent/'dispatches/dispatch_resumed3.log'
+    expected = str(log.with_suffix(suffix).resolve())
+    report = followup.status(folder)
+    assert report['summary']['evidence']['worker_live_event_log'] == expected
+    assert report['dispatch_observation']['executions'][0]['live_event_log'] == expected
+    # The current package determines the path before its writer creates it.
+    assert not Path(expected).exists()
+    record['evidence'] = {'log': {'path': str(folder.parent/'recorded-worker.log')}}
+    assert followup.status(folder)['summary']['evidence']['worker_live_event_log'] == str(
+        (folder.parent/'recorded-worker.log').with_suffix(suffix).resolve())
+
+
 def test_multiple_current_bindings_are_reported_without_selecting_latest(observed):
     folder, _, add = observed
     add('dispatch1'); add('dispatch2')

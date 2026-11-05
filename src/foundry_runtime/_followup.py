@@ -129,7 +129,8 @@ def _summary(report, *, runtime_selection=None):
             'delivery': report.get('delivery'), 'next_action': action, 'next_command_argv': command,
             'next_invocation': invocation or None,
             'evidence': {'goal': report['goal'], 'outcome': report.get('outcome_path'),
-                         'dispatch': worker.get('dispatch')}, 'errors': errors}
+                         'dispatch': worker.get('dispatch'),
+                         'worker_live_event_log': worker.get('live_event_log')}, 'errors': errors}
 
 
 def _manager_wait(live_call, native_calls):
@@ -378,6 +379,9 @@ def _dispatch_status(path):
     from ._provider_activity import execution_activity
     from ._native_session import recorded_session
     log = record.get('evidence', {}).get('log', {}).get('path') or str(path).removesuffix('.package.json') + '.log'
+    launcher = record.get('frozen', {}).get('launcher')
+    live_log = Path(log).with_suffix('.claude.jsonl') if launcher == 'claude' else Path(log)
+    report['live_event_log'] = str(live_log.resolve()) if launcher in ('claude', 'app-server', 'exec') else None
     report['activity_observation'] = execution_activity(log, record.get('frozen', {}).get('launcher'),
                                                        session=recorded_session(record))
     from ._provider_activity import observe

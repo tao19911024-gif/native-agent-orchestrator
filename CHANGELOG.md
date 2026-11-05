@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0a107 — 2026-11-04
+
+- Explain missing recorded runtime dependencies during amendment or recovery
+  with an explicit `--upgrade-runtime current` invocation at the settled boundary.
+- Return the current worker's absolute live log path in status summaries,
+  using the exact execution binding and recorded launcher.
+- Consolidate currently known scope dependencies into one operator question.
+  New manager requests and worker instructions carry the same versioned guidance;
+  retained requests preserve their original rendering.
+
 ## 0.1.0a106 — 2026-11-04
 
 - Show current goal execution, runtime provenance, pending operator input and
