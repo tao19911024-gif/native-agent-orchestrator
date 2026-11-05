@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Bind managed worker packages to the active goal round, including resumed
+  worker streams, and display the recorded phase for settled outcomes.
+- Preserve completed review verdicts when another slot fails. Show the
+  retained checkpoint recovery command on review refusal.
+- Apply project review staffing to standalone review and preserve explicit
+  selectors. Identify order revision field mismatches and route closure
+  corrections through the existing goal recovery entry.
+
 ## 0.1.0a107 — 2026-11-04
 
 - Explain missing recorded runtime dependencies during amendment or recovery

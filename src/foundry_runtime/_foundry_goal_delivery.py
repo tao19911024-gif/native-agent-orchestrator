@@ -278,10 +278,11 @@ def incomplete(exc, rc, coding_evidence, coding_session, manager_state, manifest
     if (manifest.get('candidate_closure') or {}).get('status') in ('failed', 'not_evaluated'):
         outcome['next_action'] = (
             'Inspect the closure receipt and correct the verification environment or candidate. '
-            'On a67 or later, --recover-goal without --prompt-file retries closure and review '
-            'of the unchanged candidate without another coding or manager turn. '
-            'Historical runtimes require an explicit settled-boundary upgrade; changed code '
-            'uses the existing amendment or named-candidate review path.')
+            'Use --recover-goal without --prompt-file to retry closure and review of the unchanged candidate.')
+        if coding_session and (manifest.get('delivery_context') or {}).get('mode') != 'review-only':
+            outcome['next_action'] += ' To request a coding correction, use --recover-goal with --prompt-file.'
+        else:
+            outcome['next_action'] += ' Use a named-candidate review for a different committed candidate.'
         return outcome
     if manifest.get('manager_phase') == 'awaiting_input':
         decision = manifest['execution_decision']['manager']

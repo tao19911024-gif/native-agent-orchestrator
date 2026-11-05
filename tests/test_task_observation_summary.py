@@ -133,6 +133,38 @@ def test_feedback_continuation_preserves_recorded_environment():
         'feedback': {'continuation': {'invocation': invocation}}})
     assert summary['next_invocation'] == invocation
     assert summary['waiting_for'] == 'operator'
+    settled = followup._summary({'goal': 'goal', 'status': 'outcome_available',
+        'phase': 'review_pending', 'outcome_status': 'candidate_verified',
+        'feedback': {'continuation': {'invocation': invocation}}})
+    assert settled['phase'] == 'candidate_verified'
+    assert settled['waiting_for'] is None
+    assert settled['next_action'] == 'inspect_delivery'
+
+
+def test_manager_lock_preserves_worker_binding_to_active_round(observed, monkeypatch):
+    from foundry_runtime import foundry_goal as goal
+
+    round_dir, manifest, add = observed
+    outer = round_dir.parent
+    # A controller and its active round both own goal records. The adjacent
+    # manager folder owns native receipts and has no goal manifest.
+    save(outer / 'manifest.json', {'mode': 'auto-amend', 'run_id': 'outer',
+        'active_round': str(round_dir), 'order': manifest['order']})
+    path = add('dispatch_resumed2')
+    intent = SimpleNamespace(intent_id='dispatch_resumed2', path=round_dir.parent / 'journal',
+        record={'attempt_id': 'one', 'state': 'active', 'root_pid': 123}, frozen={})
+    _, record = package.read_intent(json.loads(path.read_bytes()))
+    record['frozen']['launcher'] = 'claude'
+    def run_owned(*args, **kwargs):
+        package.record_package(path.with_name('dispatch_resumed2.log'), 'TASK1', 'resume', intent, 'work')
+        return followup.status(outer)['summary']
+
+    monkeypatch.setattr(goal.goal_execution, 'run_owned', run_owned)
+    with goal._run_lock(outer):
+        summary = goal._run(None, round_dir, None,
+            manager_state={'native_dir': str(round_dir.with_name('goal-manager'))})
+    assert summary['waiting_for'] == 'worker'
+    assert summary['evidence']['worker_live_event_log'] == str(path.with_name('dispatch_resumed2.claude.jsonl'))
 
 
 def test_stopped_controller_with_unsettled_worker_requires_inspection(observed, monkeypatch):

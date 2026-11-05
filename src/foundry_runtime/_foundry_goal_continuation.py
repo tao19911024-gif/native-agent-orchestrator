@@ -204,7 +204,7 @@ def recover_worker(owner, order, folder, manifest, answer, recovery_file, *, mig
     options.pop('migrate_recovered_manager', None)
     options.update(project_record=manifest['project_record'], manager_state=manifest['manager_state'],
                    execution_decision=manifest['execution_decision'])
-    with owner._run_lock(manifest['manager_state']['native_dir']):
+    with owner._run_lock(manifest['manager_state']['native_dir'], bind_goal=False):
         return owner.goal_execution.run_owned(order, folder, Path(checkpoint['executable']),
             target_worktree=Path(manifest['worktree']), coding_session=checkpoint['coding_session'],
             retained={**checkpoint, 'returncode': None, 'manifest': manifest},

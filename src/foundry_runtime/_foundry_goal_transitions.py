@@ -25,7 +25,7 @@ def manager_history(owner, state, worktree, *, source_locked=False, allow_empty=
     source = Path(state['native_dir'])
     calls = {}
     from contextlib import nullcontext
-    with nullcontext() if source_locked else owner._run_lock(source):
+    with nullcontext() if source_locked else owner._run_lock(source, bind_goal=False):
         for call in sorted(source.glob('call-*')):
             envelope = json.loads((call/'stdin.txt').read_bytes().rsplit(b'\n\n', 1)[-1])
             envelope.pop('response_contract', None)

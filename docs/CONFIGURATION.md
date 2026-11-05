@@ -88,9 +88,11 @@ reason and source receipt or round in `review_tier_decisions`.
 Adapter values follow the same provider and boolean contracts; invalid values
 are reported during new-goal configuration. Use `--no-disposable-scratch` to
 override an enabled project storage default for one new goal.
-These defaults apply only to new goals. Direct dispatch, standalone review,
-amendments, recovery and runtime boundary continuations retain their recorded
-configuration. Preserve descriptor bytes and settings referenced by existing tasks
+New goals consume the project staffing defaults. A standalone review inherits
+the project's `review_profile`, or the Opus and Sol pairing for a project with
+`default_provider: "claude"`. An explicit review, provider or analyst selector
+takes precedence. Direct dispatch, amendments and recovery use their own
+recorded configuration. Preserve descriptor bytes referenced by existing tasks
 when changing the policy for new work.
 
 The project execution prompt directs workers to read rule entries once, reuse

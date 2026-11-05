@@ -19,6 +19,7 @@ def test_failed_closure_recovery_retries_only_review(external, tmp_path, monkeyp
         argv[-1] += "; import subprocess; Path('candidate.txt').write_text('done'); subprocess.run(['git','add','candidate.txt'],check=True); subprocess.run(['git','commit','-qm','candidate'],check=True); print('session id: fixture-session')"
         return argv
     monkeypatch.setattr(dispatch, 'coding_argv', coding)
+    monkeypatch.setattr(goal, '_session_from_log', lambda _: 'fixture-session')
     monkeypatch.setattr(goal, 'NativeAnalyst', Analyst)
     monkeypatch.setattr(goal, 'resolve_executable', lambda backend: Path(sys.executable))
     monkeypatch.setattr(_foundry_manager, 'turn', lambda *a, **k: pytest.fail('closure recovery must not call the manager'))
@@ -37,6 +38,9 @@ def test_failed_closure_recovery_retries_only_review(external, tmp_path, monkeyp
         first = goal.run_goal(order, folder, Path(sys.executable), coding_launcher='exec', project_record=scope.record())
     assert first['status'] == 'coding_incomplete'
     assert 'without --prompt-file' in first['next_action']
+    assert 'amendment' not in first['next_action']
+    if managed != 'review_only':
+        assert 'with --prompt-file' in first['next_action']
     manifest = json.loads((folder/'manifest.json').read_bytes())
     if managed is True:
         manifest['manager_state'] = {'profile': 'opus', 'model': 'claude-opus-5-5', 'native_dir': str(tmp_path/'manager')}

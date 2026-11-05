@@ -17,6 +17,10 @@ attempt. Completed attempts, another goal with the same tag and superseded
 attempts are excluded from active work. Historical goals without this binding
 retain their original observations.
 
+The active round owns the worker package binding for a managed goal. The
+manager's native conversation lock owns its call receipts. A settled outcome
+with no continuation action displays the recorded outcome status as its phase.
+
 `evidence.worker_live_event_log` is the absolute path for the uniquely bound
 current worker. Claude writes stream events to the matching `.claude.jsonl`;
 Codex app-server and exec use the recorded `.log`. The path is available before

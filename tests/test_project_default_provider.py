@@ -32,6 +32,23 @@ def test_adapter_defaults_reject_invalid_contract_values(defaults, field):
         goal_defaults(SimpleNamespace(**defaults))
 
 
+@pytest.mark.parametrize('defaults,flags,expected', [
+    ({'default_provider': 'claude'}, [], ['claude', 'codex']),
+    ({'default_staffing': {'review_profile': 'opus-sol'}}, [], ['claude', 'codex']),
+    ({'default_provider': 'claude'}, ['--analyst-backend', 'codex'], []),
+])
+def test_standalone_review_uses_project_review_policy(external, monkeypatch, defaults, flags, expected):
+    tree, scope, order, _ = external
+    scope.path.write_text(json.dumps({**scope.project, **defaults}))
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda _: Path(sys.executable))
+    calls = []
+    monkeypatch.setattr(goal, 'run_review', lambda *args, **kwargs:
+                        calls.append(kwargs) or {'status': 'candidate_verified'})
+    assert cli.main(['--project-config', str(scope.path), '--order', str(order),
+        '--foundry-review', '--worktree', str(tree), '--review-base', 'base', '--review-head', 'head', *flags]) == 0
+    assert [row['backend'] for row in calls[0].get('reviewers', [])] == expected
+
+
 @pytest.mark.parametrize('default,flags,kind,backend,source', [
     ('claude', [], 'cross-module', 'claude', 'project'),
     ('claude', ['--provider', 'codex'], 'cross-module', 'codex', 'explicit'),

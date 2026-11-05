@@ -111,8 +111,8 @@ def _publish_outcome(folder, outcome):
 
 
 @contextmanager
-def _run_lock(folder, *, reuse_owned=False):
-    """One controller per evidence directory; released by process exit too."""
+def _run_lock(folder, *, reuse_owned=False, bind_goal=True):
+    """Own the directory lock and bind dispatch only for goal directories."""
     folder = Path(folder).resolve()
     if reuse_owned and any(lease['active'] and lease['pid'] == os.getpid()
                            and lease['folder'] == folder for lease in _owned_run_locks.get()):
@@ -136,7 +136,7 @@ def _run_lock(folder, *, reuse_owned=False):
         except OSError as exc:
             raise GoalBlocked("this Foundry round still has a running controller") from exc
         from ._followup import goal_scope
-        scope = goal_scope.set(str(folder))
+        scope = goal_scope.set(str(folder)) if bind_goal else None
         lease = {'folder': folder, 'pid': os.getpid(), 'active': True}
         ownership = _owned_run_locks.set((*_owned_run_locks.get(), lease))
         try:
@@ -148,7 +148,8 @@ def _run_lock(folder, *, reuse_owned=False):
         finally:
             lease['active'] = False
             _owned_run_locks.reset(ownership)
-            goal_scope.reset(scope)
+            if scope is not None:
+                goal_scope.reset(scope)
             handle.seek(0)
             if os.name == "nt":
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
@@ -775,7 +776,7 @@ def _run(order, evidence_dir, executable, **options):
         options.pop('manager_profile', None)
         if state is not None:
             # This is conversation ownership, not the worker's writing lease.
-            with _run_lock(state['native_dir']):
+            with _run_lock(state['native_dir'], bind_goal=False):
                 return goal_execution.run_owned(order, evidence_dir, executable, **{**options, 'manager_state': state})
         return goal_execution.run_owned(order, evidence_dir, executable, **options)
 
@@ -833,7 +834,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     """Normal execution and recovery share one review/finalization path."""
     from . import _foundry_dispatch as dispatch
     context, tree = checkpoint["context"], Path(checkpoint["worktree"])
-    native, outcome = None, None
+    native, outcome, completed_reviews = None, None, None
     participation = checkpoint.get('implementation_evidence') or {}
     try:
         names = ["review-0", "review-1"]
@@ -945,6 +946,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     for name, saved in previous_panel.results.items():
                         analyst.results.setdefault(name, {**saved, 'session': previous_panel.native_session(requests[name])})
                     outcomes.update(review_group.prewarm(retry, requests, analyst))
+            completed_reviews = [outcomes[name][0] for name in names if outcomes[name][1] is None]
             reviews, sessions = [], []
             for name in names:
                 value, error = outcomes[name]
@@ -995,7 +997,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     except (GoalBlocked, RuntimeError, OSError) as exc:
         if not resume and not retained_only:
             outcome = {'status': 'review_blocked', 'candidate_commit': context['candidate_commit'],
-                       'coding': checkpoint['coding'], 'reviews': [], 'reason': str(exc),
+                       'coding': checkpoint['coding'], 'reviews': completed_reviews or [], 'reason': str(exc),
                        'review_completion_required': True}
             if manifest.get('review_tier_decisions'):
                 outcome['review_tier_decisions'] = manifest['review_tier_decisions']
@@ -1066,7 +1068,7 @@ def _recover_manager_feedback(order, folder, manifest, *, answer=None):
     options.update(manager_state=manifest.get('manager_state'), execution_decision=manifest.get('execution_decision'))
     if (manifest.get('manager_state') or {}).get('quota_fallback'):
         options['reviewers'] = manifest['reviewers']
-    with _run_lock((manifest.get('manager_state') or manifest['expert_state'])['native_dir']):
+    with _run_lock((manifest.get('manager_state') or manifest['expert_state'])['native_dir'], bind_goal=False):
         return goal_execution.run_owned(order, folder, Path(checkpoint['executable']),
             target_worktree=Path(checkpoint['worktree']), coding_session=checkpoint['coding_session'],
             continuation=manifest.get('continuation'),

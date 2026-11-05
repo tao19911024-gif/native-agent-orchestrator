@@ -131,11 +131,26 @@ states and a repeated conflict-response correction scenario.
 ## Reconcile interrupted execution
 
 An explicitly authorized `--order-revision` can reconcile the retained contract
-at a settled failed-worker feedback boundary. The existing dispatch completion
+at an operator-input boundary or a settled failed-worker feedback boundary.
+The revision JSON contains `schema_version: 1`, `authorized_by: "operator"`,
+the active round's `goal` directory, `run_id` and original `order` reference.
+Supply `previous`, `revised` and `authorization` as objects with `path` and
+`sha256`. The previous file holds the exact last admitted order bytes. The
+revised file holds the current order bytes. The authorization file records
+the operator ruling. An identity mismatch reports the field and expected value.
+The existing dispatch completion
 verifier checks the original checkpoint, terminal and cleanup before admission.
 Original goal identity and checkpoint evidence remain unchanged. Contract
 revision and runtime upgrade are separate recorded operations; neither establishes
 business acceptance.
+
+When candidate closure fails, use `--recover-goal` without `--prompt-file` to
+retry closure and review of the same commit. For a recorded coding session, pass
+`--prompt-file` with the correction to continue coding through the original goal.
+
+When a review slot fails, the outcome retains any completed verdicts and marks
+review completion as required. Use the existing `--recover-goal` invocation
+from status to retry the unfinished slots against the same frozen candidate.
 
 For an `unknown` direct attempt, project status returns `recovery_commands` when
 the original package and native identities are available. The generated

@@ -301,7 +301,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             manager_state = manifest['manager_state']
             while True:
                 try:
-                    with owner._run_lock(manager_state['native_dir'], reuse_owned=True) if manager_state.get('handoff') else nullcontext():
+                    with owner._run_lock(manager_state['native_dir'], reuse_owned=True, bind_goal=False) if manager_state.get('handoff') else nullcontext():
                         response = measured('coordinate', lambda: _foundry_manager.turn(manager_state, tree, packet, operator_update=queued))
                     guidance, manager_state, usage, packet = response
                     packet, queued = incorporate(manifest['intervention']['root'], packet)
@@ -498,7 +498,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         manager_packet, queued_update = incorporate(manifest['intervention']['root'], manager_packet)
                         manager_packet, revision_update = owner.order_revision.manager_input(owner, manifest, manager_packet)
                         from contextlib import nullcontext
-                        with owner._run_lock(manager_state['native_dir'], reuse_owned=True) if migrated_manager else nullcontext():
+                        with owner._run_lock(manager_state['native_dir'], reuse_owned=True, bind_goal=False) if migrated_manager else nullcontext():
                             retained_live = manifest.pop('undelivered_live_decision', None)
                             if (retained_live and not manager_answer and not queued_update and not revision_update
                                     and not manager_packet.get('unanswered_live_events')

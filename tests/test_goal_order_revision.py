@@ -72,7 +72,9 @@ def test_mismatched_revision_does_not_mutate_goal(external, tmp_path, fault):
         order = other
     goal._write(decision, data)
     before = (folder/'manifest.json').read_bytes()
-    with pytest.raises(ValueError):
+    field = {'run': 'run_id', 'goal': 'goal', 'old_bytes': 'previous.sha256',
+             'new_bytes': 'revised.sha256', 'ruling': 'ruling', 'path': '--order path'}[fault]
+    with pytest.raises(ValueError, match=field):
         revision.admit(goal, folder, manifest, order, decision)
     assert (folder/'manifest.json').read_bytes() == before
     assert not list(folder.glob('order-revision-*.json'))

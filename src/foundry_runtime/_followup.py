@@ -114,13 +114,17 @@ def _summary(report, *, runtime_selection=None):
         action, waiting = 'wait', 'controller'
     continuation = (report.get('feedback') or {}).get('continuation') or {}
     invocation = continuation.get('invocation') or {}
+    if report.get('outcome_status') == 'candidate_verified':
+        # Optional follow-up findings stay in the full feedback report.
+        invocation = {}
     if invocation.get('argv'):
         action, waiting, command = 'continue_from_feedback', 'operator', invocation['argv']
     elif report.get('outcome_status') == 'awaiting_input':
         action, waiting = 'answer_input_request', 'operator'
         invocation = report.get('input_continuation') or {}
         command = invocation.get('argv') or command
-    return {'status': report['status'], 'phase': report.get('phase'),
+    phase = report.get('outcome_status') if action == 'inspect_delivery' else report.get('phase')
+    return {'status': report['status'], 'phase': phase,
             'waiting_for': waiting, 'pending_operator_inputs': queued,
             'dispatch_status': dispatch.get('status'),
             'runtime': {'controller': report.get('runtime_observation'),

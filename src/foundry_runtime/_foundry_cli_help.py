@@ -187,16 +187,16 @@ def announce_review_recovery(order, evidence):
     if evidence is None:
         return
     try:
+        from ._foundry_goal_auto import active_round
         folder = Path(evidence)
         manifest = _read_manifest(folder / "manifest.json")
-        active = Path(manifest["active_round"]) if manifest.get("active_round") else folder
-        current = _read_manifest(active / "manifest.json") if active != folder else manifest
-        if not current.get("review_checkpoint") or (active / "outcome.json").exists():
+        active, current = active_round(folder, manifest)
+        outcome = active / "outcome.json"
+        if not current.get("review_checkpoint") or (
+                outcome.is_file() and not _read_manifest(outcome).get('review_completion_required')):
             return
-    except (OSError, ValueError, TypeError):
+        invocation = recovery_invocation(order, folder, current)
+    except (OSError, ValueError, KeyError, TypeError):
         return
-    print("Review interrupted. Keep completed reviews, coding and test evidence; "
-          "retry only unfinished review slots using the existing checkpoint:\n"
-          f'  --order "{order}" --foundry-goal --recover-goal "{folder}"\n'
-          "Do not start a fresh --foundry-review for this interruption; "
-          "no --prompt-file is needed for review-only recovery.", file=sys.stderr)
+    print("Review interrupted. Resume the unfinished slots using the retained checkpoint.\n"
+          + invocation['powershell'], file=sys.stderr)
