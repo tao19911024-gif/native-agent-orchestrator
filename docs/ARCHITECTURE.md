@@ -30,6 +30,21 @@ in serialized formats and environment settings. The
 [configuration reference](CONFIGURATION.md) owns descriptor fields and the
 [command reference](CLI.md) owns operator commands.
 
+Goal status joins only packages bound to the exact active goal directory and run
+ID, with the journal's current attempt. The goal manifest records its existing
+dispatch evidence directory. Package publication records the goal binding;
+inspection reads it without updating the manifest or creating a task index.
+Runtime selection is an optional read-only input, separate from recorded
+controller/worker provenance. Status summaries reuse existing feedback and input
+continuation commands, including their recorded environment.
+
+Usage summaries project already reconciled native identities. Saved full reports
+provide fixed comparison baselines; cumulative sessions contribute their growth
+once, including sessions shared across roles. The session selector is shared with
+the existing usage owner. Native invocations, observed responses and token units
+remain distinct. Delivery levels project execution, candidate review and
+project-owned acceptance from the same outcome. See [task observation](TASK_OBSERVATION.md).
+
 [Source authority](SOURCE_AUTHORITY.md) identifies the release repository and
 historical migration. The release selector owns new-task deployment and records
 the version-bound acceptance receipt. Task provenance continues to own recovery.

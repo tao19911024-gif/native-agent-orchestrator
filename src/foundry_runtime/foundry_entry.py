@@ -33,6 +33,8 @@ def add_arguments(ap) -> None:
                     help="provider for new admission and coding; --review-profile selects independent reviewers")
     ap.add_argument("--foundry-usage", nargs="+", metavar="RECORD",
                     help="read delivery baseline and usage from goal directories, manifests, outcomes or dispatch receipts; no model calls or writes")
+    ap.add_argument('--usage-since', metavar='REPORT_JSON', help='compare usage with a previously saved --foundry-usage report')
+    ap.add_argument('--summary', action='store_true', help='print only the summary for exact goal status or usage inspection')
     ap.add_argument("--foundry-goal", action="store_true",
                     help="code, test and independently review one order")
     ap.add_argument("--foundry-review", action="store_true",
@@ -85,6 +87,10 @@ def add_arguments(ap) -> None:
 
 
 def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
+    if a.summary and not a.foundry_usage:
+        ap.error('--summary requires --foundry-usage or exact --status-goal inspection')
+    if a.usage_since and not a.foundry_usage:
+        ap.error('--usage-since requires --foundry-usage')
     if getattr(a, 'upgrade_runtime', None):
         from ._foundry_goal_upgrade import handle
         return handle(a, ap, project=project, project_adapter=project_adapter)
@@ -93,8 +99,11 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 "order", "resume", "steer", "foundry_goal", "foundry_review", "foundry_analyze", "recover_goal")):
             ap.error("--foundry-usage reads existing records; choose it separately from execution")
         from ._foundry_goal_usage import task_report
-        report = task_report(a.foundry_usage)
-        _print_report(report)
+        try:
+            report = task_report(a.foundry_usage, since=a.usage_since)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            ap.error(str(exc))
+        _print_report((report.get('incremental_usage') or report['summary']) if a.summary else report)
         return 0 if report["records"] else 2
     project_options = {"project_record": project.record()} if project is not None else {}
     def evidence_for(order, kind):

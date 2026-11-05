@@ -85,6 +85,14 @@ def record_package(log, tag, operation, intent, body, launch_context=None):
         **({"launch_context": launch_context} if launch_context is not None else {}),
     }
     path = log.with_suffix(".package.json")
+    from ._followup import goal_scope, identity
+    if goal_scope.get():
+        goal = Path(goal_scope.get()).resolve()
+        try:
+            manifest = json.loads((goal / 'manifest.json').read_bytes())
+            receipt['goal'] = {'directory': str(goal), 'run_id': identity(goal, manifest)}
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            receipt['goal_observation_error'] = str(exc)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(receipt, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     announce_dispatch(path, receipt)

@@ -132,6 +132,7 @@ def add_arguments(parser):
     parser.add_argument("--project-config", help="descriptor path for onboarding or project --order/--resume")
     parser.add_argument("--status-evidence-root", help="existing evidence root for --foundry-project status --worktree (adapter journal observation)")
     parser.add_argument('--status-goal', help='exact goal directory for compact read-only completion observation')
+    parser.add_argument('--runtime-selection', help='read selected runtime from this release-selection JSON when inspecting an exact goal')
     parser.add_argument('--status-dispatch', help='exact dispatch package receipt for read-only completion observation')
     parser.add_argument('--follow-up-plan', action='store_true', help='include optional heartbeat polling plan; requires explicit user request, not an event callback')
     parser.add_argument("--project-rule", action="append", default=[],
@@ -143,6 +144,10 @@ def add_arguments(parser):
 
 
 def handle(args, parser):
+    if args.summary and args.foundry_project and not args.status_goal:
+        parser.error('--summary requires exact --status-goal inspection or --foundry-usage')
+    if args.runtime_selection and not args.status_goal:
+        parser.error('--runtime-selection requires --status-goal')
     if args.follow_up_plan and not (args.status_goal or args.status_dispatch):
         parser.error('--follow-up-plan requires exact --status-goal or --status-dispatch')
     if args.status_goal or args.status_dispatch:
@@ -154,11 +159,11 @@ def handle(args, parser):
             parser.error('follow-up status requires --foundry-project status and one exact goal or dispatch receipt')
         from ._followup import status as goal_status, dispatch_status
         try:
-            report = (goal_status(args.status_goal, plan=args.follow_up_plan) if args.status_goal
+            report = (goal_status(args.status_goal, plan=args.follow_up_plan, runtime_selection=args.runtime_selection) if args.status_goal
                       else dispatch_status(args.status_dispatch, plan=args.follow_up_plan))
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             report = {'status': 'inspection_failed', 'error': str(exc), 'read_only': True}
-        print(json.dumps(report, ensure_ascii=True, indent=2))
+        print(json.dumps(report.get('summary', report) if args.summary else report, ensure_ascii=True, indent=2))
         return 2 if report['status'] == 'inspection_failed' else 0
     if (args.project_preflight_input or args.project_resume_preflight_input) and (args.foundry_project or not args.project_config):
         parser.error("--project-preflight-input requires project --order/--resume, not onboarding")

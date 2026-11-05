@@ -108,6 +108,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
     manifest = {"schema_version": 1, "run_id": run_id, "order": _fact(order),
                 "predispatch": _fact(receipt_path) if receipt_path else None, "worktree": str(tree),
                 "base_commit": base, "tag": tag, "runtime_provenance": observe(adapter=adapter),
+                "dispatch_evidence_root": str(adapter.evidence(tag)),
                 **({"coding_launcher": coding_launcher} if review_range is None else {}),
                 "requested_compute": {
                     "coding": ({"backend": coding_backend, **coding_compute} if coding_compute else None)
