@@ -165,10 +165,15 @@ def test_upgrade_freezes_launch_before_publication_retry(boundary, monkeypatch):
 @pytest.mark.parametrize('threshold', [240000, 0])
 def test_boundary_launch_reaches_native_and_survives_plain_resume(
         external, manager_io, tmp_path, monkeypatch, threshold):
+    from types import SimpleNamespace
+    from foundry_runtime import _dispatch_package
     from foundry_runtime import app_server_transport as transport, foundry_entry, foundry_native_support
     from foundry_runtime import _native_session, _foundry_dispatch as dispatch
     from test_owned_goal_recovery import SERVER, SID
     tree, scope, order, _ = external
+    # Package timestamps have second precision; rapid continuations share one timestamp.
+    monkeypatch.setattr(_dispatch_package, 'time', SimpleNamespace(
+        strftime=lambda *args: '2026-11-04T12:00:00Z', gmtime=lambda: None))
     _, decisions = manager_io
     decisions.extend([{'action': 'delegate', 'instruction': 'initial work', 'artifacts': []},
                       {'action': 'deliver_artifacts', 'instruction': 'inspect', 'artifacts': ['candidate.txt']}])

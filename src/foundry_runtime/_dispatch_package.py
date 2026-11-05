@@ -14,6 +14,7 @@ from ._runtime_provenance import observe
 def retained_launch(evidence, common_dir, tag, session):
     """Resolve launch policy from this session's existing intent/package owners."""
     from ._native_session import recorded_session
+    from ._foundry_dispatch import _resumed_index
     candidates = []
     for path in Path(evidence).glob('dispatch*.package.json'):
         try:
@@ -27,10 +28,11 @@ def retained_launch(evidence, common_dir, tag, session):
                 continue
             context = package.get('launch_context')
             if isinstance(context, dict):
-                candidates.append((package.get('written_utc', ''), context))
+                # Existing numbered continuations resolve same-second timestamps.
+                candidates.append((package.get('written_utc', ''), _resumed_index(path), context))
         except (OSError, ValueError, KeyError, TypeError, IntentConflict):
             continue  # Missing historical observation cannot justify new enforcement.
-    return deepcopy(max(candidates, key=lambda row: row[0])[1]) if candidates else None
+    return deepcopy(max(candidates, key=lambda row: row[:2])[2]) if candidates else None
 
 
 class DispatchNotStarted(RuntimeError):

@@ -177,6 +177,11 @@ and invoke it through the selected installed runtime. The existing upgrade
 owner verifies the settled boundary and retains the original goal history.
 Missing project evidence continues through its original error path.
 
+Plain continuation retains the latest recorded session launch policy. When
+packages share a second-resolution timestamp, their existing continuation
+numbers determine publication order, including an explicit runtime upgrade's
+new settings.
+
 A settled failed coding turn in a managed goal can transfer with
 `--handoff-provider claude --handoff-role coding --prompt-file <answer>`
 through the goal's existing `--recover-goal` entry. The answer continuation

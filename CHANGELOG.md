@@ -6,6 +6,8 @@
   with an explicit `--upgrade-runtime current` invocation at the settled boundary.
 - Return the current worker's absolute live log path in status summaries,
   using the exact execution binding and recorded launcher.
+- Retain the latest launch policy when consecutive session records share a
+  timestamp, using their existing numbered continuation order.
 - Consolidate currently known scope dependencies into one operator question.
   New manager requests and worker instructions carry the same versioned guidance;
   retained requests preserve their original rendering.
