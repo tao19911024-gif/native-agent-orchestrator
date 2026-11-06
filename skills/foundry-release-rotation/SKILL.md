@@ -14,8 +14,11 @@ releases only from clean detached release tags. Never modify active installs.
 Keep current selection, one qualified rollback and explicit current-task holds.
 Determine holds from existing owner records and current execution/active-round
 provenance. Completed historical records do not retain an installation. Preserve
-paused tasks that still require their version. Publication does not select a
-runtime; use the existing acceptance receipt and selection mechanism.
+paused tasks that still require their version. Follow the deployment's selection
+policy. With standing operator approval, select the verified published version
+for new tasks in the same release operation using an operator-approved receipt.
+Verify project entry points, retain the previous qualified version for rollback,
+and record independent acceptance after selection.
 
 For each release, close generated output, retire proven completed/nonrunning
 hosted registrations through the existing hosting owner, then use the same
