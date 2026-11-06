@@ -724,6 +724,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     manager_packet = {"stage": "worker_returned", "coding_session": coding_session,
                         "worker_evidence": turn_evidence, "returncode": rc,
                         "observed_head": _git(tree, 'rev-parse', 'HEAD').decode().strip(), "run_id": run_id}
+                    last_turn = coding_turns[-1]
+                    if last_turn.get('execution_intent_id') and last_turn.get('attempt_id'):
+                        manager_packet['execution'] = {'intent_id': last_turn['execution_intent_id'],
+                                                       'attempt_id': last_turn['attempt_id']}
                     from ._goal_intervention import carry_events
                     manager_packet = carry_events(manifest, manager_packet)
                     if (compute_assignment or {}).get('profile_version', 0) >= 5:

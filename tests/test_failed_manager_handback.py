@@ -61,6 +61,9 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     pending = Path(manifest['pending_dispatch']['path'])
     checkpoint = json.loads(goal.goal_usage._reference(manifest['coding_checkpoint']))
     assert checkpoint['returncode'] == 0
+    first_turn = checkpoint['coding_usage']['managed_turns'][-1]
+    assert requests[1]['packet']['execution'] == {'intent_id': first_turn['execution_intent_id'],
+                                                   'attempt_id': first_turn['attempt_id']}
     assert all(f in checkpoint['evidence'] for f in manifest['manager_packet']['worker_evidence'])
     package = json.loads(pending.read_bytes())
     _, failed = _dispatch_package.read_intent(package, project_record=scope.record())
