@@ -65,6 +65,9 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     package = json.loads(pending.read_bytes())
     _, failed = _dispatch_package.read_intent(package, project_record=scope.record())
     assert failed['returncode'] == 1 and failed['state'] == 'completed'
+    assignment = failed['frozen']['execution_decision']['manager']
+    assert assignment['instruction'] == 'Continue second slice'
+    assert manifest['dispatch_assignment'] == assignment['evidence']
     assert failed['evidence']['log'] not in checkpoint['evidence']
     if legacy:
         manifest.pop('pending_dispatch')
@@ -109,6 +112,8 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     assert result['status'] == 'awaiting_input'
     assert len(requests) == 3
     assert requests[-1]['packet']['returncode'] == 1
+    assert requests[-1]['packet']['execution']['attempt_id'] == failed['attempt_id']
+    assert requests[-1]['packet']['execution']['assignment'] == assignment['evidence']
     assert requests[-1]['packet']['operator_answer'] == 'Review the failed second slice without repeating completed work.'
     assert failed['evidence']['log'] in requests[-1]['packet']['worker_evidence']
     restored = json.loads((folder/'coding-checkpoint.json').read_bytes())

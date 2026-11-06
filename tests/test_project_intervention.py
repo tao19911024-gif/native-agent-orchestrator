@@ -74,13 +74,16 @@ def test_manager_queue_consumed_by_existing_native_owner(external, conversation,
     first = intervention.submit(root, 'TASK1', '示例应用：先核对，不要再启动团队。', external[1])
     assert first['status'] == 'queued' and not requests
     assert intervention.submit(root, 'TASK1', '示例应用：先核对，不要再启动团队。', external[1])['message_id'] == first['message_id']
-    packet = {'stage': 'worker_returned'}
+    packet = {'stage': 'worker_running', 'run_id': 'fixture-run',
+              'execution': {'intent_id': 'intent-1', 'attempt_id': 'attempt-1'}}
     result = manager_turn(state, external[0], packet, pending_only=True, intervention_root=root)
     decision, next_state, _, accepted = result
     assert first['message_id'] in decision['operator_answer']
     assert accepted['operator_message_ids'] == [first['message_id']]
     assert accepted['operator_answer'].count('示例应用') == 1
-    assert intervention.observe(root)[0]['status'] == 'responded'
+    observed = intervention.observe(root)[0]
+    assert observed['status'] == 'responded'
+    assert observed['execution'] == packet['execution'] and observed['run_id'] == 'fixture-run'
     # Lost goal write: native reservations/receipts reconstruct the same decision.
     replay = manager_turn(state, external[0], packet, pending_only=True, intervention_root=root)
     assert replay[0] == decision and len(requests) == 1

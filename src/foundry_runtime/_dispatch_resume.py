@@ -130,6 +130,7 @@ def resume_order(
     project=None,
     before_attempt=None,
     launch_context=None,
+    execution_decision=None,
 ):
     """Admit one correction, preserving exec-resume as the byte-compatible default."""
     from ._native_session import read_session_worktree
@@ -189,6 +190,7 @@ def resume_order(
         launcher=frozen_launcher,
         session=session,
         app_server_policy=policy,
+        execution_decision=execution_decision,
         **selection,
     )
     if launch_context is not None:

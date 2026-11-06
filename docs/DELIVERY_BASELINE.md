@@ -41,6 +41,7 @@ paths remain in local evidence storage.
 | `runtime_provenance` | Runtime version, interpreter and package identity recorded in that manifest |
 | `candidate` | Candidate commit from the outcome and base/candidate context from the matching review checkpoint |
 | `coding` | Recorded coding result, evidence references, session identity, retained native executions and usage reference |
+| `operator_inputs` | Live operator instructions associated through the manager request's round and attempt, with delivery state and native receipt |
 | `checks` | Candidate-closure result and checkpoint-owned project-review checks, each with its source reference |
 | `reviews` | Recorded verdict, candidate, packet hash, findings summary, reviewer index and retained session ID |
 | `project_acceptance` | Result recorded by the project's acceptance owner |
@@ -50,6 +51,9 @@ paths remain in local evidence storage.
 
 An unavailable checkpoint leaves the outcome and its reviews visible. A
 checkpoint for another invocation or candidate is reported in `gaps`.
+An execution's `binding` includes the package's round and the manager
+assignment frozen in the corresponding attempt journal. Historical executions
+without that binding retain their original evidence and usage.
 Unrecorded results remain `null` or empty lists. Project acceptance is counted
 as `not_recorded` when the outcome has no acceptance result.
 

@@ -266,7 +266,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         nonlocal manifest, manager_state, manager_packet, reviewers, migrated_manager
         from time import time, monotonic
         from . import _foundry_manager
-        from ._goal_intervention import incorporate, carry_events, answer_events
+        from ._goal_intervention import incorporate, carry_events, answer_events, live_execution
         from ._foundry_goal_transitions import manager as transfer_manager, restore_opus
         from contextlib import nullcontext
         started = monotonic()
@@ -290,6 +290,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                   'observed_head': _git(tree, 'rev-parse', 'HEAD').decode().strip(),
                   'events': events, 'ownership': 'Manager decides design/readiness; current dispatch still owns worker execution.',
                   'context_renewal': CONTEXT_RENEWAL_GUIDANCE}
+        if live_execution.get():
+            packet['execution'] = live_execution.get()
         packet = carry_events(manifest, packet)
         packet['unanswered_instruction'] = 'Address every unanswered_live_events entry, or explicitly request the required commander ruling.'
         manifest['live_manager_packet'] = packet
@@ -600,8 +602,13 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                             if manifest.get('manager_start'):
                                 manifest['manager_start']['options'].update({k: execution_options[k] for k in
                                     ('role_compute', 'coding_model', 'coding_effort') if k in execution_options})
+                assignment = (execution_decision or {}).get('manager')
+                if worker_recovery and not manager_repeat:
+                    assignment = (retained or {}).get('worker_assignment', assignment)
+                resume_policy = {**policy, **({'execution_decision': {'manager': assignment}} if assignment else {})}
                 if manager_state is not None or manifest.get('expert_state'):
                     manifest['manager_phase'] = 'dispatch_pending'
+                    manifest['dispatch_assignment'] = (assignment or {}).get('evidence')
                     manifest.pop('live_manager_decision', None)
                     _write(evidence_dir / 'manifest.json', manifest)
                 from ._goal_intervention import live_scope
@@ -612,7 +619,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                     observe_source=progress_snapshot):
                         if worker_recovery and not manager_repeat:
                             result = dispatch.resume_order(coding_session, tree, tag, manager_answer,
-                                recovery_file=recovery_file, **policy, **(coding_compute or {}))
+                                recovery_file=recovery_file, **resume_policy, **(coding_compute or {}))
                         elif handover is not None:
                             message = (continuation["answer"] if continuation is not None else
                                        amendment_prompt(order, amendment, execution_decision, project=project))
@@ -621,7 +628,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         elif manager_repeat:
                             result = dispatch.resume_order(coding_session, tree, tag,
                                 plan_prompt("Continue the same task from the retained worker result.", execution_decision),
-                                **policy, **(coding_compute or {}))
+                                **resume_policy, **(coding_compute or {}))
                         elif continuation is not None and coding_session:
                             # Dispatch deduplicates resume text. Bind the answer to its
                             # predecessor so identical replies to different questions are
@@ -636,7 +643,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                     continuation["team_override"]).decode("utf-8")
                             result = dispatch.resume_order(coding_session, tree, tag,
                                                            plan_prompt(message, execution_decision),
-                                                           **policy, **(coding_compute or {}))
+                                                           **resume_policy, **(coding_compute or {}))
                         elif amendment is None:
                             dispatch_decision = {**(execution_decision or {}),
                                 **({'disposable_scratch': manifest['disposable_scratch']}
@@ -650,7 +657,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                                                            amendment_prompt(order, amendment, execution_decision,
                                                                recovery.data['predecessor']['intent_id'] if recovery_file else None, project=project),
                                                            **({'recovery_file': recovery_file} if recovery_file else {}),
-                                                           **policy, **(coding_compute or {}))
+                                                           **resume_policy, **(coding_compute or {}))
                 except AdmissionRefused as exc:
                     if manager_state is None:
                         raise

@@ -165,7 +165,8 @@ class ClaudeLive:
     def __init__(self, session, human, launch_context=None):
         from ._goal_intervention import LiveEvents
         from ._launch_context import compaction_observation
-        self.live_events = LiveEvents(threshold=compaction_observation(launch_context, 'claude')['token_limit'])
+        self.live_events = LiveEvents(threshold=compaction_observation(launch_context, 'claude')['token_limit'],
+                                      log=getattr(human, 'name', None))
         self.enabled = self.live_events.claude_enabled and self.live_events.decide is not None
         self.session, self.human = session, human
         self.turn_id = 'claude-run'

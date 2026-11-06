@@ -82,6 +82,7 @@ def retained_dispatch(owner, folder, manifest):
         if (package.get('tag') == manifest['tag'] and record.get('launcher') in ('app-server', 'claude')
                 and Path(frozen['worktree']).resolve() == Path(manifest['worktree']).resolve()
                 and package.get('attempt_id') == record.get('attempt_id')
+                and package.get('source_sha256', frozen.get('order_sha256')) == frozen.get('order_sha256')
                 and (reference or binding or frozen.get('order_sha256') == manifest['order']['sha256']
                      or previous and frozen.get('session_id') == previous.get('coding_session'))
                 and log.resolve() not in prior_logs
@@ -105,8 +106,13 @@ def retained_dispatch(owner, folder, manifest):
         candidates = round_matches
     if (len(candidates) > 1 and not reference and not manifest.get('execution_recovery')
             and manifest.get('execution_decision', {}).get('manager')):
-        selected = [row for row in candidates
-                    if _matches_manager_assignment(row[0], row[2], manifest['execution_decision'])]
+        assignment = manifest.get('dispatch_assignment')
+        recorded = [(row, (row[2]['frozen'].get('execution_decision') or {}).get('manager'))
+                    for row in candidates]
+        selected = [row for row, manager in recorded if assignment and manager and manager.get('evidence') == assignment]
+        if not selected and not any(manager for _, manager in recorded):
+            selected = [row for row in candidates
+                        if _matches_manager_assignment(row[0], row[2], manifest['execution_decision'])]
         if len(selected) == 1:
             candidates = selected
     if len(candidates) != 1:
@@ -138,8 +144,10 @@ def restore_completed_feedback(owner, folder, manifest, *, checkpoint_path=None,
         'coding_usage': {'managed_turns': [*((previous or {}).get('coding_usage') or {}).get('managed_turns', []),
                                          owner.goal_usage.capture(log, manifest['tag'])]}}
     from ._goal_intervention import carry_events
+    from ._dispatch_package import execution_binding
     manifest.update(manager_phase='feedback_pending', manager_packet=carry_events(manifest, {
             'stage': 'worker_returned', 'run_id': manifest['run_id'], 'coding_session': session,
+            'execution': execution_binding(json.loads(path.read_bytes()), record),
             'worker_evidence': facts, 'returncode': rc,
             'observed_head': owner._git(manifest['worktree'], 'rev-parse', 'HEAD').decode().strip()}))
     from ._foundry_goal_execution import apply_live_readiness
@@ -212,10 +220,12 @@ def recover_worker(owner, order, folder, manifest, answer, recovery_file, *, mig
     options.pop('migrate_recovered_manager', None)
     options.update(project_record=manifest['project_record'], manager_state=manifest['manager_state'],
                    execution_decision=manifest['execution_decision'])
+    assignment = (predecessor.get('frozen', {}).get('execution_decision') or {}).get('manager')
     with owner._run_lock(manifest['manager_state']['native_dir'], bind_goal=False):
         return owner.goal_execution.run_owned(order, folder, Path(checkpoint['executable']),
             target_worktree=Path(manifest['worktree']), coding_session=checkpoint['coding_session'],
-            retained={**checkpoint, 'returncode': None, 'manifest': manifest},
+            retained={**checkpoint, 'returncode': None, 'manifest': manifest,
+                      **({'worker_assignment': assignment} if assignment else {})},
             recovery_file=recovery_file, manager_answer=answer, worker_recovery=True,
             migrate_recovered_manager=migrate_runtime or manifest.get('worker_recovery_migration', False), **options)
 
