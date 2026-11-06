@@ -52,6 +52,17 @@ def review_feedback(outcome_path):
                 manifest['order']['path'], path.parent, manifest)
         except (OSError, ValueError, KeyError, TypeError) as exc:
             view['continuation']['reason'] = str(exc)
+        if outcome and len(prior['reviews']) < 2:
+            try:
+                interrupted = owner._provider_failed_review(outcome, manifest)
+                if interrupted:
+                    session = interrupted['coding_session']
+                    settings = owner.amendment_manifest(path, session)
+                    view['operator_amendment'] = {'coding_session': session,
+                        'invocation': amendment_invocation(settings['order']['path'], path, session,
+                                                           settings, prompt_file='<prompt-file>')}
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                view['operator_amendment'] = {'status': 'unavailable', 'reason': str(exc)}
         return view
     if not focus['findings']:
         return view

@@ -75,6 +75,15 @@ are populated from the published outcome. The
 [live validation report](LIVE_DELIVERY_VALIDATION.md) records this path with real
 native review calls and an original-session correction.
 
+If a provider failure interrupts the review and the original coding session is
+recorded, `operator_amendment.invocation` supplies an additional route for
+operator-directed work. Set `$PromptFile` to the file containing the new coding
+instructions and run the generated command. The amendment resumes the recorded
+coding session and checks the resulting candidate with a new review pair. The
+prior outcome retains its incomplete review and any recorded findings. To finish
+the review of the unchanged candidate, use `continuation.invocation` to recover
+its existing review checkpoint.
+
 ## Repeated development scenario
 
 A retained development review identified an incomplete conflict response:

@@ -99,6 +99,63 @@ def test_removed_bundled_reviewer_names_explicit_upgrade(external, tmp_path, mon
     assert not launches and {p: p.read_bytes() for p in prior.iterdir()} == before
 
 
+@pytest.mark.parametrize('completed', [False, True])
+def test_provider_failed_review_allows_operator_amendment(external, tmp_path, monkeypatch, capsys, completed):
+    tree, scope, order, launches = external
+    base = git(tree, 'rev-parse', 'HEAD')
+    (tree/'candidate.txt').write_text('candidate')
+    git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'candidate')
+    head = git(tree, 'rev-parse', 'HEAD')
+    prior = tmp_path/'prior'; prior.mkdir()
+    session = 'original-session'
+    context = {'base_commit': base, 'candidate_commit': head}
+    checkpoint = prior/'review-checkpoint.json'
+    goal._write(checkpoint, {'run_id': 'original-run', 'order': goal._fact(order), 'worktree': str(tree),
+                            'context': context, 'coding_session': session})
+    goal._write(prior/'manifest.json', {'run_id': 'original-run', 'order': goal._fact(order), 'worktree': str(tree),
+        'base_commit': base, 'coding_launcher': 'claude', 'project_record': scope.record(),
+        'review_checkpoint': goal._fact(checkpoint), 'runtime_provenance': {'python': sys.executable}})
+    review = {'candidate_commit': head, 'packet_sha256': goal._sha(goal._json_bytes(context)),
+              'verdict': 'PASS', 'findings': []}
+    outcome = prior/'outcome.json'
+    recorded = {'status': 'review_blocked', 'candidate_commit': head, 'review_completion_required': True,
+                'reason': 'provider_failure: request timed out', 'reviews': [review] if completed else []}
+    goal._write(outcome, recorded)
+    with pytest.raises(goal.GoalBlocked, match='--prompt-file'):
+        goal._amendment(order, tree, outcome, session)
+    with pytest.raises(goal.GoalBlocked, match='recorded coding session'):
+        goal._amendment(order, tree, outcome, 'other-session', operator_additions='Merge upstream.')
+    goal._write(outcome, {**recorded, 'reason': 'schema_rejected: invalid verdict'})
+    with pytest.raises(goal.GoalBlocked, match='completed pair'):
+        goal._amendment(order, tree, outcome, session, operator_additions='Merge upstream.')
+    goal._write(outcome, recorded)
+    before = outcome.read_bytes()
+    from foundry_runtime._foundry_goal_delivery import review_feedback
+    feedback = review_feedback(outcome)
+    assert feedback['continuation']['status'] == 'review_completion_required'
+    assert '--recover-goal' in feedback['continuation']['invocation']['argv']
+    assert feedback['operator_amendment']['invocation']['argv'][-4:] == [
+        '--coding-session', session, '--prompt-file', '<prompt-file>']
+    prompt = tmp_path/'answer.md'; prompt.write_text('Merge upstream.')
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda backend: Path(sys.executable))
+    decision = tmp_path/'decision.json'
+    goal._write(decision, {'action': 'delegate', 'instruction': 'Apply the operator instructions.'})
+    monkeypatch.setattr(manager, 'turn', lambda state, tree, packet, **kwargs: (
+        {'action': 'delegate', 'instruction': 'Apply the operator instructions.', 'evidence': goal._fact(decision)},
+        state, {}, packet))
+    received = []
+    def capture(worker_session, worktree, tag, message, **kwargs):
+        received.append((worker_session, message))
+        raise RuntimeError('fixture stops at the original coding session')
+    monkeypatch.setattr(dispatch, 'resume_order', capture)
+    assert cli.main(['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
+        '--amend-from', str(outcome), '--coding-session', session, '--prompt-file', str(prompt),
+        '--goal-evidence', str(tmp_path/'amended')]) == 2
+    assert len(received) == 1, capsys.readouterr().err
+    assert received[0][0] == session and 'Merge upstream.' in received[0][1]
+    assert outcome.read_bytes() == before and not launches
+
+
 def test_capacity_policy_defaults_and_validation():
     normalized = policy.normalize_policy(capacity_defaults=True)
     assert sum(normalized['capacity_retry_seconds']) >= 2*3600

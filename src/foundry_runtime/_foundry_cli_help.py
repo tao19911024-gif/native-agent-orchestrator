@@ -38,10 +38,10 @@ def recovery_invocation(order, folder, manifest, *, python=None, prompt_file=Non
                             python=python, prompt_file=prompt_file, extra_args=extra_args)
 
 
-def amendment_invocation(order, outcome, session, manifest):
+def amendment_invocation(order, outcome, session, manifest, *, prompt_file=None):
     """Use the same recorded entry and environment for explicit review correction."""
     invocation = _goal_invocation(order, manifest,
-        ['--amend-from', str(outcome), '--coding-session', session])
+        ['--amend-from', str(outcome), '--coding-session', session], prompt_file=prompt_file)
     invocation['verification'] = 'syntax_only; task and candidate checked by the existing amendment owner'
     return invocation
 

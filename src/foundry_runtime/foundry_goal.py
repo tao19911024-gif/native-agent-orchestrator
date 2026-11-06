@@ -296,8 +296,24 @@ def _review_range(tree, base, head, *, retained_only=False):
     return base, head
 
 
+def _provider_failed_review(outcome, manifest):
+    """Read the coding checkpoint behind a provider-only review interruption."""
+    if (outcome.get('status') != 'review_blocked' or not outcome.get('review_completion_required')
+            or not outcome.get('reason', '').startswith('provider_failure: ')
+            or outcome.get('host_findings') or any(r.get('verdict') != 'PASS' for r in outcome.get('reviews', []))
+            or (manifest.get('delivery_context') or {}).get('mode') == 'review-only'
+            or not manifest.get('review_checkpoint')):
+        return None
+    checkpoint = json.loads(goal_usage._reference(manifest['review_checkpoint']))
+    if (any(checkpoint.get(key) != manifest.get(key) for key in ('run_id', 'order', 'worktree'))
+            or checkpoint['context']['candidate_commit'] != outcome['candidate_commit']
+            or checkpoint['context']['base_commit'] != manifest['base_commit']):
+        raise GoalBlocked('interrupted review checkpoint belongs to another task or candidate')
+    return checkpoint if checkpoint.get('coding_session') else None
+
+
 def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
-    """Read an explicitly selected completed review for this unchanged candidate."""
+    """Continue an unchanged candidate from retained review evidence."""
     path = Path(outcome_path).resolve(strict=True)
     prior = json.loads(path.read_bytes())
     manifest_path = path.with_name("manifest.json")
@@ -310,7 +326,13 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
         raise GoalBlocked("amendment order or worktree differs from prior review")
     base, head = _review_range(tree, manifest["base_commit"], prior["candidate_commit"])
     reviews = prior.get("reviews", [])
-    if len(reviews) != 2:
+    interrupted = _provider_failed_review(prior, manifest) if len(reviews) < 2 else None
+    if interrupted:
+        if session != interrupted['coding_session']:
+            raise GoalBlocked('provider-failed review amendment requires the recorded coding session')
+        if not isinstance(operator_additions, str) or not operator_additions.strip():
+            raise GoalBlocked('provider-failed review amendment requires explicit instructions in --prompt-file')
+    elif len(reviews) != 2:
         raise GoalBlocked("amendment requires the completed pair of reviews")
     for review in reviews:
         validate_response_shape(review, response_contract("review", correction_routing="correction_guidance" in review, review_field_reads="read_fields" in review))
@@ -318,10 +340,12 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
             raise GoalBlocked("amendment finding belongs to another candidate")
         if (review["verdict"] == "BLOCK") != _blocking(review["findings"]):
             raise GoalBlocked("amendment verdict and blocking findings disagree")
-    if len({r["packet_sha256"] for r in reviews}) != 1:
+        if interrupted and review['packet_sha256'] != _sha(_json_bytes(interrupted['context'])):
+            raise GoalBlocked('amendment review differs from the interrupted review checkpoint')
+    if len({r["packet_sha256"] for r in reviews}) > 1:
         raise GoalBlocked("amendment reviews refer to different packets")
     has_block = any(r["verdict"] == "BLOCK" for r in reviews) or bool(prior.get("host_findings"))
-    if has_block != (status == "review_blocked"):
+    if not interrupted and has_block != (status == "review_blocked"):
         raise GoalBlocked("amendment outcome disagrees with review verdicts")
     if operator_additions is not None and (not isinstance(operator_additions, str) or not operator_additions.strip()):
         raise ValueError('operator additions must be nonempty text')
@@ -336,7 +360,7 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
             **({'operator_additions': operator_additions} if operator_additions is not None else {}),
             "retained_work": {
                 "source_candidate": head,
-                "recorded_coding_session": prior.get("coding_session"),
+                "recorded_coding_session": interrupted['coding_session'] if interrupted else prior.get("coding_session"),
                 "coding_evidence": coding.get("evidence", []) if isinstance(coding, dict) else [],
                 "usage": prior.get("task_usage"),
                 "review_checkpoint": manifest.get("review_checkpoint"),
