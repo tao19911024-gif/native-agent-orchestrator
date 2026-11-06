@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0a109 — 2026-11-05
+
+- Freeze the manager assignment in each managed continuation's execution intent.
+  Recovery uses that assignment and the recorded dispatch input to identify the
+  attempt that actually ran.
+- Associate live operator input and manager receipts with the active or settled
+  worker attempt. Show the execution and assignment in status and the delivery
+  baseline, and recover the coding session from a matching review checkpoint
+  when the outcome omits it.
+- Finalize completed independent reviews using the original call's recorded
+  backend identity and verified receipt. New native calls check the current
+  configuration at admission.
+
 ## 0.1.0a108 — 2026-11-05
 
 - Bind managed worker packages to the active goal round, including resumed
