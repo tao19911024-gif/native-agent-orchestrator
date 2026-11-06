@@ -11,9 +11,11 @@ from foundry_runtime import foundry_goal as goal
 from test_installed_runtime import external, Analyst
 
 
-def test_cli_registers_only_new_goal_option(external, monkeypatch):
+def test_cli_registers_only_new_goal_option(external, monkeypatch, tmp_path):
     from foundry_runtime import cli, foundry_entry
     _, scope, order, _ = external
+    fast = tmp_path / 'fast-scratch'
+    scope.path.write_text(json.dumps({**scope.project, 'default_disposable_scratch_root': str(fast)}))
     monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda _: Path(sys.executable))
     prepared = []
     monkeypatch.setattr(goal, 'run_prepared', lambda order, folder, value:
@@ -22,10 +24,46 @@ def test_cli_registers_only_new_goal_option(external, monkeypatch):
             '--disposable-scratch']
     assert cli.main(argv) == 0
     assert prepared[0]['options']['disposable_scratch'] is True
+    assert prepared[0]['options']['disposable_scratch_root'] == str(fast)
+    assert not fast.exists()  # Preparing a plan does not create storage.
     with pytest.raises(SystemExit) as error:
         cli.main([*argv, '--recover-goal', str(order.parent / 'old-goal')])
     assert error.value.code == 2
     assert len(prepared) == 1
+
+
+def test_goal_scratch_uses_project_root_and_keeps_evidence(external, tmp_path, monkeypatch):
+    _, scope, order, _ = external
+    folder = tmp_path / 'evidence' / 'goal'
+    fast = tmp_path / 'fast'
+    original = dispatch.coding_argv
+    def coding(*args, **kwargs):
+        argv = original(*args, **kwargs)
+        argv[-1] += (
+            "; import os, subprocess; "
+            "scratch = Path(os.environ['TMP']); "
+            f"assert scratch.parent.parent == Path({str(fast)!r}); "
+            "assert Path(os.environ['PYTEST_DEBUG_TEMPROOT']).parent == scratch.parent; "
+            "(scratch/'fixture.bin').write_bytes(b'temporary'); "
+            "Path('candidate.txt').write_text('done'); "
+            "subprocess.run(['git','add','candidate.txt'],check=True); "
+            "subprocess.run(['git','commit','-qm','candidate'],check=True); "
+            "print('session id: fixture-session')")
+        return argv
+    monkeypatch.setattr(dispatch, 'coding_argv', coding)
+    monkeypatch.setattr(goal, 'NativeAnalyst', Analyst)
+    outcome = goal.run_goal(order, folder, Path(sys.executable), coding_launcher='exec',
+                           project_record=scope.record(), disposable_scratch=True,
+                           disposable_scratch_root=str(fast))
+    assert outcome['status'] == 'candidate_verified'
+    manifest = json.loads((folder/'manifest.json').read_bytes())
+    scratch_dir = fast / manifest['run_id']
+    assert manifest['disposable_scratch']['path'] == str(scratch_dir)
+    usage = json.loads(goal.goal_usage._reference(outcome['task_usage']))
+    assert usage['scratch']['status'] == 'reclaimed'
+    assert usage['scratch']['bytes_reclaimed'] == len(b'temporary')
+    assert not scratch_dir.exists() and not (folder/'disposable').exists()
+    assert (folder/'outcome.json').is_file() and (folder/'review-checkpoint.json').is_file()
 
 
 @pytest.mark.parametrize('interrupted', [False, True, 'before-reclaim', 'during-reclaim', 'after-usage'])

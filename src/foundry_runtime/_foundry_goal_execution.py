@@ -27,7 +27,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                   reviewers=None, recovery_file=None, manager_state=None, retained=None,
                   task_staffing=None, handover=None, project_record=None, manager_answer=None,
                   follow_up_goal=None, migrate_recovered_manager=False, worker_recovery=False, task_deadline_at=None,
-                  review_author_models=None, initializing=False, disposable_scratch=False, **_legacy):
+                  review_author_models=None, initializing=False, disposable_scratch=False,
+                  disposable_scratch_root=None, **_legacy):
     """Execute the three-part task, then judge the frozen commit twice."""
     from . import foundry_goal as owner
     from .foundry_goal import (
@@ -121,11 +122,15 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             (disposable_scratch or (launch_context or {}).get('worker_environment'))):
         # A new child goal owns fresh scratch even if its parent's was reclaimed.
         # Same-folder recovery reuses the context stored in its checkpoint.
-        worker_environment = _goal_scratch.register(evidence_dir, manifest)
+        scratch_base = disposable_scratch_root or (launch_context or {}).get('disposable_scratch_root')
+        if scratch_base is not None:
+            scratch_base = str(Path(scratch_base).resolve())
+        worker_environment = _goal_scratch.register(evidence_dir, manifest, base=scratch_base)
         from ._launch_context import capture
         launch_context = {**(launch_context or capture(tree,
             root_role=(native_team or {}).get('lead_role', 'executor'), backend=coding_backend,
-            coding_model=(coding_compute or {}).get('model'))), 'worker_environment': worker_environment}
+            coding_model=(coding_compute or {}).get('model'))), 'worker_environment': worker_environment,
+            **({'disposable_scratch_root': scratch_base} if scratch_base is not None else {})}
     from ._followup import origin, announce
     manifest['originating_session'] = origin()
     if task_deadline_at is not None:

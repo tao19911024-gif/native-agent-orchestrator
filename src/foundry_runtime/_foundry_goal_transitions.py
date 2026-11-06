@@ -20,12 +20,12 @@ def assignment(provider, *, previous=None):
             'model': model('opus' if provider == 'claude' else 'astra'), 'effort': 'high'}
 
 
-def manager_history(owner, state, worktree, *, source_locked=False, allow_empty=False):
+def manager_history(owner, state, worktree, *, source_locked=False, allow_empty=False, read_only=False):
     """Read the retained manager chain through the native receipt authority."""
     source = Path(state['native_dir'])
     calls = {}
     from contextlib import nullcontext
-    with nullcontext() if source_locked else owner._run_lock(source, bind_goal=False):
+    with nullcontext() if source_locked or read_only else owner._run_lock(source, bind_goal=False):
         for call in sorted(source.glob('call-*')):
             envelope = json.loads((call/'stdin.txt').read_bytes().rsplit(b'\n\n', 1)[-1])
             envelope.pop('response_contract', None)

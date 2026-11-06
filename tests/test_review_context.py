@@ -150,7 +150,9 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
     completed = {p: p.read_bytes() for p in (folder / 'reviews/review-0').rglob('*') if p.is_file()}
     assert sorted(slot for slot, _ in calls) == [0, 1], str(interrupted.value)
     from foundry_runtime import _followup, cli
-    feedback = _followup.status(folder)['feedback']
+    observed = _followup.status(folder)
+    assert observed['summary']['phase'] == 'review_blocked'
+    feedback = observed['feedback']
     assert feedback['candidate_commit'] == head and feedback['outcome_status'] == 'review_blocked'
     assert feedback['artifacts']['outcome'] == goal._fact(folder / 'outcome.json')
     partial = json.loads((folder / 'outcome.json').read_bytes())
