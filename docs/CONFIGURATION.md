@@ -188,6 +188,14 @@ Omitted values use the environment and then the runtime defaults. Continuations
 use the recorded launch settings. Supported keys and default resolution are
 owned by [`validate_project_launch` and `settings`](../src/foundry_runtime/_launch_context.py).
 
+The Codex app-server sends process completion to a waiting owner when an
+observed command finishes during that owner's wait. Earlier results stay with
+the native command tool. If the root and all observed active members remain in
+mailbox waits with no visible command or pending input, the existing member
+progress threshold triggers one observation to the root per turn. The root
+reconciles retained handles and returns a result or identifies the dependency.
+Native wait intervals and process custody remain in effect.
+
 For Codex, zero omits `tool_output_token_limit` from native arguments and keeps
 the client's selected configuration. A per-command `max_output_tokens` value
 does not necessarily replace the client's outer tool-result limit. With several
