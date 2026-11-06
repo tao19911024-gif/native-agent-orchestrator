@@ -832,7 +832,9 @@ class NativeAnalyst:
 
     def recover(self, request, *, _include_session=False):
         """Read-only receipt reconciliation: never spawn after an uncertain call."""
-        self._verify_executable()
+        settled_review = _include_session and request.get('kind') == 'review'
+        if not settled_review:
+            self._verify_executable()
         call_id = request.get("call_id")
         if not isinstance(call_id, str) or not re.fullmatch(r"[0-9a-f]{64}", call_id):
             raise NativeError("native recovery needs a stable host call_id")
@@ -845,7 +847,8 @@ class NativeAnalyst:
                     or allocation.get("stdin_sha256") != hashlib.sha256(_prompt(
                         request, self.backend, max_input_bytes=self.max_input_bytes)).hexdigest()):
                 raise NativeError("native recovery request identity changed")
-            record, streams, _ = self._inspect_receipt({"folder": folder, "allocation": allocation})
+            record, streams, _ = self._inspect_receipt({"folder": folder, "allocation": allocation},
+                                                       archived=settled_review)
             value = self._decode_receipt(record, streams, allocation)
             return (value, record.get("session_id")) if _include_session else value
         except NativeSchemaError as exc:
