@@ -52,6 +52,24 @@ def test_explicit_claude_model_selects_claude_execution(external, capsys):
     assert selected['team']['backend'] == 'claude'
 
 
+@pytest.mark.parametrize('adapter_mode', [False, True])
+def test_standalone_review_uses_project_pair(external, tmp_path, monkeypatch, adapter_mode):
+    tree, scope, order, workers = external
+    defaults = {'default_provider': 'claude', 'default_staffing': {'review_profile': 'opus-sol'}}
+    adapter = adapter_for(scope, tmp_path, **defaults) if adapter_mode else None
+    if not adapter_mode:
+        scope.path.write_text(json.dumps({**scope.project, **defaults}))
+    selected = []
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(goal, 'run_review', lambda *a, **kw: selected.append(kw) or {'status': 'candidate_verified'})
+    args = [] if adapter_mode else ['--project-config', str(scope.path)]
+    assert cli.main([*args, '--order', str(order), '--foundry-review', '--worktree', str(tree),
+                     '--review-base', 'base', '--review-head', 'head'], project_adapter=adapter) == 0
+    assert [(row['backend'], row['model']) for row in selected[0]['reviewers']] == [
+        ('claude', model('opus')), ('codex', model('sol'))]
+    assert not workers
+
+
 def test_automatic_reselection_preserves_independent_opus_slot():
     settings = [{'backend': backend, 'model': model(tier), 'effort': 'high', 'executable': sys.executable}
                 for backend, tier in [('claude', 'opus'), ('codex', 'sol')]]

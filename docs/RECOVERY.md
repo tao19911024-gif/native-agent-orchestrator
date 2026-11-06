@@ -150,6 +150,10 @@ When candidate closure fails, use `--recover-goal` without `--prompt-file` to
 retry closure and review of the same commit. For a recorded coding session, pass
 `--prompt-file` with the correction to continue coding through the original goal.
 
+After a manager consumes an answer, goal status follows the retained answer
+chain. `continuation_goal` identifies the goal that supplies the current outcome
+and recovery command. The original question remains in its original outcome.
+
 When a review slot fails, the outcome retains any completed verdicts and marks
 review completion as required. Use the existing `--recover-goal` invocation
 from status to retry the unfinished slots against the same frozen candidate.

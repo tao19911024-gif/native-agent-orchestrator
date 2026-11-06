@@ -18,6 +18,7 @@ execution before starting a task, and inspect it with `--foundry-project check`.
 | `launch` | Per-project native launch settings |
 | `default_provider` | Optional `claude` or `codex` coding default for new Foundry goals |
 | `default_disposable_scratch` | Optional boolean enabling registered disposable storage for new goals; omitted defaults to `false` |
+| `default_disposable_scratch_root` | Optional absolute directory for registered scratch, with one child per run ID |
 | `history_roots` | Optional directory references used by historical recovery discovery |
 
 Registration selects `AGENTS.md` when present. Repeat `--project-rule` to choose
@@ -40,9 +41,10 @@ selects Claude coding and an adaptive Claude team, and reports `project` as the
 coding/correction source and team backend source. `--provider codex` overrides
 the project setting. Without `default_provider`, task-kind behavior is unchanged.
 
-Descriptors and project adapters expose the same optional `default_provider`
-and `default_disposable_scratch` fields through `ProjectExecution` and
-`goal_defaults`. Adapters without those attributes retain the existing defaults.
+Descriptors and project adapters expose the same optional `default_provider`,
+`default_disposable_scratch` and `default_disposable_scratch_root` fields through
+`ProjectExecution` and `goal_defaults`. Adapters without those attributes retain
+the existing defaults.
 
 Projects can also declare `default_staffing` on the descriptor or adapter:
 
@@ -199,8 +201,10 @@ positive limit, including the earlier default of 3,000 tokens. Set
 
 New goals can opt into managed disposable storage with `--disposable-scratch`
 or the project's `default_disposable_scratch: true`. The runtime registers a fresh
-directory under that goal's evidence directory, supplies it in worker instructions
-and records the worker's temporary-directory environment in its launch context.
+directory under the goal evidence directory by default. Set
+`default_disposable_scratch_root` to place temporary files on a separate volume
+while retaining goal evidence in its project location. Worker instructions and
+the launch context carry the resulting directory.
 See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals)
 for completion, recovery, report retention and cleanup accounting.
 

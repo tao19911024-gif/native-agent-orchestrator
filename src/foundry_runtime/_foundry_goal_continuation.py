@@ -370,7 +370,7 @@ def continuation_parent(folder):
     return parent
 
 
-def consumed_continuation(owner, folder, manifest):
+def consumed_continuation(owner, folder, manifest, *, read_only=False):
     """Resolve an answered question by its retained native chain, never mtime.
 
     Historical continuations intentionally leave the question outcome immutable.
@@ -407,7 +407,7 @@ def consumed_continuation(owner, folder, manifest):
     if not candidates:
         return folder, manifest
     from ._foundry_goal_transitions import manager_history
-    _, latest, _ = manager_history(owner, state, manifest['worktree'])
+    _, latest, _ = manager_history(owner, state, manifest['worktree'], read_only=read_only)
     if latest == state.get('last_call_id'):
         return folder, manifest
     consumed = [(path, saved) for path, saved in candidates

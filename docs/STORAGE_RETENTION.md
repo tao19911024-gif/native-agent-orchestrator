@@ -99,10 +99,12 @@ A retained installation must name its current owner and removal condition.
 
 Add `--disposable-scratch` to a new `--foundry-goal` invocation, or set the
 project descriptor or adapter's `default_disposable_scratch` to `true`, to register
-`<goal-evidence>/disposable` in that goal's manifest. Registration creates a new
-directory; it does not adopt an existing directory. The option applies to the
-new goal only. Recovery uses the recorded declaration, and historical goals
-without that declaration retain their existing storage behavior.
+`<goal-evidence>/disposable` in that goal's manifest. A project can set the
+absolute `default_disposable_scratch_root` to place the registered directory at
+`<configured-root>/<run-id>`. Evidence remains in the project evidence directory.
+Each registration creates a fresh directory. Recovery uses the recorded
+declaration, and continuations with a new run ID keep the recorded storage base.
+Historical goals retain their recorded storage behavior.
 
 Use `--no-disposable-scratch` on a new goal to override a project's enabled
 default for that invocation. Both explicit storage flags apply only to new

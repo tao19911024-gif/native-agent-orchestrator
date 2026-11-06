@@ -157,6 +157,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
         if not any((a.provider, a.launcher, a.compute_profile, a.coding_model, a.auto_amend_model)) else None)
     if a.disposable_scratch is None:
         a.disposable_scratch = defaults.get('disposable_scratch', False)
+    a.disposable_scratch_root = defaults.get('disposable_scratch_root')
     if a.provider == "codex" and a.launcher == "claude":
         ap.error("--provider codex cannot use --launcher claude")
     if a.launcher == "claude" and a.provider is None:

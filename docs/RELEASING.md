@@ -4,6 +4,11 @@ The [source authority](SOURCE_AUTHORITY.md) is this repository. The release
 operator publishes a candidate from a reviewed commit. Publication and default
 runtime selection are separate operations.
 
+Release material fixes promptly after the pull request and package checks pass.
+This applies to defects that disrupt task execution, recovery, or delivery, or
+cause substantial repeated work or model usage. Minor fixes can share a release.
+An explicit operator approval can authorize runtime selection as described below.
+
 ## Build and publish
 
 1. Complete the pull request and installed-package checks. Set the version in

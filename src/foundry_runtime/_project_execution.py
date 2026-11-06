@@ -62,6 +62,10 @@ class ProjectExecution:
     def default_disposable_scratch(self):
         return self.project.get('default_disposable_scratch', False)
 
+    @property
+    def default_disposable_scratch_root(self):
+        return self.project.get('default_disposable_scratch_root')
+
     def execution_profile(self, provider):
         return self.context.record()["execution_profiles"][provider]
 
@@ -207,10 +211,13 @@ def goal_defaults(project):
     """Read new-goal defaults from descriptors or their project-owned adapters."""
     provider = getattr(project, 'default_provider', None)
     scratch = getattr(project, 'default_disposable_scratch', False)
+    scratch_root = getattr(project, 'default_disposable_scratch_root', None)
     if provider not in (None, 'codex', 'claude'):
         raise ValueError('default_provider must be codex or claude')
     if type(scratch) is not bool:
         raise ValueError('default_disposable_scratch must be a boolean')
+    if scratch_root is not None and (not isinstance(scratch_root, (str, Path)) or not Path(scratch_root).is_absolute()):
+        raise ValueError('default_disposable_scratch_root must be an absolute directory')
     staffing = getattr(project, 'default_staffing', {})
     from ._compute_selection import GOAL_PROFILES, REVIEW_PROFILES
     choices = {'compute_profile': GOAL_PROFILES, 'review_profile': REVIEW_PROFILES,
@@ -222,7 +229,9 @@ def goal_defaults(project):
     profile = staffing.get('compute_profile')
     if provider and profile and provider != ('claude' if profile == 'claude' else 'codex'):
         raise ValueError('default_staffing compute profile must match default_provider')
-    return {'provider': provider, 'disposable_scratch': scratch, 'staffing': dict(staffing)}
+    return {'provider': provider, 'disposable_scratch': scratch,
+            'disposable_scratch_root': str(scratch_root) if scratch_root is not None else None,
+            'staffing': dict(staffing)}
 
 
 def validate_execution(project):

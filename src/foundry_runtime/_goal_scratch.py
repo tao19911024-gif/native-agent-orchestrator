@@ -3,9 +3,13 @@ from pathlib import Path
 import stat
 
 
-def register(folder, manifest):
-    root = Path(folder).resolve() / 'disposable'
-    root.mkdir()  # A pre-existing directory has no new disposal declaration.
+def _directory(folder, run_id, base):
+    return Path(base).resolve() / run_id if base is not None else Path(folder).resolve() / 'disposable'
+
+
+def register(folder, manifest, *, base=None):
+    root = _directory(folder, manifest['run_id'], base)
+    root.mkdir(parents=base is not None)  # A pre-existing directory has no new disposal declaration.
     manifest['disposable_scratch'] = {'path': str(root), 'owner': manifest['run_id']}
     temporary, pytest = root / 'tmp', root / 'pytest'
     temporary.mkdir(); pytest.mkdir()
@@ -40,7 +44,8 @@ def reclaim(folder, manifest, outcome, prior=None):
     if outcome.get('status') not in {'candidate_verified', 'artifacts_delivered'} or outcome.get('retained_recovery'):
         result['status'] = 'retained'
         return result
-    root = Path(folder).resolve() / 'disposable'
+    base = (manifest.get('launch_context') or {}).get('disposable_scratch_root')
+    root = _directory(folder, manifest['run_id'], base)
     if scratch != {'path': str(root), 'owner': manifest['run_id']}:
         result.update(status='retained', errors=['scratch ownership differs from this goal'])
         return result

@@ -63,11 +63,12 @@ def load(path):
         raise ValueError('default_provider must be codex or claude')
     if 'default_disposable_scratch' in value and type(value['default_disposable_scratch']) is not bool:
         raise ValueError('default_disposable_scratch must be a boolean')
-    if 'default_staffing' in value:
+    if 'default_staffing' in value or 'default_disposable_scratch_root' in value:
         from types import SimpleNamespace
         from ._project_execution import goal_defaults
-        goal_defaults(SimpleNamespace(default_staffing=value['default_staffing'],
-                                      default_provider=value.get('default_provider')))
+        goal_defaults(SimpleNamespace(default_staffing=value.get('default_staffing', {}),
+                                      default_provider=value.get('default_provider'),
+                                      default_disposable_scratch_root=value.get('default_disposable_scratch_root')))
     return value
 
 

@@ -89,6 +89,23 @@ def test_plain_recovery_follows_consumed_answer_and_retries_only_closure(answere
     assert json.loads((root/'outcome.json').read_bytes())['status']=='awaiting_input'
 
 
+def test_status_follows_consumed_answer_without_locking_or_rewriting(answered_closure, monkeypatch):
+    from foundry_runtime._followup import status
+    root, child, _, _, _, requests, workers, _ = answered_closure
+    paths = [root/'outcome.json', child/'outcome.json', child/'manifest.json']
+    original = [path.read_bytes() for path in paths]
+    counts = len(requests), len(workers)
+    monkeypatch.setattr(goal, '_run_lock', lambda *a, **k: pytest.fail('status acquired an owner lock'))
+    report = status(root)
+    assert report['goal'] == str(root)
+    assert report['outcome_path'] == str(child/'outcome.json')
+    assert report['summary']['phase'] == 'coding_incomplete'
+    assert report['summary']['next_action'] == 'inspect_delivery'
+    assert report['summary']['next_command_argv'][-1] == str(child)
+    assert [path.read_bytes() for path in paths] == original
+    assert (len(requests), len(workers)) == counts
+
+
 def test_upgrade_resolves_consumed_closure_boundary(answered_closure, monkeypatch):
     root, child, tree, scope, order, requests, workers, head=answered_closure
     old=json.loads((root/'manifest.json').read_bytes())
@@ -153,14 +170,22 @@ def test_multiple_answer_generations_follow_references_not_old_question(external
     requests,decisions=manager_io
     decisions.extend([wait('first'),wait('second'),wait('third')])
     root=tmp_path/'goal'
+    scratch = tmp_path/'fast'
     goal.run_goal(order,root,Path(sys.executable),coding_launcher='exec',project_record=scope.record(),
-        manager_state={'backend':'claude','model':None,'effort':None,'native_dir':str(tmp_path/'manager')})
+        manager_state={'backend':'claude','model':None,'effort':None,'native_dir':str(tmp_path/'manager')},
+        disposable_scratch=True, disposable_scratch_root=str(scratch))
     first=goal.recover_goal(order,root,answer='first answer')
     second=goal.recover_goal(order,Path(first['continuation_evidence']),answer='second answer')
     latest=goal.recover_goal(order,root)
     assert latest['input_request']['question']=='third'
     assert latest['result_outcome']==second['result_outcome']
     assert len(requests)==3 and not workers
+    for folder in (root, Path(first['continuation_evidence']), Path(second['continuation_evidence'])):
+        manifest = json.loads((folder/'manifest.json').read_bytes())
+        directory = scratch/manifest['run_id']
+        assert manifest['disposable_scratch']['path'] == str(directory)
+        assert directory.is_dir()
+    assert len(list(scratch.iterdir())) == 3
 
 
 @pytest.mark.parametrize('inline', [False, True])

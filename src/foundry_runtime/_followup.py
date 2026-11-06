@@ -104,7 +104,8 @@ def _summary(report, *, runtime_selection=None):
         action = 'inspect_retained_execution'
     elif report.get('status') == 'outcome_available':
         action = 'inspect_delivery'
-        command = [sys.executable, '-m', 'foundry_runtime', '--foundry-usage', report['goal']]
+        command = [sys.executable, '-m', 'foundry_runtime', '--foundry-usage',
+                   report.get('continuation_goal', report['goal'])]
     elif worker.get('status') == 'pending':
         waiting = 'provider_capacity' if worker.get('provider_observation', {}).get('status') == 'quota_blocked' else 'worker'
         action = 'wait'
@@ -124,7 +125,7 @@ def _summary(report, *, runtime_selection=None):
         action, waiting = 'answer_input_request', 'operator'
         invocation = report.get('input_continuation') or {}
         command = invocation.get('argv') or command
-    phase = report.get('outcome_status') if action == 'inspect_delivery' else report.get('phase')
+    phase = report.get('outcome_status') if report.get('status') == 'outcome_available' else report.get('phase')
     return {'status': report['status'], 'phase': phase,
             'waiting_for': waiting, 'pending_operator_inputs': queued,
             'dispatch_status': dispatch.get('status'),
@@ -187,6 +188,17 @@ def _goal_status(folder):
     try:
         from ._foundry_goal_auto import active_round
         active_folder, active = active_round(folder, manifest)
+        if active.get('manager_phase') == 'awaiting_input':
+            from . import foundry_goal as owner
+            from ._foundry_goal_continuation import consumed_continuation
+            try:
+                child, _ = consumed_continuation(owner, active_folder, active, read_only=True)
+                if child != active_folder:
+                    current = _goal_status(child)
+                    return {**current, **report, 'errors': current['errors'] + report['errors'],
+                            'continuation_goal': current.get('continuation_goal', str(child))}
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+                report['errors'].append('continuation observation: ' + str(exc))
         report['phase'] = active.get('manager_phase')
         report['runtime_observation'] = active.get('runtime_provenance')
         report['dispatch_observation'] = _current_dispatch(active_folder, active)

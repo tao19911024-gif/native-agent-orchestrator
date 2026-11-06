@@ -462,6 +462,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 **({'amend_prompt': amend_prompt} if amend_from and amend_prompt is not None else {}),
                 auto_amend_model=auto_model, auto_amend_effort=auto_effort,
                 **({'disposable_scratch': True} if getattr(a, 'disposable_scratch', False) else {}),
+                **({'disposable_scratch_root': a.disposable_scratch_root}
+                   if getattr(a, 'disposable_scratch', False) and getattr(a, 'disposable_scratch_root', None) else {}),
                 compute_profile=profile,
                 compute_source=compute_source,
                 task_kind=task_kind, staffing_sources=staffing_sources,

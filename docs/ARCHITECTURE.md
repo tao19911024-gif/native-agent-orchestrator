@@ -5,7 +5,8 @@ Codex and Claude clients perform model execution and provider-native delegation.
 The runtime records custody, continuation, review results, usage, and result receipts.
 
 Explicit disposable storage is registered in the owning goal manifest by
-`--disposable-scratch` or the project's new-goal default. The goal records reclamation in the existing usage
+`--disposable-scratch` or the project's new-goal default. Projects can place
+registered scratch on a separate volume from the evidence root. The goal records reclamation in the existing usage
 record before publishing its completed outcome and final usage reference. Worker
 instructions carry the storage path, and the frozen launch context carries the
 coding worker's temporary-directory environment. Review and recovery retain the directory
