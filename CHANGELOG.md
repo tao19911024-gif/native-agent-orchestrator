@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0a110 — 2026-11-06
+
+- Follow the manager's retained answer chain in goal status and show the current
+  continuation outcome and recovery command.
+- Allow projects to place registered worker scratch on a separate volume from
+  goal evidence. Continuations retain the recorded location policy, and the
+  owning goal reclaims disposable storage at completion.
+
 ## 0.1.0a109 — 2026-11-05
 
 - Freeze the manager assignment in each managed continuation's execution intent.
