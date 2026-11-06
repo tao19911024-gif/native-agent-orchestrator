@@ -209,16 +209,13 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     if review and not all((a.worktree, a.review_base, a.review_head)):
         ap.error("--foundry-review requires --worktree, --review-base and --review-head")
     order = Path(a.order).resolve()
+    from ._foundry_cli_help import announce_review_recovery
     if project is None:
         record_foundry_location = project_adapter.record_foundry_location
-        from ._foundry_cli_help import announce_review_recovery
     else:
         def record_foundry_location(order, evidence):
             # External evidence is already owned by this explicit descriptor.
             pass
-        def announce_review_recovery(order, evidence):
-            if evidence is not None:
-                print("Retained project run: " + str(evidence) + "; continue with the same --project-config.", file=sys.stderr)
     if recovery:
         try:
             from .foundry_goal import recover_goal

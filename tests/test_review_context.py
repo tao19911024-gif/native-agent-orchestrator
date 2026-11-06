@@ -91,7 +91,7 @@ def test_short_context_and_legacy_requests_keep_inline_rendering(tmp_path, backe
 
 
 def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
-        external, tmp_path, monkeypatch):
+        external, tmp_path, monkeypatch, capsys):
     from foundry_runtime import foundry_native as native, _code_index
     tree, scope, order, workers = external
     order.write_text('Implement the complete contract.\n' * 400 + 'FINAL_REQUIREMENT', encoding='utf-8')
@@ -147,11 +147,16 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
     feedback = _followup.status(folder)['feedback']
     assert feedback['candidate_commit'] == head and feedback['outcome_status'] == 'review_blocked'
     assert feedback['artifacts']['outcome'] == goal._fact(folder / 'outcome.json')
-    assert json.loads((folder / 'outcome.json').read_bytes())['review_completion_required'] is True
+    partial = json.loads((folder / 'outcome.json').read_bytes())
+    assert partial['review_completion_required'] is True
+    assert [row['verdict'] for row in partial['reviews']] == ['PASS']
     assert feedback['artifacts']['review_checkpoint'] == goal._fact(checkpoint)
     assert feedback['continuation']['status'] == 'review_completion_required'
     command = feedback['continuation']['invocation']['argv']
     assert command[0] == sys.executable and command[-2:] == ['--recover-goal', str(folder)]
+    from foundry_runtime._foundry_cli_help import announce_review_recovery
+    announce_review_recovery(order, folder)
+    assert feedback['continuation']['invocation']['powershell'] in capsys.readouterr().err
     assert checkpoint.read_bytes() == before
     with goal._run_lock(folder):
         assert 'feedback' not in _followup.status(folder)

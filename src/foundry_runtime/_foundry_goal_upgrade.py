@@ -300,7 +300,7 @@ def prepare(owner, folder, manifest, request, *, checkpoint_path=None):
             if call.is_dir() and not (call/'receipt.json').exists():
                 raise ValueError('not at an upgrade boundary: interrupted review; recover it first: ' + str(call))
         try:
-            with owner._run_lock(folder/'reviews'):
+            with owner._run_lock(folder/'reviews', bind_goal=False):
                 panel = Panel(settings, requests, NativeAnalyst, folder/'reviews', Path(manifest['worktree']),
                               resume=True, transfers=manifest.get('review_transfers'))
         except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:

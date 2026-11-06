@@ -54,11 +54,16 @@ def validate(owner, folder, manifest, order, decision):
             raise owner.GoalBlocked('order changed again after its authorized revision')
         return None
     request = json.loads(owner.goal_usage._reference(fact))
-    if (not isinstance(request, dict) or request.get('schema_version') != 1 or request.get('authorized_by') != 'operator'
-            or request.get('run_id') != manifest['run_id']
-            or Path(request['goal']).resolve() != folder.resolve()
-            or request.get('order') != manifest['order']):
-        raise owner.GoalBlocked('order revision must name this exact original goal and operator decision')
+    if not isinstance(request, dict):
+        raise owner.GoalBlocked('order revision must be a JSON object')
+    required = {'schema_version': 1, 'authorized_by': 'operator', 'goal': str(folder.resolve()),
+                'run_id': manifest['run_id'], 'order': manifest['order']}
+    for field, value in required.items():
+        supplied = request.get(field)
+        if field == 'goal' and isinstance(supplied, str):
+            supplied = str(Path(supplied).resolve())
+        if supplied != value:
+            raise owner.GoalBlocked(f'order revision {field} must equal {json.dumps(value, ensure_ascii=False)}')
     outcome_path = folder/'outcome.json'
     outcome = json.loads(outcome_path.read_bytes()) if outcome_path.exists() else {}
     waiting = (manifest.get('manager_phase') == 'awaiting_input'
@@ -74,13 +79,17 @@ def validate(owner, folder, manifest, order, decision):
         raise owner.GoalBlocked('order revision belongs to an unfinished manager goal; completed work uses its amendment boundary')
     row = {'decision': fact, 'request': request}
     for name in ('previous', 'revised', 'authorization'):
+        if name not in request:
+            raise owner.GoalBlocked(f'order revision needs a {name} file reference with path and sha256')
         row[name + '_text'] = owner.goal_usage._reference(request[name]).decode('utf-8')
     if not row['authorization_text'].strip():
         raise owner.GoalBlocked('order revision needs the specific operator ruling')
     current = owner._fact(order)
-    if (current['path'] != expected['path'] or request['previous']['sha256'] != expected['sha256']
-            or request['revised']['sha256'] != current['sha256']):
-        raise owner.GoalBlocked('order revision bytes do not match the previous and current contracts')
+    if current['path'] != expected['path']:
+        raise owner.GoalBlocked(f'order revision --order path must equal {expected["path"]}')
+    for field, digest in (('previous', expected['sha256']), ('revised', current['sha256'])):
+        if request[field]['sha256'] != digest:
+            raise owner.GoalBlocked(f'order revision {field}.sha256 must equal {digest}')
     return fact, row
 
 

@@ -57,7 +57,8 @@ def retained_dispatch(owner, folder, manifest):
         # Declared reader for older goals that did not persist the package link.
         # Never pick by recency when several invocations could own the boundary.
         paths = list(adapter.evidence(manifest['tag']).glob('dispatch*.package.json'))
-    candidates = []
+    candidates, round_matches = [], []
+    round_identity = {'directory': str(Path(folder).resolve()), 'run_id': manifest.get('run_id')}
     previous = None
     prior = manifest.get('coding_checkpoint')
     if prior:
@@ -72,17 +73,22 @@ def retained_dispatch(owner, folder, manifest):
         if '.reconciled.' in path.name:
             continue
         package = json.loads(path.read_bytes())
+        binding = package.get('goal')
+        if binding and binding != round_identity:
+            continue
         journal, record = read_intent(package, project_record=manifest.get('project_record'))
         frozen = record['frozen']
         log = path.with_name(path.name.removesuffix('.package.json') + '.log')
         if (package.get('tag') == manifest['tag'] and record.get('launcher') in ('app-server', 'claude')
                 and Path(frozen['worktree']).resolve() == Path(manifest['worktree']).resolve()
                 and package.get('attempt_id') == record.get('attempt_id')
-                and (reference or frozen.get('order_sha256') == manifest['order']['sha256']
+                and (reference or binding or frozen.get('order_sha256') == manifest['order']['sha256']
                      or previous and frozen.get('session_id') == previous.get('coding_session'))
                 and log.resolve() not in prior_logs
                 and record['state'] in ('active', 'unknown', 'completed')):
             candidates.append((path, journal, record))
+            if binding:
+                round_matches.append(candidates[-1])
     if len(candidates) > 1 and manifest.get('execution_recovery'):
         # Legacy manifests lack pending_dispatch. Their verified recovery grant
         # already names the exact interrupted attempt; never select by timestamp.
@@ -95,6 +101,8 @@ def retained_dispatch(owner, folder, manifest):
                     and row[2].get('recovery_authorization', {}).get('decision_sha256') == fact['sha256']]
         if decision.get('task_key') == manifest['tag'] and len(selected) == 1:
             candidates = selected
+    if not reference and not manifest.get('execution_recovery') and round_matches:
+        candidates = round_matches
     if (len(candidates) > 1 and not reference and not manifest.get('execution_recovery')
             and manifest.get('execution_decision', {}).get('manager')):
         selected = [row for row in candidates
@@ -204,7 +212,7 @@ def recover_worker(owner, order, folder, manifest, answer, recovery_file, *, mig
     options.pop('migrate_recovered_manager', None)
     options.update(project_record=manifest['project_record'], manager_state=manifest['manager_state'],
                    execution_decision=manifest['execution_decision'])
-    with owner._run_lock(manifest['manager_state']['native_dir']):
+    with owner._run_lock(manifest['manager_state']['native_dir'], bind_goal=False):
         return owner.goal_execution.run_owned(order, folder, Path(checkpoint['executable']),
             target_worktree=Path(manifest['worktree']), coding_session=checkpoint['coding_session'],
             retained={**checkpoint, 'returncode': None, 'manifest': manifest},

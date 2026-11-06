@@ -112,15 +112,20 @@ def _summary(report, *, runtime_selection=None):
         action, waiting = 'wait', 'coordinator'
     elif report.get('controller_observation', {}).get('state') == 'held':
         action, waiting = 'wait', 'controller'
-    continuation = (report.get('feedback') or {}).get('continuation') or {}
+    feedback = report.get('feedback') or {}
+    continuation = feedback.get('continuation') or {}
     invocation = continuation.get('invocation') or {}
+    if report.get('outcome_status') == 'candidate_verified':
+        # Optional follow-up findings stay in the full feedback report.
+        invocation = {}
     if invocation.get('argv'):
         action, waiting, command = 'continue_from_feedback', 'operator', invocation['argv']
     elif report.get('outcome_status') == 'awaiting_input':
         action, waiting = 'answer_input_request', 'operator'
         invocation = report.get('input_continuation') or {}
         command = invocation.get('argv') or command
-    return {'status': report['status'], 'phase': report.get('phase'),
+    phase = report.get('outcome_status') if action == 'inspect_delivery' else report.get('phase')
+    return {'status': report['status'], 'phase': phase,
             'waiting_for': waiting, 'pending_operator_inputs': queued,
             'dispatch_status': dispatch.get('status'),
             'runtime': {'controller': report.get('runtime_observation'),
@@ -128,6 +133,7 @@ def _summary(report, *, runtime_selection=None):
                         'observer_python': sys.executable, 'selected': selected},
             'delivery': report.get('delivery'), 'next_action': action, 'next_command_argv': command,
             'next_invocation': invocation or None,
+            **({'operator_amendment': feedback['operator_amendment']} if 'operator_amendment' in feedback else {}),
             'evidence': {'goal': report['goal'], 'outcome': report.get('outcome_path'),
                          'dispatch': worker.get('dispatch'),
                          'worker_live_event_log': worker.get('live_event_log')}, 'errors': errors}

@@ -130,11 +130,18 @@ def _selected_main(owner, a, ap, project, project_adapter):
     from .foundry_entry import handle_mode
     a.launcher_explicit = a.launcher is not None
     a.disposable_scratch_explicit = a.disposable_scratch is not None
-    # Only new goal coding inherits project defaults. Explicit selectors
-    # and all recorded continuations keep their existing resolution path.
+    # New work can inherit project defaults. Recorded continuations keep their
+    # existing assignments, and standalone review consumes only review policy.
     from ._project_execution import goal_defaults
+    new_goal = a.foundry_goal and not (a.amend_from or a.recover_goal or getattr(a, '_boundary_continuation', None))
     defaults = (goal_defaults(project if project is not None else project_adapter)
-        if a.foundry_goal and not (a.amend_from or a.recover_goal or getattr(a, '_boundary_continuation', None)) else {})
+                if new_goal or a.foundry_review else {})
+    if a.foundry_review and not any((a.review_profile, a.provider, a.launcher, a.compute_profile,
+                                   a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
+        a.review_profile = defaults['staffing'].get('review_profile') or (
+            'opus-sol' if defaults.get('provider') == 'claude' else None)
+    if not new_goal:
+        defaults = {}
     a.project_default_staffing = defaults.get('staffing', {})
     from ._model_catalogue import BACKEND, tier_for_model
     model_provider = BACKEND.get(tier_for_model(a.coding_model or a.auto_amend_model))

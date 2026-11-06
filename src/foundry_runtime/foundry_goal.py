@@ -111,8 +111,8 @@ def _publish_outcome(folder, outcome):
 
 
 @contextmanager
-def _run_lock(folder, *, reuse_owned=False):
-    """One controller per evidence directory; released by process exit too."""
+def _run_lock(folder, *, reuse_owned=False, bind_goal=True):
+    """Own the directory lock and bind dispatch only for goal directories."""
     folder = Path(folder).resolve()
     if reuse_owned and any(lease['active'] and lease['pid'] == os.getpid()
                            and lease['folder'] == folder for lease in _owned_run_locks.get()):
@@ -136,7 +136,7 @@ def _run_lock(folder, *, reuse_owned=False):
         except OSError as exc:
             raise GoalBlocked("this Foundry round still has a running controller") from exc
         from ._followup import goal_scope
-        scope = goal_scope.set(str(folder))
+        scope = goal_scope.set(str(folder)) if bind_goal else None
         lease = {'folder': folder, 'pid': os.getpid(), 'active': True}
         ownership = _owned_run_locks.set((*_owned_run_locks.get(), lease))
         try:
@@ -148,7 +148,8 @@ def _run_lock(folder, *, reuse_owned=False):
         finally:
             lease['active'] = False
             _owned_run_locks.reset(ownership)
-            goal_scope.reset(scope)
+            if scope is not None:
+                goal_scope.reset(scope)
             handle.seek(0)
             if os.name == "nt":
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
@@ -295,8 +296,24 @@ def _review_range(tree, base, head, *, retained_only=False):
     return base, head
 
 
+def _provider_failed_review(outcome, manifest):
+    """Read the coding checkpoint behind a provider-only review interruption."""
+    if (outcome.get('status') != 'review_blocked' or not outcome.get('review_completion_required')
+            or not outcome.get('reason', '').startswith('provider_failure: ')
+            or outcome.get('host_findings') or any(r.get('verdict') != 'PASS' for r in outcome.get('reviews', []))
+            or (manifest.get('delivery_context') or {}).get('mode') == 'review-only'
+            or not manifest.get('review_checkpoint')):
+        return None
+    checkpoint = json.loads(goal_usage._reference(manifest['review_checkpoint']))
+    if (any(checkpoint.get(key) != manifest.get(key) for key in ('run_id', 'order', 'worktree'))
+            or checkpoint['context']['candidate_commit'] != outcome['candidate_commit']
+            or checkpoint['context']['base_commit'] != manifest['base_commit']):
+        raise GoalBlocked('interrupted review checkpoint belongs to another task or candidate')
+    return checkpoint if checkpoint.get('coding_session') else None
+
+
 def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
-    """Read an explicitly selected completed review for this unchanged candidate."""
+    """Continue an unchanged candidate from retained review evidence."""
     path = Path(outcome_path).resolve(strict=True)
     prior = json.loads(path.read_bytes())
     manifest_path = path.with_name("manifest.json")
@@ -309,7 +326,13 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
         raise GoalBlocked("amendment order or worktree differs from prior review")
     base, head = _review_range(tree, manifest["base_commit"], prior["candidate_commit"])
     reviews = prior.get("reviews", [])
-    if len(reviews) != 2:
+    interrupted = _provider_failed_review(prior, manifest) if len(reviews) < 2 else None
+    if interrupted:
+        if session != interrupted['coding_session']:
+            raise GoalBlocked('provider-failed review amendment requires the recorded coding session')
+        if not isinstance(operator_additions, str) or not operator_additions.strip():
+            raise GoalBlocked('provider-failed review amendment requires explicit instructions in --prompt-file')
+    elif len(reviews) != 2:
         raise GoalBlocked("amendment requires the completed pair of reviews")
     for review in reviews:
         validate_response_shape(review, response_contract("review", correction_routing="correction_guidance" in review, review_field_reads="read_fields" in review))
@@ -317,10 +340,12 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
             raise GoalBlocked("amendment finding belongs to another candidate")
         if (review["verdict"] == "BLOCK") != _blocking(review["findings"]):
             raise GoalBlocked("amendment verdict and blocking findings disagree")
-    if len({r["packet_sha256"] for r in reviews}) != 1:
+        if interrupted and review['packet_sha256'] != _sha(_json_bytes(interrupted['context'])):
+            raise GoalBlocked('amendment review differs from the interrupted review checkpoint')
+    if len({r["packet_sha256"] for r in reviews}) > 1:
         raise GoalBlocked("amendment reviews refer to different packets")
     has_block = any(r["verdict"] == "BLOCK" for r in reviews) or bool(prior.get("host_findings"))
-    if has_block != (status == "review_blocked"):
+    if not interrupted and has_block != (status == "review_blocked"):
         raise GoalBlocked("amendment outcome disagrees with review verdicts")
     if operator_additions is not None and (not isinstance(operator_additions, str) or not operator_additions.strip()):
         raise ValueError('operator additions must be nonempty text')
@@ -335,7 +360,7 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
             **({'operator_additions': operator_additions} if operator_additions is not None else {}),
             "retained_work": {
                 "source_candidate": head,
-                "recorded_coding_session": prior.get("coding_session"),
+                "recorded_coding_session": interrupted['coding_session'] if interrupted else prior.get("coding_session"),
                 "coding_evidence": coding.get("evidence", []) if isinstance(coding, dict) else [],
                 "usage": prior.get("task_usage"),
                 "review_checkpoint": manifest.get("review_checkpoint"),
@@ -775,7 +800,7 @@ def _run(order, evidence_dir, executable, **options):
         options.pop('manager_profile', None)
         if state is not None:
             # This is conversation ownership, not the worker's writing lease.
-            with _run_lock(state['native_dir']):
+            with _run_lock(state['native_dir'], bind_goal=False):
                 return goal_execution.run_owned(order, evidence_dir, executable, **{**options, 'manager_state': state})
         return goal_execution.run_owned(order, evidence_dir, executable, **options)
 
@@ -833,7 +858,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     """Normal execution and recovery share one review/finalization path."""
     from . import _foundry_dispatch as dispatch
     context, tree = checkpoint["context"], Path(checkpoint["worktree"])
-    native, outcome = None, None
+    native, outcome, completed_reviews = None, None, None
     participation = checkpoint.get('implementation_evidence') or {}
     try:
         names = ["review-0", "review-1"]
@@ -945,6 +970,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     for name, saved in previous_panel.results.items():
                         analyst.results.setdefault(name, {**saved, 'session': previous_panel.native_session(requests[name])})
                     outcomes.update(review_group.prewarm(retry, requests, analyst))
+            completed_reviews = [outcomes[name][0] for name in names if outcomes[name][1] is None]
             reviews, sessions = [], []
             for name in names:
                 value, error = outcomes[name]
@@ -995,7 +1021,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
     except (GoalBlocked, RuntimeError, OSError) as exc:
         if not resume and not retained_only:
             outcome = {'status': 'review_blocked', 'candidate_commit': context['candidate_commit'],
-                       'coding': checkpoint['coding'], 'reviews': [], 'reason': str(exc),
+                       'coding': checkpoint['coding'], 'reviews': completed_reviews or [], 'reason': str(exc),
                        'review_completion_required': True}
             if manifest.get('review_tier_decisions'):
                 outcome['review_tier_decisions'] = manifest['review_tier_decisions']
@@ -1066,7 +1092,7 @@ def _recover_manager_feedback(order, folder, manifest, *, answer=None):
     options.update(manager_state=manifest.get('manager_state'), execution_decision=manifest.get('execution_decision'))
     if (manifest.get('manager_state') or {}).get('quota_fallback'):
         options['reviewers'] = manifest['reviewers']
-    with _run_lock((manifest.get('manager_state') or manifest['expert_state'])['native_dir']):
+    with _run_lock((manifest.get('manager_state') or manifest['expert_state'])['native_dir'], bind_goal=False):
         return goal_execution.run_owned(order, folder, Path(checkpoint['executable']),
             target_worktree=Path(checkpoint['worktree']), coding_session=checkpoint['coding_session'],
             continuation=manifest.get('continuation'),
