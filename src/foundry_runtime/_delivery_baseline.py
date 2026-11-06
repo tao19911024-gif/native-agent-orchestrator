@@ -43,14 +43,14 @@ def build(report, read):
         inputs = []
         if manifest:
             from ._goal_intervention import input_root, observe
-            root = input_root(Path(manifest_ref['path']).parent, manifest)
-            if (root / 'operator-inputs').is_dir():
-                try:
+            try:
+                root = input_root(Path(manifest_ref['path']).parent, manifest)
+                if (root / 'operator-inputs').is_dir():
                     if root not in interventions:
                         interventions[root] = observe(root)
                     inputs = [row for row in interventions[root] if row.get('run_id') == task['run_id']]
-                except (OSError, ValueError, KeyError, TypeError) as exc:
-                    gaps.append({'kind': 'operator_inputs', 'reason': str(exc)})
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                gaps.append({'kind': 'operator_inputs', 'reason': str(exc)})
         candidate = {"base_commit": manifest.get("base_commit"),
                      "candidate_commit": source.get("candidate_commit")}
         closure = source.get("candidate_closure")
