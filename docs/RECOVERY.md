@@ -114,7 +114,9 @@ evidence and its newly required change. Retained requests without this contract
 preserve their recorded instructions.
 
 Completed Claude and Codex executions both restore manager feedback from their
-original execution journal. A verified retained native terminal can be reconciled
+original execution journal. The controller selects packages bound to the active
+round by directory and run ID before considering packages from older runtimes
+that lack the binding. A verified retained native terminal can be reconciled
 after interrupted completion publication. An attempt without terminal evidence
 uses its recorded interrupted-execution procedure; cleanup alone establishes
 process exit, not successful work. A closed historical intent remains closed.
