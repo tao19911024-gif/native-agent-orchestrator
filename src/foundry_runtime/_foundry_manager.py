@@ -179,6 +179,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
                        'history': [{k: v for k, v in row.items() if k != 'result'} for row in history]}
         packet = {**packet, 'manager_handoff': handoff}
     request = {'kind': 'coordinate', 'packet': packet, 'instruction_provenance': 1, 'operator_input': True}
+    if state.get('time_budget') is not None:
+        request['time_budget'] = state['time_budget']
     if state.get('scope_question_policy') == 1:
         request['scope_question_policy'] = 1
     request['review_precondition'] = ('Review requires a committed candidate and a clean worktree. '

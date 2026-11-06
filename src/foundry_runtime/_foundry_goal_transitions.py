@@ -97,7 +97,7 @@ def manager(owner, folder, manifest, *, provider, migrate, answer, source_locked
         artifact_delivery=state.get('artifact_delivery', False), handoff=handoff,
         transition_request=request_key)
     for key in ('design_convergence', 'review_convergence', 'quota_recovery', 'context_reuse', 'live_coordination',
-                'quota_fallback_policy', 'task_deadline_at', 'effective_coordination', 'claude_live_events'):
+                'quota_fallback_policy', 'task_deadline_at', 'time_budget', 'effective_coordination', 'claude_live_events'):
         if key in state:
             next_state[key] = state[key]
     if state.get('execution_profiles'):

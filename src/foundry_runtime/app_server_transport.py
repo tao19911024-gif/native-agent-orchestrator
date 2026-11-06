@@ -711,7 +711,8 @@ class AppServer:
             with path.open('a', encoding='utf-8') as stream:
                 stream.write(json.dumps({'thread_id': params['threadId'], 'turn_id': params['turnId'],
                     'item_id': ident, 'phase': item.get('phase'), 'text': item.get('text'),
-                    'questions': item.get('questions'), 'source_log': name}, ensure_ascii=False) + '\n')
+                    'questions': item.get('questions'), 'source_log': name,
+                    'timestamp': time.time()}, ensure_ascii=False) + '\n')
             self._message_items.add(ident)
         except Exception as exc:
             self._log('message projection unavailable: ' + str(exc))

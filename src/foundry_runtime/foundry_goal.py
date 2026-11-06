@@ -539,7 +539,7 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
              auto_amend_model=None, auto_amend_effort=None, compute_profile=None,
              team_profile=None, compute_source=None, task_kind=None, staffing_sources=None,
              review_source_detail=None, team_source_detail=None, admission_staffing=None,
-             launcher_explicit=None, **kwargs):
+             launcher_explicit=None, time_budget_minutes=None, **kwargs):
     """Run normally, or explicitly continue recorded BLOCK/PASS review findings."""
     explicit_compute = bool(compute_profile or auto_amend_model or auto_amend_effort or "backend" in kwargs or any(kwargs.get(k) for k in
         ("coding_model", "coding_effort", "analyst_model", "analyst_effort", "role_compute", "reviewers")))
@@ -559,6 +559,8 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
         recorded_deadline = prior.get('task_deadline_at')
         if recorded_deadline is not None:
             kwargs['task_deadline_at'] = recorded_deadline
+        if prior.get('time_budget') is not None:
+            kwargs['time_budget'] = prior['time_budget']
         if prior.get("project_record") is not None:
             from ._project_execution import from_record
             supplied = from_record(kwargs.get("project_record", prior["project_record"]))
@@ -746,23 +748,29 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             kwargs['task_staffing']['sources'] = {**sources, 'manager': 'kind'}
     print("FOUNDRY DECISION: " + json.dumps(decision, ensure_ascii=True, sort_keys=True), file=sys.stderr)
     correction = compute_kwargs(auto_amend_model, auto_amend_effort, backend=coding_backend)
+    budget = {'time_budget_minutes': time_budget_minutes} if time_budget_minutes is not None else {}
     if not correction:
-        return {'executable': str(executable), 'correction': None, 'options': kwargs}
+        return {'executable': str(executable), 'correction': None, 'options': kwargs, **budget}
     _, _, roles = resolve_goal_compute(kwargs.get("role_compute"), coding_backend=coding_backend,
         backend=kwargs.get("backend", "codex"), analyst_model=kwargs.get("analyst_model"),
         analyst_effort=kwargs.get("analyst_effort"), coding_model=kwargs.get("coding_model"),
         coding_effort=kwargs.get("coding_effort"))
     if roles is not None:
         kwargs = {**kwargs, "role_compute": roles}
-    return {'executable': str(executable), 'correction': correction, 'options': kwargs}
+    return {'executable': str(executable), 'correction': correction, 'options': kwargs, **budget}
 
 
 def run_prepared(order, evidence_dir, prepared):
     executable = Path(prepared['executable'])
+    options = prepared['options']
+    minutes = prepared.get('time_budget_minutes')
+    if minutes is not None:
+        from time import time
+        options = {**options, 'time_budget': {'started_at': time(), 'minutes': minutes}}
     if prepared['correction'] is None:
-        return _run(order, evidence_dir, executable, **prepared['options'])
+        return _run(order, evidence_dir, executable, **options)
     return goal_auto.run(sys.modules[__name__], order, evidence_dir, executable,
-                         prepared['correction'], prepared['options'])
+                         prepared['correction'], options)
 
 
 def run_goal(order: Path, evidence_dir: Path, executable: Path, **kwargs):
@@ -1221,7 +1229,7 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
             for key in ('amend_from', 'amend_prompt', 'coding_session', 'review_range'):
                 options.pop(key, None)
             for key in ('manager_state', 'native_team', 'project_record', 'reviewers',
-                        'execution_decision', 'task_staffing', 'compute_assignment', 'task_deadline_at'):
+                        'execution_decision', 'task_staffing', 'compute_assignment', 'task_deadline_at', 'time_budget'):
                 if key in manifest:
                     options[key] = manifest[key]
             review = manifest.get('requested_compute', {}).get('review') or {}

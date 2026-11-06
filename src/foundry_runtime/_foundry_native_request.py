@@ -27,7 +27,9 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 "do not perform those edits yourself. Inspect relevant sources and returned evidence as needed. "
                 "Return delegate with the next concrete instruction when work remains, or review to send the "
                 "candidate to independent reviewers. Review is a routing decision, not an acceptance verdict. "
-                "Keep instructions focused on the goal, constraints and acceptance; let the worker choose tools. "
+                "Verify only the order's acceptance criteria and required project gates. "
+                "Reuse applicable checks. If evidence conflicts, request a focused check that resolves that conflict. "
+                "Record unrelated findings for separate work and let the worker choose tools. "
                 "Reuse the conversation's decisions and the worker's valid evidence. If operator input is needed, "
                 "delegate that question to the worker's existing input channel."),
             "plan": (
@@ -55,6 +57,12 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 "recording any P2/P3 observations."),
         }
         instruction = roles.get(kind, "Complete the requested repository task and return the required result.")
+        if kind == 'coordinate' and request.get('time_budget'):
+            instruction += (
+                ' The time_budget gives the start (Unix seconds) and duration (minutes) for the entire goal. '
+                'At the next normal coordination after the reporting budget, include progress, the open decision '
+                'or remaining acceptance check, and the estimated time needed. Continue the assigned work. '
+                'Keep the acceptance criteria and required project gates.')
         if kind == 'coordinate' and request.get('effective_coordination') == 1:
             instruction += (
                 ' Decision packet: events contains only new entries not already carried in '
@@ -134,8 +142,8 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 'Reference existing artifacts by path and source revision/hash or recorded test '
                 'conditions when available; retain their limitations. Reuse conclusions only while '
                 'their sources, assumptions and affected dependencies remain valid. Changed or '
-                'contradictory evidence calls for the affected checks; broaden verification when '
-                'dependency impact is uncertain. Missing provenance calls for a scoped source check, '
+                'contradictory evidence calls for checks of the affected acceptance or required project gates. '
+                'Missing provenance calls for a scoped source check, '
                 'not automatic rejection or wholesale repetition. '
                 'Give experts the concrete unresolved decision, relevant evidence pointers and '
                 'changes since prior advice; ask for a decision, rationale and counterexample '

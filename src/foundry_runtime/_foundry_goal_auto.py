@@ -167,6 +167,8 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                 "run_id": uuid.uuid4().hex,
                 "runtime_provenance": observe(project_context=context),
                 "correction_compute": correction, "rounds": rounds, "state": "running"}
+    if options.get('time_budget') is not None:
+        manifest['time_budget'] = options['time_budget']
     upgrade_goal = ((options.get('continuation') or {}).get('runtime_upgrade') or {}).get('goal')
     if upgrade_goal:
         manifest['follow_up_goal'] = upgrade_goal

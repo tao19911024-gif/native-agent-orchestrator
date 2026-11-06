@@ -21,10 +21,11 @@ def test_cli_registers_only_new_goal_option(external, monkeypatch, tmp_path):
     monkeypatch.setattr(goal, 'run_prepared', lambda order, folder, value:
                         prepared.append(value) or {'status': 'project_handoff'})
     argv = ['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
-            '--disposable-scratch']
+            '--disposable-scratch', '--time-budget-minutes', '45']
     assert cli.main(argv) == 0
     assert prepared[0]['options']['disposable_scratch'] is True
     assert prepared[0]['options']['disposable_scratch_root'] == str(fast)
+    assert prepared[0]['time_budget_minutes'] == 45
     assert not fast.exists()  # Preparing a plan does not create storage.
     with pytest.raises(SystemExit) as error:
         cli.main([*argv, '--recover-goal', str(order.parent / 'old-goal')])
@@ -54,16 +55,23 @@ def test_goal_scratch_uses_project_root_and_keeps_evidence(external, tmp_path, m
     monkeypatch.setattr(goal, 'NativeAnalyst', Analyst)
     outcome = goal.run_goal(order, folder, Path(sys.executable), coding_launcher='exec',
                            project_record=scope.record(), disposable_scratch=True,
-                           disposable_scratch_root=str(fast))
+                           disposable_scratch_root=str(fast), time_budget_minutes=45)
     assert outcome['status'] == 'candidate_verified'
     manifest = json.loads((folder/'manifest.json').read_bytes())
     scratch_dir = fast / manifest['run_id']
     assert manifest['disposable_scratch']['path'] == str(scratch_dir)
+    assert manifest['time_budget']['minutes'] == 45
+    checkpoint = json.loads(goal.goal_usage._reference(manifest['coding_checkpoint']))
+    assert checkpoint['options']['time_budget'] == manifest['time_budget']
     usage = json.loads(goal.goal_usage._reference(outcome['task_usage']))
     assert usage['scratch']['status'] == 'reclaimed'
     assert usage['scratch']['bytes_reclaimed'] == len(b'temporary')
     assert not scratch_dir.exists() and not (folder/'disposable').exists()
     assert (folder/'outcome.json').is_file() and (folder/'review-checkpoint.json').is_file()
+    from foundry_runtime import _followup
+    summary = _followup.status(folder)['summary']
+    assert summary['scratch']['status'] == 'reclaimed'
+    assert summary['time_budget']['report_due'] is False
 
 
 @pytest.mark.parametrize('interrupted', [False, True, 'before-reclaim', 'during-reclaim', 'after-usage'])

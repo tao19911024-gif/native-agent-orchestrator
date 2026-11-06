@@ -20,6 +20,7 @@ environment's absolute interpreter path and `$ProjectConfig` for its descriptor.
 | Read one task's history | Add `--tag TASK1` to project status |
 | Read an exact dispatch receipt | `--foundry-project status --status-dispatch $PackagePath` |
 | Read an exact goal | `--foundry-project status --status-goal $GoalDirectory` |
+| Set a reporting budget for a new goal | Add `--time-budget-minutes 45` to its launch command |
 | Print its concise summary | Add `--summary` to exact goal status |
 | Include the selected default runtime | Add `--runtime-selection $SelectionFile` to exact goal status |
 
