@@ -1,10 +1,12 @@
 """Read existing execution evidence for the originating host's follow-up tools."""
 from contextvars import ContextVar
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
 import sys
+import time
 
 goal_scope = ContextVar('foundry_followup_goal', default=None)
 
@@ -128,6 +130,10 @@ def _summary(report, *, runtime_selection=None):
     phase = report.get('outcome_status') if report.get('status') == 'outcome_available' else report.get('phase')
     return {'status': report['status'], 'phase': phase,
             'waiting_for': waiting, 'pending_operator_inputs': queued,
+            'progress': report.get('progress'),
+            'time_budget': report.get('time_budget'),
+            'scratch': report.get('scratch'),
+            'index_observation': report.get('index_observation'),
             'dispatch_status': dispatch.get('status'),
             'runtime': {'controller': report.get('runtime_observation'),
                         'worker': worker.get('runtime_observation'),
@@ -141,6 +147,94 @@ def _summary(report, *, runtime_selection=None):
             'evidence': {'goal': report['goal'], 'outcome': report.get('outcome_path'),
                          'dispatch': worker.get('dispatch'),
                          'worker_live_event_log': worker.get('live_event_log')}, 'errors': errors}
+
+
+def _worker_messages(path, *, launcher=None, session=None):
+    """Read recent completed root messages from the existing worker evidence."""
+    from ._goal_intervention import protocol_markers
+    try:
+        with Path(path).open('rb') as stream:
+            size = stream.seek(0, 2)
+            start = max(0, size - 64 * 1024)
+            stream.seek(start)
+            raw = stream.read(size - start)
+    except OSError:
+        return None
+    if start:
+        raw = raw.partition(b'\n')[2]
+    latest, question = None, None
+    for line in raw.split(b'\n')[:-1]:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if launcher == 'claude':
+            if (row.get('type') != 'assistant' or row.get('parent_tool_use_id')
+                    or (session and row.get('session_id') != session)):
+                continue
+            message = row.get('message') or {}
+            text = '\n'.join(block['text'] for block in message.get('content', [])
+                             if isinstance(block, dict) and block.get('type') == 'text'
+                             and isinstance(block.get('text'), str))
+            row = {'item_id': row.get('uuid') or message.get('id'), 'text': text, 'timestamp': row.get('timestamp')}
+        if not isinstance(row.get('text'), str) or not row['text']:
+            continue
+        latest = {key: row.get(key) for key in ('item_id', 'phase', 'timestamp', 'questions')}
+        latest['text'] = row['text'][:1000]
+        if row.get('questions') or 'FOUNDRY_MANAGER_QUESTION' in protocol_markers(row['text']):
+            question = latest
+    return {'path': str(path), 'latest': latest, 'latest_question': question, 'tail_truncated': bool(start)}
+
+
+def _progress(report, active, worker):
+    from ._goal_intervention import protocol_markers
+    member = worker.get('worker') or {}
+    messages = (worker.get('message_projection') if worker else
+                next((row['path'] for row in reversed(report.get('commander_messages', []))), None))
+    live_events = report['unanswered_live_events']
+    decision = active.get('live_manager_decision') or (active.get('execution_decision') or {}).get('manager') or {}
+    coordination = report.get('coordination') or {}
+    manager = active.get('manager_state') or {}
+    live_call = report.get('live_manager_call') or {}
+    last_write = None
+    log = worker.get('live_event_log')
+    if member.get('launcher') == 'claude':
+        messages = log
+    if log:
+        try:
+            last_write = datetime.fromtimestamp(Path(log).stat().st_mtime, timezone.utc).isoformat()
+        except FileNotFoundError:
+            pass
+    activity = report.get('activity_observation') or {}
+    return {
+        'round': report['active_round'], 'coordination_stage': live_call.get('stage'),
+        'coordination_state': live_call.get('state'),
+        'active_worker': worker.get('worker') if worker.get('status') == 'pending' else None,
+        'active_coordinators': report['active_native_calls'],
+        'last_worker_event': activity.get('last_native_event'),
+        'last_worker_evidence_write_utc': last_write,
+        'worker_messages': _worker_messages(messages, launcher=member.get('launcher'),
+                                            session=member.get('session_id')) if messages else None,
+        'unanswered_questions': [
+            {**row, 'text': (row.get('text') or '')[:1000]} for row in live_events
+            if row.get('questions') or (row.get('kind') == 'worker_message'
+                and 'FOUNDRY_MANAGER_QUESTION' in protocol_markers(row.get('text') or ''))
+        ][-5:],
+        'commander_question': coordination.get('commander_question') or active.get('assignment_refusal_question'),
+        'last_manager_decision': {
+            'backend': manager.get('backend'), 'model': manager.get('model'),
+            'action': decision.get('action'), 'instruction': (decision.get('instruction') or '')[:1000] or None,
+            'receipt': decision.get('evidence') or coordination.get('last_decision'),
+        } if decision or coordination.get('last_decision') else None,
+    }
+
+
+def _budget(budget, observed_at, *, settled=False):
+    elapsed = max(0, int(observed_at - budget['started_at']))
+    exceeded = elapsed >= budget['minutes'] * 60
+    return {**budget, 'elapsed_seconds': elapsed, 'exceeded': exceeded, 'report_due': exceeded and not settled}
 
 
 def _manager_wait(live_call, native_calls):
@@ -200,9 +294,11 @@ def _goal_status(folder):
             except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
                 report['errors'].append('continuation observation: ' + str(exc))
         report['phase'] = active.get('manager_phase')
+        report['active_round'] = str(active_folder)
         report['runtime_observation'] = active.get('runtime_provenance')
         report['dispatch_observation'] = _current_dispatch(active_folder, active)
         executions = report['dispatch_observation']['executions']
+        worker = executions[0] if len(executions) == 1 else {}
         if len(executions) == 1:
             report['activity_observation'] = executions[0].get('activity_observation')
         from ._launch_context import compaction_observation
@@ -219,6 +315,7 @@ def _goal_status(folder):
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 launch = None
                 report['compaction_observation_error'] = str(exc)
+        report['index_observation'] = worker.get('index_observation') or (launch or {}).get('index_observation')
         report['compaction'] = compaction_observation(launch,
             'claude' if active.get('coding_launcher') == 'claude' else 'codex')
         from ._foundry_goal_delivery import coding_recovery
@@ -239,7 +336,6 @@ def _goal_status(folder):
                 report['native_reconciliation'] = {'status': 'unavailable', 'reason': str(exc)}
         from ._goal_intervention import retain_events
         report['unanswered_live_events'] = retain_events(active, [])
-        import time
         observed_at = time.time()
         report['unanswered_event_ages'] = [
             {'item_id': event.get('item_id'), 'received_at': event.get('received_at'),
@@ -260,8 +356,7 @@ def _goal_status(folder):
                 for call in consultation['calls'] if call.get('outcome') is None)
         report['live_manager_call'] = active.get('live_manager_call')
         if (report['live_manager_call'] or {}).get('state') == 'running':
-            import time
-            elapsed = max(0, time.time() - report['live_manager_call']['started_at'])
+            elapsed = max(0, observed_at - report['live_manager_call']['started_at'])
             warning_at = report['live_manager_call'].get('soft_warning_seconds')
             report['live_manager_call'] = {**report['live_manager_call'],
                 'observed_elapsed_seconds': elapsed,
@@ -279,6 +374,14 @@ def _goal_status(folder):
                                                if fact.get('path', '').endswith('.messages.jsonl')]
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 report['commander_messages_gap'] = str(exc)
+        report['progress'] = _progress(report, active, worker)
+        if active.get('disposable_scratch'):
+            report['scratch'] = {**active['disposable_scratch'], 'status': 'registered'}
+            usage = active_folder / 'usage.json'
+            if usage.is_file():
+                recorded_scratch = json.loads(usage.read_bytes()).get('scratch')
+                if recorded_scratch:
+                    report['scratch'].update(recorded_scratch)
         state = active.get('manager_state') or {}
         if state.get('native_dir'):
             waits = []
@@ -304,6 +407,9 @@ def _goal_status(folder):
         report['errors'].append('expert observation: ' + str(exc))
     from ._foundry_goal_auto import outcome_path as selected_outcome_path
     outcome_path = selected_outcome_path(folder, manifest)
+    budget = active.get('time_budget') or manifest.get('time_budget')
+    if budget:
+        report['time_budget'] = _budget(budget, time.time())
     if not outcome_path.is_file() or (manifest.get('runtime_upgrades') and manifest.get('state') != 'completed'):
         from ._executor_lifecycle import observe_locked_byte
         controller = observe_locked_byte(folder.with_name('.' + folder.name + '.owner.lock'))
@@ -378,6 +484,8 @@ def _goal_status(folder):
         report['feedback'] = review_feedback(outcome_path)
     except (OSError, ValueError, TypeError, KeyError) as exc:
         report['errors'].append('review feedback: ' + str(exc))
+    if budget:
+        report['time_budget'] = _budget(budget, outcome_path.stat().st_mtime, settled=True)
     return {**report, 'status': 'outcome_available', 'outcome_status': outcome['status'],
             'event_id': hashlib.sha256((run_id + '\0').encode() + raw).hexdigest(),
             'outcome_path': str(outcome_path),
@@ -421,10 +529,14 @@ def _dispatch_status(path):
     from ._native_session import recorded_session
     log = record.get('evidence', {}).get('log', {}).get('path') or str(path).removesuffix('.package.json') + '.log'
     launcher = record.get('frozen', {}).get('launcher')
+    session = recorded_session(record, log)
+    report['worker'] = {'launcher': launcher, 'session_id': session,
+                        'model': record['frozen'].get('requested_compute', {}).get('model')}
+    report['index_observation'] = (package.get('launch_context') or {}).get('index_observation')
     live_log = Path(log).with_suffix('.claude.jsonl') if launcher == 'claude' else Path(log)
     report['live_event_log'] = str(live_log.resolve()) if launcher in ('claude', 'app-server', 'exec') else None
-    report['activity_observation'] = execution_activity(log, record.get('frozen', {}).get('launcher'),
-                                                       session=recorded_session(record))
+    report['message_projection'] = str(Path(log).with_suffix('.messages.jsonl'))
+    report['activity_observation'] = execution_activity(log, launcher, session=session)
     from ._provider_activity import observe
     report['provider_observation'] = observe(log, record.get('frozen', {}).get('launcher'))
     report['runtime_observation'] = package.get('runtime_provenance')

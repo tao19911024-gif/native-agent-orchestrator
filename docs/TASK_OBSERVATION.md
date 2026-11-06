@@ -21,6 +21,20 @@ The active round owns the worker package binding for a managed goal. The
 manager's native conversation lock owns its call receipts. A settled outcome
 with no continuation action displays the recorded outcome status as its phase.
 
+`progress` shows the active round, bound worker, active coordinator calls,
+last recorded worker activity and the latest available manager decision with its
+receipt. It reads up to 64 KiB of the Codex root-message projection or Claude
+worker stream for the latest root update and question. Pending worker
+questions and questions addressed to the operator come from the goal record.
+Inspect the referenced message log for earlier messages and the manager receipt
+for the corresponding native decision. The observer can run from a separate
+terminal while the launch command is still waiting.
+
+`time_budget` shows elapsed wall time and whether a progress report is due when
+the order was launched with `--time-budget-minutes`. `scratch` shows registered
+task storage and its latest reclamation record. `index_observation` shows the
+code index preparation recorded for the active attempt.
+
 `evidence.worker_live_event_log` is the absolute path for the uniquely bound
 current worker. Claude writes stream events to the matching `.claude.jsonl`;
 Codex app-server and exec use the recorded `.log`. The path is available before

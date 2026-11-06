@@ -99,8 +99,8 @@ class AppServer:
         self._message_items = set()
         self.process_completion_wait = False
         self._process_waiting = {}
-        self._process_completed = {}
-        self._process_seen = set()
+        self._process_running = set()
+        self._idle_wait_notified = False
         from ._goal_intervention import LiveEvents
         self.live_events = LiveEvents(log=getattr(self._log_handle, 'name', None))
         self._stdout_thread = threading.Thread(
@@ -250,7 +250,7 @@ class AppServer:
         params = message.get("params", {})
         if self.process_completion_wait and not self.observation_only:
             try:
-                notice = self._process_wait_notice(message)
+                notice = self._process_wait_notice(message, observed_at)
                 if notice is not None:
                     self._deliver_process_wait_notice(notice)
             except Exception as exc:
@@ -348,11 +348,11 @@ class AppServer:
     def _id(value):
         return isinstance(value, str) and bool(value.strip())
 
-    def _process_wait_notice(self, message):
+    def _process_wait_notice(self, message, observed_at=None):
         """Existing native event stream wakes only its recorded waiting owner.
 
-        Completion may precede wait subscription; retain it until a native wait
-        consumes it. Repeated terminal notifications do not create new input.
+        A running command must finish during its owner's wait. Terminal results
+        observed outside that wait stay with the original command tool.
         No OS scan, timer, process cancellation, manager decision or task resume.
         """
         params = message.get('params') or {}
@@ -367,8 +367,7 @@ class AppServer:
             turn = terminal.get('id')
             key = (thread, turn)
             self._process_waiting.pop(key, None)
-            self._process_completed.pop(key, None)
-            self._process_seen = {row for row in self._process_seen if row[:2] != key}
+            self._process_running = {row for row in self._process_running if row[:2] != key}
             return
         if (not self._id(thread) or not self._id(turn)
                 or self._terminal is not None or self._stopping.is_set()
@@ -384,36 +383,28 @@ class AppServer:
         key = (thread, turn)
         if item.get('type') == 'collabAgentToolCall' and item.get('tool') == 'wait':
             if method == 'item/started':
-                self._process_waiting[key] = identity
-            elif method == 'item/completed' and self._process_waiting.get(key) == identity:
+                started = time.monotonic() if observed_at is None else observed_at
+                if self._process_waiting.get(key, (None,))[0] != identity:
+                    self._process_waiting[key] = (identity, started)
+            elif method == 'item/completed' and self._process_waiting.get(key, (None,))[0] == identity:
                 self._process_waiting.pop(key, None)
-        elif method == 'item/completed' and item.get('type') == 'commandExecution':
-            # An empty write_stdin interaction is not process termination.
-            # Require a native process handle and measured exit code; retain
-            # unknown shapes in the log for the bounded native-handle fallback.
-            if (item.get('source') == 'unifiedExecInteraction'
-                    or not self._id(item.get('processId')) or type(item.get('exitCode')) is not int):
-                return
-            seen = (*key, identity)
-            if seen not in self._process_seen:
-                self._process_seen.add(seen)
-                self._process_completed.setdefault(key, []).append({
-                    'item_id': identity, 'process_id': item['processId'],
-                    'status': item.get('status'), 'exit_code': item.get('exitCode')})
-        if key in self._process_waiting and self._process_completed.get(key):
-            return {'thread_id': thread, 'turn_id': turn,
-                    'wait_id': self._process_waiting[key],
-                    'commands': self._process_completed.pop(key)}
+        elif item.get('type') == 'commandExecution' and item.get('source') != 'unifiedExecInteraction':
+            command = (*key, identity)
+            if method == 'item/started' and item.get('status') == 'inProgress':
+                self._process_running.add(command)
+            elif method == 'item/completed' and command in self._process_running:
+                self._process_running.remove(command)
+                if (key in self._process_waiting and self._id(item.get('processId'))
+                        and type(item.get('exitCode')) is int):
+                    return {'thread_id': thread, 'turn_id': turn, 'wait_id': self._process_waiting[key][0],
+                            'commands': [{'item_id': identity, 'process_id': item['processId'],
+                                          'status': item.get('status'), 'exit_code': item['exitCode']}]}
 
     def _deliver_process_wait_notice(self, notice):
-        # The reader must remain free to receive this RPC's response. This is
-        # an owned delivery thread, joined with existing RPC writers on close.
         # Multi-agent V2 rejects direct AppServer input to a child. Its existing
         # parent owns native member messaging; route through that root instead.
         # Root acknowledgment is not evidence that the member received a relay.
         member_relay = notice['thread_id'] != self.thread_id
-        destination_thread = self.thread_id if member_relay else notice['thread_id']
-        destination_turn = self.turn_id if member_relay else notice['turn_id']
         text = ('Foundry native process completion: ' + json.dumps(notice) +
                 '. If already collected, reuse that retained result; otherwise collect the original native handle/result. '
                 'This is execution evidence, not acceptance; do not restart the command. '
@@ -425,10 +416,56 @@ class AppServer:
                     'process yourself, create a replacement member, or treat this input as member '
                     'completion. Then wait for that member to verify its original handle/result. '
                     'Message to relay: ' + text)
+        self._deliver_wait_input(notice, text, 'foundry_process_wait_relay_delivered_to_parent'
+                                 if member_relay else 'foundry_process_wait_delivered',
+                                 'foundry_process_wait_delivery_unconfirmed')
+
+    def _publish_idle_wait(self, now):
+        if not self.process_completion_wait or self.observation_only:
+            return
+        with self._turn_lock:
+            if (self._idle_wait_notified or self._terminal is not None or self._stopping.is_set()
+                    or self._process_running or self._input_requests or self._unanswered_input
+                    or self.live_events.pending is not None or not self.live_events.events.empty()):
+                return
+            root = (self.thread_id, self.turn_id)
+            members = self.member_activity.members
+            if root not in self._process_waiting or not members:
+                return
+            member_waits = [wait for (thread, _), wait in self._process_waiting.items() if thread in members]
+            waiting_members = {thread for thread, _ in self._process_waiting if thread in members}
+            if waiting_members != members.keys() or len(member_waits) != len(members):
+                return
+            wait_id, started = self._process_waiting[root]
+            quiet_since = max(started, self.last_activity or started,
+                              *(wait[1] for wait in member_waits),
+                              *(member.get('last', started) for member in members.values()))
+            if now - quiet_since < self.member_activity.threshold:
+                return
+            self._idle_wait_notified = True
+            notice = {'thread_id': root[0], 'turn_id': root[1], 'wait_id': wait_id,
+                      'members': sorted(members), 'quiet_seconds': int(now - quiet_since)}
+        try:
+            self._deliver_idle_wait_notice(notice)
+        except RuntimeError as exc:
+            self._log('idle wait observation delivery unavailable: ' + str(exc))
+
+    def _deliver_idle_wait_notice(self, notice):
+        text = ('Foundry observation: the root and every observed active member are in mailbox waits, '
+                'and no command is visible as running. Check any retained handle once and request '
+                'the pending result or actual blocker from its owner. If no work remains, hand back '
+                'the result. A member parked for future instructions should return its current result. '
+                'Keep any confirmed unfinished work with its existing owner.')
+        self._deliver_wait_input(notice, text, 'foundry_idle_wait_delivered_to_root',
+                                 'foundry_idle_wait_delivery_unconfirmed')
+
+    def _deliver_wait_input(self, notice, text, delivered, unconfirmed):
+        # RPC writers stay separate from the reader and join on close.
+        destination_thread, destination_turn = self.thread_id, self.turn_id
         def deliver():
             try:
                 if self._terminal is not None or self._stopping.is_set():
-                    self._log(json.dumps({'event':'foundry_process_wait_delivery_unconfirmed',
+                    self._log(json.dumps({'event':unconfirmed,
                         **notice, 'error':'owning executor is ending'}))
                     return
                 result = self.request('turn/steer', {
@@ -436,13 +473,12 @@ class AppServer:
                     'input': [{'type':'text', 'text':text}]}, stop_on_timeout=False)
                 if result.get('turnId') != destination_turn:
                     raise RpcError({'message':'process wait input acknowledgment names a different turn'})
-                self._log(json.dumps({'event':('foundry_process_wait_relay_delivered_to_parent'
-                    if member_relay else 'foundry_process_wait_delivered'), **notice,
+                self._log(json.dumps({'event':delivered, **notice,
                     'destination_thread_id':destination_thread, 'destination_turn_id':destination_turn,
                     'result':result}))
             except Exception as exc:
                 # Ambiguous RPC delivery is not permission to duplicate input.
-                self._log(json.dumps({'event':'foundry_process_wait_delivery_unconfirmed',
+                self._log(json.dumps({'event':unconfirmed,
                                       **notice, 'error':str(exc)}))
         worker = threading.Thread(target=deliver, name='foundry-process-wait-input', daemon=True)
         self._writers.append(worker)
@@ -618,8 +654,10 @@ class AppServer:
                      "owner through its existing input channel. For a pending process, retain its "
                      "exec session_id, then call collaboration.wait_agent directly while it runs "
                      "(even without a child agent). Do not block in a long write_stdin call: that "
-                     "delays operator input. When notified of process completion, collect the original "
-                     "session/result once. If other processes remain, wait again. Member owners use "
+                     "delays operator input. If other input interrupted your wait, check the original "
+                     "handle once before waiting again. When notified of process completion, collect the original "
+                     "session/result once. Wait only while a command handle or assigned member result "
+                     "is outstanding. Hand back your result if you have no remaining work. Member owners use "
                      "the same procedure. If the configured mailbox interval expires without a "
                      "completion notice, check only the original process session with a short empty "
                      "write_stdin, then return to mailbox waiting if still pending; notification loss "
@@ -673,7 +711,8 @@ class AppServer:
             with path.open('a', encoding='utf-8') as stream:
                 stream.write(json.dumps({'thread_id': params['threadId'], 'turn_id': params['turnId'],
                     'item_id': ident, 'phase': item.get('phase'), 'text': item.get('text'),
-                    'questions': item.get('questions'), 'source_log': name}, ensure_ascii=False) + '\n')
+                    'questions': item.get('questions'), 'source_log': name,
+                    'timestamp': time.time()}, ensure_ascii=False) + '\n')
             self._message_items.add(ident)
         except Exception as exc:
             self._log('message projection unavailable: ' + str(exc))
@@ -1132,7 +1171,9 @@ released. A completed model turn is never proof of process cleanup.
         while not app.outcome_ready.wait(.01):
             if hasattr(app, 'live_events'):
                 app.live_events.drain(app)
-            app.member_activity.publish(app, time.monotonic())
+            now = time.monotonic()
+            app.member_activity.publish(app, now)
+            app._publish_idle_wait(now)
             questions = app.input_requests()
             if questions != visible_questions:
                 visible_questions = questions

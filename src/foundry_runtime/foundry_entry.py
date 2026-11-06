@@ -59,6 +59,8 @@ def add_arguments(ap) -> None:
     ap.add_argument('--upgrade-requested-runtime', help=argparse.SUPPRESS)
     ap.add_argument("--retained-only", action="store_true", help="with --recover-goal, recover completed historical reviews without model calls or project acceptance")
     ap.add_argument("--goal-evidence")
+    ap.add_argument('--time-budget-minutes', type=int, metavar='MINUTES',
+                    help='wall-clock reporting budget for a new goal; execution continues after the budget')
     ap.add_argument('--disposable-scratch', action=argparse.BooleanOptionalAction, default=None,
                     help='register disposable storage for a new goal; reclaim after successful completion')
     ap.add_argument("--analysis-evidence")
@@ -461,6 +463,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 amend_from=amend_from, coding_session=coding_session or getattr(a, '_boundary_session', None),
                 **({'amend_prompt': amend_prompt} if amend_from and amend_prompt is not None else {}),
                 auto_amend_model=auto_model, auto_amend_effort=auto_effort,
+                time_budget_minutes=getattr(a, 'time_budget_minutes', None),
                 **({'disposable_scratch': True} if getattr(a, 'disposable_scratch', False) else {}),
                 **({'disposable_scratch_root': a.disposable_scratch_root}
                    if getattr(a, 'disposable_scratch', False) and getattr(a, 'disposable_scratch_root', None) else {}),

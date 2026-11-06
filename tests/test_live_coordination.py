@@ -30,8 +30,11 @@ def test_managed_worker_has_execution_not_design_authority(backend, monkeypatch)
     prompt = execution_plan_prompt('task', {'manager': {'live_coordination': 1}})
     assert 'final answer' in prompt and 'existing Foundry manager loop' in prompt
     native = build_prompt({'kind': 'coordinate', 'packet': {'stage': 'assign'},
+                          'time_budget': {'started_at': 100, 'minutes': 45},
                           'live_coordination': 1}, backend, ValueError)
     assert b'not by fixed turn, time or token limits' in native
+    assert b"Verify only the order's acceptance criteria and required project gates." in native
+    assert b'At the next normal coordination after the reporting budget' in native
 
 
 @pytest.mark.parametrize('quota_manager', ['claude'], indirect=True)

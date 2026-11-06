@@ -48,6 +48,9 @@ def main(argv=None, *, project_adapter=None) -> int:
                     help='unique launch directory; Windows service custody (or per-call FOUNDRY_HOSTED_DIRECTORY)')
     ap.add_argument('--hosted-status', help='read the exact independently hosted launch, without starting work')
     a = ap.parse_args(argv)
+    if a.time_budget_minutes is not None and (
+            a.time_budget_minutes <= 0 or not a.foundry_goal or a.recover_goal or a.amend_from):
+        ap.error('--time-budget-minutes requires a positive integer and a new --foundry-goal')
     if a.recover_goal and not a.foundry_goal:
         a.foundry_goal = True
         argv.append('--foundry-goal')  # Retain the same mode when handing off to a recorded runtime.

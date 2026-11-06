@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0a111 — 2026-11-06
+
+- Deliver Codex command completion notices only for commands observed to finish
+  during the owning thread's wait. Completed foreground results stay with the
+  original command tool.
+- Notify the root once per turn when all observed active owners are waiting and
+  no command or operator or manager input is pending at the existing member
+  progress threshold. Native wait intervals and process cleanup are unchanged.
+- Show the active worker and coordinator, recent worker updates and questions,
+  manager decision receipts, index preparation, and temporary storage in goal
+  status.
+- Accept a soft wall-clock reporting budget on new goals. Keep manager checks
+  within the order's acceptance criteria and required project gates.
+
 ## 0.1.0a110 — 2026-11-06
 
 - Follow the manager's retained answer chain in goal status and show the current

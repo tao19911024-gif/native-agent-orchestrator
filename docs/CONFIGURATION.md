@@ -188,6 +188,14 @@ Omitted values use the environment and then the runtime defaults. Continuations
 use the recorded launch settings. Supported keys and default resolution are
 owned by [`validate_project_launch` and `settings`](../src/foundry_runtime/_launch_context.py).
 
+The Codex app-server sends process completion to a waiting owner when an
+observed command finishes during that owner's wait. Earlier results stay with
+the native command tool. If the root and all observed active members remain in
+mailbox waits with no visible command or pending input, the existing member
+progress threshold triggers one observation to the root per turn. The root
+reconciles retained handles and returns a result or identifies the dependency.
+Native wait intervals and process custody remain in effect.
+
 For Codex, zero omits `tool_output_token_limit` from native arguments and keeps
 the client's selected configuration. A per-command `max_output_tokens` value
 does not necessarily replace the client's outer tool-result limit. With several
@@ -197,7 +205,15 @@ missing sections after truncation. Existing launches retain their recorded
 positive limit, including the earlier default of 3,000 tokens. Set
 `FOUNDRY_TOOL_TOKENS` to `3000` to select that limit for a new project call.
 
-## Provider selection
+## Time budget and temporary storage
+
+Add `--time-budget-minutes 45` to a new goal launch to set its wall-clock
+reporting budget. The budget starts when goal execution begins and carries
+through automatic rounds and recovery. When it expires, goal status marks the
+report as due. At its next regular coordination, the manager records progress,
+the remaining acceptance check or decision, and an estimate. The original
+acceptance criteria and required project checks govern subsequent work.
+`--task-deadline` remains the separate hard cutoff.
 
 New goals can opt into managed disposable storage with `--disposable-scratch`
 or the project's `default_disposable_scratch: true`. The runtime registers a fresh
@@ -205,6 +221,14 @@ directory under the goal evidence directory by default. Set
 `default_disposable_scratch_root` to place temporary files on a separate volume
 while retaining goal evidence in its project location. Worker instructions and
 the launch context carry the resulting directory.
+
+Use the registered directory for reproducible build and test outputs. Move
+deliverables and evidence needed by the project owner outside it. Foundry
+reclaims registered storage after candidate verification or artifact delivery.
+An unfinished goal or a project handoff retains its directory for the project
+owner. Existing task directories retain their recorded ownership.
+
+## Provider selection
 See the [storage contract](STORAGE_RETENTION.md#explicit-disposable-storage-for-new-goals)
 for completion, recovery, report retention and cleanup accounting.
 

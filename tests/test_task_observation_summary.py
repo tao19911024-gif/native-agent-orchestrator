@@ -56,6 +56,57 @@ def test_current_worker_visible_during_dispatch_pending_and_status_is_read_only(
     assert {p: p.read_bytes() for p in folder.parent.rglob('*') if p.is_file()} == before
 
 
+def test_summary_reports_questions_decision_and_overrun_while_worker_continues(observed, monkeypatch):
+    from foundry_runtime import cli
+    folder, manifest, add = observed
+    path = add('dispatch_resumed3')
+    messages = path.with_name('dispatch_resumed3.messages.jsonl')
+    question = {'item_id': 'q1', 'text': 'FOUNDRY_MANAGER_QUESTION Which contract applies?'}
+    update = {'item_id': 'm2', 'text': 'Focused check is running.'}
+    messages.write_text('\n'.join(map(json.dumps, [question, update])) + '\n{"item_id":"partial"}')
+    save(folder / 'manifest.json', {**manifest,
+        'time_budget': {'started_at': 100, 'minutes': 1},
+        'live_manager_call': {'state': 'decision_available', 'stage': 'coordinate'},
+        'live_manager_decision': {'action': 'delegate', 'instruction': 'Use the original contract.',
+                                  'evidence': {'path': 'manager-receipt.json'}}})
+    monkeypatch.setattr(followup.time, 'time', lambda: 161)
+    before = {p: p.read_bytes() for p in folder.parent.rglob('*') if p.is_file()}
+    summary = followup.status(folder)['summary']
+    progress = summary['progress']
+    assert summary['next_action'] == 'wait'
+    assert summary['time_budget']['report_due'] is True
+    assert summary['time_budget']['elapsed_seconds'] == 61
+    assert progress['active_worker']['launcher'] == 'exec'
+    assert progress['worker_messages']['latest_question']['item_id'] == 'q1'
+    assert progress['worker_messages']['latest']['item_id'] == 'm2'
+    assert progress['last_manager_decision']['instruction'] == 'Use the original contract.'
+    assert progress['last_manager_decision']['receipt']['path'] == 'manager-receipt.json'
+    assert {p: p.read_bytes() for p in folder.parent.rglob('*') if p.is_file()} == before
+    with pytest.raises(SystemExit) as error:
+        cli.main(['--foundry-project', 'status', '--status-goal', str(folder), '--time-budget-minutes', '1'])
+    assert error.value.code == 2
+
+
+def test_claude_progress_reads_root_messages_for_the_current_session(observed):
+    folder, _, add = observed
+    path = add()
+    record = package.read_intent(json.loads(path.read_bytes()))[1]
+    record['frozen']['launcher'] = 'claude'
+    record['session_id'] = 'selected'
+    rows = [{'type': 'assistant', 'uuid': item_id, 'session_id': session, 'parent_tool_use_id': parent,
+             'message': {'content': [{'type': 'text', 'text': text}]}}
+            for item_id, session, parent, text in (
+                ('root', 'selected', None, 'Focused check finished.'),
+                ('member', 'selected', 'subtask', 'Member update'),
+                ('other', 'other', None, 'Unrelated conversation'))]
+    stream = path.with_name('dispatch.claude.jsonl')
+    stream.write_text('\n'.join(map(json.dumps, rows)) + '\n')
+    progress = followup.status(folder)['summary']['progress']
+    assert progress['worker_messages']['path'] == str(stream)
+    assert progress['worker_messages']['latest']['item_id'] == 'root'
+    assert progress['last_worker_evidence_write_utc']
+
+
 @pytest.mark.parametrize('mismatch', ['run', 'directory', 'attempt', 'completed'])
 def test_other_goal_or_superseded_attempt_never_appears_current(observed, mismatch):
     folder, _, add = observed

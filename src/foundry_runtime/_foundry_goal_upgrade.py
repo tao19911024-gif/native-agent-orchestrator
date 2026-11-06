@@ -192,6 +192,8 @@ def prepare_invocation(owner, a, ap, root, target, prior, prepared, *, project, 
         raise ValueError('target round configuration could not be prepared')
     from ._foundry_manager import configuration_for
     options = child._prepared_goal['options']
+    if prepared.get('time_budget') is not None:
+        options['time_budget'] = prepared['time_budget']
     from ._launch_context import capture
     options['launch_context'] = capture(
         prepared['worktree'],
@@ -221,7 +223,8 @@ def policy(record):
                 {'native_dir', 'expert_native_dir', 'last_call_id', 'session_id', 'handoff'}},
             'coding_launcher': record.get('coding_launcher'),
             'launch_context': copy.deepcopy(record.get('launch_context')),
-            'task_deadline_at': record.get('task_deadline_at')}
+            'task_deadline_at': record.get('task_deadline_at'),
+            **({'time_budget': record['time_budget']} if 'time_budget' in record else {})}
 
 
 def publish(owner, root, parent, target, result):

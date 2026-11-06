@@ -28,7 +28,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                   task_staffing=None, handover=None, project_record=None, manager_answer=None,
                   follow_up_goal=None, migrate_recovered_manager=False, worker_recovery=False, task_deadline_at=None,
                   review_author_models=None, initializing=False, disposable_scratch=False,
-                  disposable_scratch_root=None, **_legacy):
+                  disposable_scratch_root=None, time_budget=None, **_legacy):
     """Execute the three-part task, then judge the frozen commit twice."""
     from . import foundry_goal as owner
     from .foundry_goal import (
@@ -135,6 +135,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
     manifest['originating_session'] = origin()
     if task_deadline_at is not None:
         manifest['task_deadline_at'] = task_deadline_at
+    if time_budget is not None:
+        manifest['time_budget'] = time_budget
     if follow_up_goal is not None:
         manifest['follow_up_goal'] = str(Path(follow_up_goal).resolve())
     if project_record is not None:
@@ -158,8 +160,11 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
     if manager_state is not None:
         if task_deadline_at is not None:
             manager_state = {**manager_state, 'task_deadline_at': task_deadline_at}
+        if time_budget is not None:
+            manager_state = {**manager_state, 'time_budget': time_budget}
         manifest['manager_state'] = manager_state
     execution_options = {
+        **({'time_budget': time_budget} if time_budget is not None else {}),
         **({'task_deadline_at': task_deadline_at} if task_deadline_at is not None else {}),
         **({'amend_from': str(amend_from)} if amend_from is not None else {}),
         **({'amend_prompt': amend_prompt} if amend_prompt is not None else {}),
