@@ -133,6 +133,9 @@ def _summary(report, *, runtime_selection=None):
                         'observer_python': sys.executable, 'selected': selected},
             'delivery': report.get('delivery'), 'next_action': action, 'next_command_argv': command,
             'next_invocation': invocation or None,
+            'execution': (worker.get('execution_binding') or report.get('settled_execution')
+                          or (report.get('coding_recovery') or {}).get('retained_dispatch')),
+            'operator_inputs': report.get('manager_interventions', []),
             **({'operator_amendment': feedback['operator_amendment']} if 'operator_amendment' in feedback else {}),
             'evidence': {'goal': report['goal'], 'outcome': report.get('outcome_path'),
                          'dispatch': worker.get('dispatch'),
@@ -174,7 +177,7 @@ def _goal_status(folder):
               'originating_session': manifest.get('originating_session'),
               'read_only': True, 'errors': [], 'task_acceptance': 'not_evaluated'}
     from ._expert_consultation import observe as observe_experts
-    active = manifest
+    active_folder, active = folder, manifest
     if manifest.get('runtime_upgrades'):
         from ._foundry_goal_upgrade import advice
         try:
@@ -326,6 +329,25 @@ def _goal_status(folder):
         raise ValueError('goal outcome has no status')
     from ._foundry_goal_usage import delivery
     report['delivery'] = delivery(outcome)
+    from ._dispatch_package import read_intent, execution_binding
+    round_identity = {'directory': str(active_folder), 'run_id': active.get('run_id')}
+    for fact in reversed((outcome.get('coding') or {}).get('evidence', [])):
+        log = Path(fact['path'])
+        if log.suffix != '.log':
+            continue
+        package_path = log.with_suffix('.package.json')
+        if not package_path.is_file():
+            continue
+        try:
+            package = json.loads(package_path.read_bytes())
+            if package.get('goal') != round_identity or not package.get('intent_journal'):
+                continue
+            _, intent = read_intent(package)
+            if (intent.get('evidence') or {}).get('log') == fact:
+                report['settled_execution'] = execution_binding(package, intent)
+                break
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            report['errors'].append('settled execution: ' + str(exc))
     if outcome['status'] == 'awaiting_input':
         from ._foundry_cli_help import recovery_invocation
         try:
@@ -369,7 +391,7 @@ def dispatch_status(path, *, plan=False):
 
 
 def _dispatch_status(path):
-    from ._dispatch_package import read_intent
+    from ._dispatch_package import read_intent, execution_binding
     from ._project_status import _liveness
     path = Path(path).resolve(strict=True)
     package = json.loads(path.read_bytes())
@@ -382,6 +404,7 @@ def _dispatch_status(path):
         return {**report, 'status': 'superseded', 'event_id': run_id + ':superseded',
                 'next_action': 'This attempt was replaced; inspect the explicit retry binding.'}
     live = _liveness(record)
+    report['execution_binding'] = execution_binding(package, record)
     from ._provider_activity import execution_activity
     from ._native_session import recorded_session
     log = record.get('evidence', {}).get('log', {}).get('path') or str(path).removesuffix('.package.json') + '.log'

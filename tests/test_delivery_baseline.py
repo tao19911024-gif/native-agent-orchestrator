@@ -114,6 +114,19 @@ def test_pending_and_legacy_review_preserve_missing_results(tmp_path):
     assert row["elapsed"] is None
 
 
+def test_missing_operator_input_root_preserves_archived_outcome(tmp_path):
+    completed(tmp_path)
+    path = tmp_path / "manifest.json"
+    manifest = json.loads(path.read_bytes())
+    manifest["follow_up_goal"] = str(tmp_path / "unavailable-original-root")
+    save(path, manifest)
+    row = task_report([tmp_path])["delivery_baseline"]["invocations"][0]
+    assert row["status"] == "candidate_verified"
+    assert row["reviews"][0]["verdict"] == "PASS"
+    assert row["operator_inputs"] == []
+    assert any(gap["kind"] == "operator_inputs" for gap in row["gaps"])
+
+
 def test_phase_timing_reuses_parallel_group_and_retained_elapsed(tmp_path):
     from foundry_runtime import _foundry_goal_telemetry as telemetry
 

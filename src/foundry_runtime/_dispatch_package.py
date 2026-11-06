@@ -62,6 +62,17 @@ def read_intent(package, *, project_record=None):
     return journal, record
 
 
+def execution_binding(package, record):
+    """Project a package and its exact journal attempt without mutable goal state."""
+    if package['attempt_id'] != record.get('attempt_id'):
+        raise ValueError('package and journal attempt differ')
+    if package.get('source_sha256') and package['source_sha256'] != record['frozen'].get('order_sha256'):
+        raise ValueError('package and journal input differ')
+    manager = (record['frozen'].get('execution_decision') or {}).get('manager') or {}
+    return {'intent_id': package['intent_id'], 'attempt_id': package['attempt_id'],
+            'goal': package.get('goal'), 'assignment': manager.get('evidence')}
+
+
 @contextmanager
 def observed_start(intent):
     try:
@@ -81,6 +92,7 @@ def record_package(log, tag, operation, intent, body, launch_context=None):
         "intent_journal": str(intent.path.resolve()), "originating_session": origin(),
         "root_pid": row["root_pid"],
         "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "source_sha256": intent.frozen.get('order_sha256'),
         "body_bytes": len(body.encode("utf-8")),
         "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "runtime_provenance": observe(project_context=intent.frozen.get("project_context")),
@@ -145,7 +157,10 @@ def admitted_binding(common_dir, tag, binding):
     matches, deadlines = [], []
     for path in (common_dir / "pdcl-dispatch" / ("task-" + tag) / "intents").glob("*"):
         row, _, _ = ExecutionIntent.read_history(path, task_key=tag)
-        if without_rules(row["frozen"]) == without_rules(binding):
+        comparison = without_rules(binding)
+        if binding.get('operation') == 'resume' and 'execution_decision' not in row['frozen']:
+            comparison.pop('execution_decision', None)  # Replay the original pre-association intent.
+        if without_rules(row["frozen"]) == comparison:
             matches.append(row["frozen"])
         session = (row.get('turn_binding') or {}).get('thread_id') or row.get('session_id')
         if session and session == binding.get('session_id') and row['frozen'].get('task_deadline_at') is not None:

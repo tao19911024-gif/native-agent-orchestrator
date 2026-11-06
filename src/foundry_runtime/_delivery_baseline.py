@@ -8,6 +8,7 @@ from . import _foundry_goal_telemetry as telemetry
 def build(report, read):
     """Join retained outcomes and checkpoints using the report's reference reader."""
     invocations, containers, dispatches = [], [], []
+    interventions = {}
     for record in report["records"]:
         ref, kind = record["reference"], record["kind"]
         links = [link for link in report["links"] if ref in (link["from"], link["to"])]
@@ -39,12 +40,24 @@ def build(report, read):
                 manifest = {}
                 gaps.append({"kind": "manifest", "reference": manifest_ref, "reason": str(exc)})
         task = {key: context.get(key, manifest.get(key)) for key in ("order", "run_id")}
+        inputs = []
+        if manifest:
+            from ._goal_intervention import input_root, observe
+            try:
+                root = input_root(Path(manifest_ref['path']).parent, manifest)
+                if (root / 'operator-inputs').is_dir():
+                    if root not in interventions:
+                        interventions[root] = observe(root)
+                    inputs = [row for row in interventions[root] if row.get('run_id') == task['run_id']]
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                gaps.append({'kind': 'operator_inputs', 'reason': str(exc)})
         candidate = {"base_commit": manifest.get("base_commit"),
                      "candidate_commit": source.get("candidate_commit")}
         closure = source.get("candidate_closure")
         if closure is not None:
             checks.append({"kind": "candidate_closure", "source": ref, "result": closure})
         checkpoint_ref = manifest.get("review_checkpoint")
+        checkpoint_session = None
         if checkpoint_ref:
             try:
                 checkpoint = read(checkpoint_ref)
@@ -57,6 +70,8 @@ def build(report, read):
                 if (candidate["candidate_commit"] is not None and
                         candidate["candidate_commit"] != reviewed.get("candidate_commit")):
                     raise ValueError("review checkpoint belongs to another candidate")
+                if all(task.get(key) for key in ("run_id", "order")):
+                    checkpoint_session = checkpoint.get("coding_session")
                 candidate = {key: reviewed.get(key, value) for key, value in candidate.items()}
                 if "project_review" in reviewed:
                     checks.append({"kind": "project_review", "source": checkpoint_ref,
@@ -70,7 +85,7 @@ def build(report, read):
             "reference": ref, "kind": kind, "status": delivery.get("status"), "task": task,
             "manifest_observation": observation, "candidate": candidate,
             "runtime_provenance": manifest.get("runtime_provenance"),
-            "coding": {"session_id": source.get("coding_session"), "returncode": coding.get("returncode"),
+            "coding": {"session_id": source.get("coding_session") or checkpoint_session, "returncode": coding.get("returncode"),
                        "evidence": coding.get("evidence", []),
                        "executions": record.get("coding_executions", []),
                        "usage_reference": record.get("usage_reference")},
@@ -80,6 +95,7 @@ def build(report, read):
                         for index, review in enumerate(delivery.get("reviews", []))],
             "project_acceptance": source.get("project_acceptance"),
             "artifacts": source.get("artifacts", []),
+            "operator_inputs": inputs,
             "elapsed": elapsed if elapsed.get("duration_s") is not None else None,
             "phase_timing": {"source": "adjacent telemetry read now",
                              "path": str(Path(ref["path"]).with_name(telemetry.FILENAME)),

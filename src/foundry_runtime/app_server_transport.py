@@ -102,7 +102,7 @@ class AppServer:
         self._process_completed = {}
         self._process_seen = set()
         from ._goal_intervention import LiveEvents
-        self.live_events = LiveEvents()
+        self.live_events = LiveEvents(log=getattr(self._log_handle, 'name', None))
         self._stdout_thread = threading.Thread(
             target=self._read_stdout, name="pdcl-app-server-stdout", daemon=True
         )

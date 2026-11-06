@@ -18,6 +18,7 @@ import re
 from threading import Lock
 
 _live = ContextVar('foundry_live_manager', default=None)
+live_execution = ContextVar('foundry_live_execution', default=None)
 
 
 def tool_observation(item):
@@ -74,10 +75,12 @@ class LiveEvents:
 
     Dispatch joins it before returning ownership of the goal manifest.
     """
-    def __init__(self, decide=None, threshold=None):
+    def __init__(self, decide=None, threshold=None, *, log=None):
         from ._context_signals import CompactionResidual
         inherited, self.capture, self.claude_enabled, self.undelivered, self.observe_source = _live.get() or (None, None, False, None, None)
         self.decide = decide if decide is not None else inherited
+        self.package_path = Path(log).with_suffix('.package.json') if isinstance(log, (str, Path)) else None
+        self.execution = None
         self.events = queue.Queue()
         self.event_lock = Lock()
         self.seen = set()
@@ -215,7 +218,15 @@ class LiveEvents:
             self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='foundry-live-manager')
         self.pending_rows = rows
         self.pending_generation = self.evidence_generation
-        self.pending = self.executor.submit(copy_context().run, self.decide, rows)
+        if self.execution is None and self.package_path and self.package_path.is_file():
+            try:
+                package = _read(self.package_path)
+                self.execution = {key: package[key] for key in ('intent_id', 'attempt_id')}
+            except (OSError, ValueError, KeyError):
+                pass  # Package publication and the native event can overlap.
+        context = copy_context()
+        context.run(live_execution.set, self.execution)
+        self.pending = self.executor.submit(context.run, self.decide, rows)
 
     def _settle(self, app, *, steer=True):
         pending, self.pending = self.pending, None
@@ -455,6 +466,9 @@ def deliveries(root):
         for key in messages:
             row = {'status': status, 'request': str(stdin),
                    'receipt': str(receipt) if record else None}
+            if packet.get('execution'):
+                row['execution'] = packet['execution']
+                row['run_id'] = packet['run_id']
             # A successful retry supersedes a prior quota/transport stop.
             if key not in results or status == 'responded' or results[key]['status'] == 'blocked':
                 results[key] = row

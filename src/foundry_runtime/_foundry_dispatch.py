@@ -636,7 +636,8 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
 def resume_order(session: str, wt: Path, tag: str, text: str, *, execution_intent_id=None,
                  recovery_file=None, launcher: str = "exec",
                  app_server_policy=None, model=None, effort=None, native_team=None,
-                 answer_from=None, answer_file=None, predispatch_receipt=None, project=None, launch_context=None):
+                 answer_from=None, answer_file=None, predispatch_receipt=None, project=None, launch_context=None,
+                 execution_decision=None):
     """Public resume seam; orchestration is extracted to keep this module shrinking."""
     from . import _dispatch_resume
     return _dispatch_resume.resume_order(
@@ -646,4 +647,5 @@ def resume_order(session: str, wt: Path, tag: str, text: str, *, execution_inten
         model=model, effort=effort, **team_kwargs(native_team),
         answer_from=answer_from, answer_file=answer_file, predispatch_receipt=predispatch_receipt,
         **({'launch_context': launch_context} if launch_context is not None else {}),
+        **({'execution_decision': execution_decision} if execution_decision is not None else {}),
         **({"project": project} if project is not None else {}))

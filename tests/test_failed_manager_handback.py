@@ -61,10 +61,16 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     pending = Path(manifest['pending_dispatch']['path'])
     checkpoint = json.loads(goal.goal_usage._reference(manifest['coding_checkpoint']))
     assert checkpoint['returncode'] == 0
+    first_turn = checkpoint['coding_usage']['managed_turns'][-1]
+    assert requests[1]['packet']['execution'] == {'intent_id': first_turn['execution_intent_id'],
+                                                   'attempt_id': first_turn['attempt_id']}
     assert all(f in checkpoint['evidence'] for f in manifest['manager_packet']['worker_evidence'])
     package = json.loads(pending.read_bytes())
     _, failed = _dispatch_package.read_intent(package, project_record=scope.record())
     assert failed['returncode'] == 1 and failed['state'] == 'completed'
+    assignment = failed['frozen']['execution_decision']['manager']
+    assert assignment['instruction'] == 'Continue second slice'
+    assert manifest['dispatch_assignment'] == assignment['evidence']
     assert failed['evidence']['log'] not in checkpoint['evidence']
     if legacy:
         manifest.pop('pending_dispatch')
@@ -109,6 +115,8 @@ def test_failed_assignment_returns_to_manager_once(external, manager_io, tmp_pat
     assert result['status'] == 'awaiting_input'
     assert len(requests) == 3
     assert requests[-1]['packet']['returncode'] == 1
+    assert requests[-1]['packet']['execution']['attempt_id'] == failed['attempt_id']
+    assert requests[-1]['packet']['execution']['assignment'] == assignment['evidence']
     assert requests[-1]['packet']['operator_answer'] == 'Review the failed second slice without repeating completed work.'
     assert failed['evidence']['log'] in requests[-1]['packet']['worker_evidence']
     restored = json.loads((folder/'coding-checkpoint.json').read_bytes())

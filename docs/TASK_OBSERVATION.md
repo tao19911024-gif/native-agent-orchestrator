@@ -29,6 +29,14 @@ that file instead of predicting numbered continuation names. The field is `null`
 when no unique current execution is recorded. The full dispatch observation
 exposes the same path as `live_event_log`.
 
+The summary's `execution` identifies the observed intent, attempt and frozen
+manager assignment when recorded. `operator_inputs` shows the queued input and
+its native manager request and receipt once admitted. A live request carries
+the active execution identity. A request consumed after the worker returns
+carries the settled attempt from its coding receipt. A response confirms delivery to the
+manager. Worker implementation is evaluated from the subsequent execution and
+candidate evidence.
+
 For a deployment using the release selector, include its selection file:
 
 ```powershell

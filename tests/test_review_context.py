@@ -133,6 +133,12 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
             "sys.stdout.write(" + repr('\n'.join(map(json.dumps, rows)) + '\n') + ")")
         return spawn([sys.executable, '-B', '-c', script], **kwargs)
     monkeypatch.setattr(native.OwnedProcess, 'spawn', local)
+    native_session = native.NativeAnalyst.native_session
+    def session_after_configuration_change(member, request):
+        with monkeypatch.context() as changed:
+            changed.setattr(member, '_backend_identity', lambda: {'user_config': 'changed after settlement'})
+            return native_session(member, request)
+    monkeypatch.setattr(native.NativeAnalyst, 'native_session', session_after_configuration_change)
     folder = tmp_path / 'goal'
     with pytest.raises(native.NativeError) as interrupted:
         goal.run_review(order, folder, Path(sys.executable), target_worktree=tree,

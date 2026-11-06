@@ -635,6 +635,15 @@ def task_report(paths, *, since=None):
             return view
         try:
             receipt = read(observation["receipt"])
+            log_ref = next((r for r in receipt.get('evidence_refs', []) if r.get('kind') == 'log'), None)
+            package_path = Path(log_ref['path']).with_suffix('.package.json') if log_ref else None
+            if package_path and package_path.is_file():
+                from ._dispatch_package import execution_binding, read_intent
+                package = json.loads(_bytes(package_path))
+                if package.get('intent_journal') and (package['intent_id'], package['attempt_id']) == (
+                        observation.get('execution_intent_id'), observation.get('attempt_id')):
+                    _, intent = read_intent(package)
+                    view['binding'] = execution_binding(package, intent)
             terminal_ref = next((r for r in receipt.get("evidence_refs", []) if r.get("kind") == "terminal"), None)
             if terminal_ref:
                 terminal = read(terminal_ref)
