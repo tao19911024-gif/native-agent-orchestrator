@@ -384,7 +384,11 @@ class AppServer:
             self._log('idle wait observation delivery unavailable: ' + str(exc))
 
     def _deliver_idle_wait_notice(self, notice):
-        text = ('Foundry observation: the root is in a mailbox wait, no command is visible as running, '
+        text = ('Foundry observation: this mailbox wait has no active native command or member. '
+                'Collect any retained command result once through its original process handle. '
+                'Continue the remaining task, or return the result when it is complete.'
+                if not notice['members'] else
+                'Foundry observation: the root is in a mailbox wait, no command is visible as running, '
                 'and no active member is observed outside a mailbox wait. Check any retained handle once and request '
                 'the pending result or actual blocker from its owner. If no work remains, hand back '
                 'the result. A member parked for future instructions should return its current result. '

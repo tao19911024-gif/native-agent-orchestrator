@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0a114 — 2026-11-07
+
+- Return empty root mailbox waits on the next observation tick when no native
+  command, active member or pending input owns unfinished work. Waiting teams
+  retain their existing quiet-progress interval and native wait configuration.
+- Suppress an empty-wait observation when a background completion already owns
+  that wait's wake-up. Retain original command handles and result collection.
+- Keep input pauses, repeated-result suppression, frozen launch instructions,
+  independent review and process cleanup under their existing owners.
+
 ## 0.1.0a113 — 2026-11-07
 
 - Consolidate Codex member, command and mailbox-wait observations under the

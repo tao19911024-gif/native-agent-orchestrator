@@ -306,6 +306,7 @@ class CodexMemberActivity:
                 self.running.remove(command)
                 if (key in self.waiting and self._valid_id(item.get('processId'))
                         and type(item.get('exitCode')) is int):
+                    self.seen.add(('process_wait', *key, self.waiting[key][0]))
                     return {'thread_id': thread, 'turn_id': turn, 'wait_id': self.waiting[key][0],
                             'commands': [{'item_id': identity, 'process_id': item['processId'],
                                           'status': item.get('status'), 'exit_code': item['exitCode']}]}
@@ -321,10 +322,15 @@ class CodexMemberActivity:
         if waiting_members != members.keys() or len(member_waits) != len(members):
             return
         wait_id, started = self.waiting[root]
+        # A completion already owns this wait's wake-up, including delivery in flight.
+        if ('process_wait', *root, wait_id) in self.seen:
+            return
         quiet_since = max(started, last_activity or started,
                           *(wait[1] for wait in member_waits),
                           *(member.get('last', started) for member in members.values()))
-        if now - quiet_since < self.threshold:
+        # Only an observed waiting team needs the quiet-progress interval.
+        # An empty root mailbox has no member or command result to wait for.
+        if members and now - quiet_since < self.threshold:
             return
         self.idle_notified = True
         return {'thread_id': root[0], 'turn_id': root[1], 'wait_id': wait_id,
