@@ -23,6 +23,7 @@ def test_managed_worker_owns_bounded_execution_with_manager_readiness(backend, m
     assert 'final acceptance in your own context' not in team['instructions']
     assert 'Work directly when one context can complete the slice' in team['instructions']
     assert 'Make reversible implementation decisions within the assigned scope' in team['instructions']
+    assert 'When no member owns outstanding work, use the retained command handle' in team['instructions']
     assert 'owns scope and delivery readiness' in team['instructions']
     assert 'independent candidate review remains separate' in team['instructions']
     assert 'Delegate substantive implementation' not in team['instructions']

@@ -335,6 +335,16 @@ _EXPERT_HANDOFF = (
 )
 
 
+# Team instructions are frozen at launch. Shared manager/review guidance also
+# contributes to historical recovery stdin hashes and keeps its existing bytes.
+_NATIVE_WAIT_GUIDANCE = WAIT_GUIDANCE.replace(
+    "Inspect new output on completion",
+    "When no member owns outstanding work, use the retained command handle for process waiting. "
+    "If that handle has already returned a result, inspect it and continue instead of entering another member wait. "
+    "Inspect new output on completion",
+)
+
+
 _MANAGED_EXECUTION_GUIDANCE = (
     "You execute the Foundry manager's bounded assignment. Own implementation, focused tests and "
     "the committed candidate handoff. Work directly when one context can complete the slice; "
@@ -385,7 +395,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
             "lead_role": "manager" if profile == "adaptive" and not managed else "executor",
             "config": {},
             "member_roles": member_roles('claude'),
-            "instructions": (EVIDENCE_GUIDANCE + WAIT_GUIDANCE + (_MANAGED_EXECUTION_GUIDANCE if managed else
+            "instructions": (EVIDENCE_GUIDANCE + _NATIVE_WAIT_GUIDANCE + (_MANAGED_EXECUTION_GUIDANCE if managed else
                 "Manage this task's native Claude team. Delegate substantive implementation "
                 "and its focused tests to workers; retain requirements, architectural decisions, "
                 "conflicting evidence and final acceptance. ") + "While workers execute, resolve dependencies "
@@ -446,7 +456,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
         return {"profile": "none", "version": 3, "worker_capacity": 0, "lead_role": "executor",
                 "process_completion_wait": 1,
                 "config": {"agents.enabled": True, "features.multi_agent_v2": {"enabled": True}, **native_wait_config()},
-                "instructions": WAIT_GUIDANCE + "Complete this task as one executor using the recorded model and test plan. "
+                "instructions": _NATIVE_WAIT_GUIDANCE + "Complete this task as one executor using the recorded model and test plan. "
                                 "Do the implementation yourself rather than forming an implementation team. "
                                 "This choice does not prohibit independent review required by the target repository. "
                                 "Use separate fresh or bounded review contexts where required; reuse valid review "
@@ -469,7 +479,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
                     **wait_config.get('features.multi_agent_v2', {}),
                     "enabled": True, "expose_spawn_agent_model_overrides": True,
                     "max_concurrent_threads_per_session": 11}},
-            "instructions": (EVIDENCE_GUIDANCE + WAIT_GUIDANCE +
+            "instructions": (EVIDENCE_GUIDANCE + _NATIVE_WAIT_GUIDANCE +
                 (_MANAGED_EXECUTION_GUIDANCE if managed else
                 "You are the manager of this task's native agent team. Delegate substantive "
                 "implementation and its tests to a native worker with fresh or bounded context. "
