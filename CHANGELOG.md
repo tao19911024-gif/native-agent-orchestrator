@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0a112 — 2026-11-06
+
+- Resolve the review base for a new automatic candidate review from the
+  project's recorded integration branch when its merge base advances along
+  the goal's starting history. Freeze the selected base in the review checkpoint.
+- Follow the consumed continuation across an authorized order revision and
+  bind manager calls to the linked runs when projecting goal status.
+
 ## 0.1.0a111 — 2026-11-06
 
 - Deliver Codex command completion notices only for commands observed to finish
