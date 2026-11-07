@@ -307,9 +307,13 @@ def _provider_failed_review(outcome, manifest):
     checkpoint = json.loads(goal_usage._reference(manifest['review_checkpoint']))
     if (any(checkpoint.get(key) != manifest.get(key) for key in ('run_id', 'order', 'worktree'))
             or checkpoint['context']['candidate_commit'] != outcome['candidate_commit']
-            or checkpoint['context']['base_commit'] != manifest['base_commit']):
+            or _review_goal_base(checkpoint['context']) != manifest['base_commit']):
         raise GoalBlocked('interrupted review checkpoint belongs to another task or candidate')
     return checkpoint if checkpoint.get('coding_session') else None
+
+
+def _review_goal_base(context):
+    return context.get('integration_base', {}).get('goal_base_commit', context['base_commit'])
 
 
 def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
@@ -356,6 +360,7 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
     coding, rounds = prior.get("coding"), manifest.get("rounds")
     return {"prior_outcome": _fact(path), "prior_manifest": _fact(manifest_path),
             "candidate_commit": head, "base_commit": base, "coding_session": session,
+            **({'integration_base': prior['integration_base']} if 'integration_base' in prior else {}),
             "reviews": reviews, "host_findings": prior.get("host_findings", []), "prior_status": status,
             **({'operator_additions': operator_additions} if operator_additions is not None else {}),
             "retained_work": {
@@ -378,6 +383,7 @@ def _review_focus(amendment):
     return {key: amendment[key] for key in (
         "prior_outcome", "prior_manifest", "candidate_commit", "base_commit")} | {
         "findings": list(findings.values()),
+        **({'integration_base': amendment['integration_base']} if 'integration_base' in amendment else {}),
         "retained_work": amendment.get("retained_work", {}),
         "scope": "Prior findings are leads, not a substitute for independent judgment of the new candidate."}
 
@@ -1035,6 +1041,8 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                 outcome['review_tier_decisions'] = manifest['review_tier_decisions']
         raise
     finally:
+        if outcome is not None and 'integration_base' in context:
+            outcome['integration_base'] = context['integration_base']
         # A failed recovery must not replace a prior measured snapshot with an
         # empty one (e.g. the native executable changed before initialization).
         if not (resume and outcome is None and native is None and (folder / "usage.json").exists()):
@@ -1323,7 +1331,7 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
         context = checkpoint["context"]
         if (checkpoint["order"] != manifest["order"] or checkpoint["run_id"] != manifest["run_id"]
                 or checkpoint["worktree"] != manifest["worktree"]
-                or context["base_commit"] != manifest["base_commit"]):
+                or _review_goal_base(context) != manifest["base_commit"]):
             raise GoalBlocked("review checkpoint does not describe this run")
         tree = Path(checkpoint["worktree"])
         _review_range(tree, context["base_commit"], context["candidate_commit"], retained_only=retained_only)

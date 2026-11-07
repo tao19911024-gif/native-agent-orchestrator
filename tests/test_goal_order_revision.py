@@ -52,6 +52,28 @@ def test_admission_keeps_original_identity_bytes_and_checkpoint(external, tmp_pa
     assert revision.manager_input(goal, saved, {}) == ({}, False)
 
 
+@pytest.mark.parametrize('authorized', [True, False])
+def test_answer_chain_follows_only_the_authorized_contract_revision(external, tmp_path, monkeypatch, authorized):
+    from foundry_runtime import _foundry_goal_transitions as transitions
+
+    folder, manifest, order, decision = revision_case(external, tmp_path)
+    saved = revision.admit(goal, folder, manifest, order, decision)
+    outcome = folder / 'outcome.json'
+    goal._write(outcome, {'status': 'awaiting_input'})
+    child = goal.goal_continuation.continuation_parent(folder) / 'continue-answered'
+    child.mkdir()
+    next_order = goal._fact(order) if authorized else {**goal._fact(order), 'sha256': 'unapproved'}
+    goal._write(child / 'manifest.json', {**saved, 'run_id': 'answer-run', 'order': next_order,
+        'manager_state': {**saved['manager_state'], 'last_call_id': 'answer-call'},
+        'continuation': {'prior_record': goal._fact(outcome)}})
+    calls = {call: {'envelope': {'packet': {'run_id': run}}} for call, run in
+             [('answer-call', 'answer-run'), ('later-call', 'separate-amendment')]}
+    history = [{'call_id': call} for call in calls]
+    monkeypatch.setattr(transitions, 'manager_history', lambda *a, **k: (calls, 'later-call', history))
+    selected, _ = goal.goal_continuation.consumed_continuation(goal, folder, saved, read_only=True)
+    assert selected == (child if authorized else folder)
+
+
 @pytest.mark.parametrize('fault', ['run', 'goal', 'old_bytes', 'new_bytes', 'ruling', 'path'])
 def test_mismatched_revision_does_not_mutate_goal(external, tmp_path, fault):
     folder, manifest, order, decision = revision_case(external, tmp_path)

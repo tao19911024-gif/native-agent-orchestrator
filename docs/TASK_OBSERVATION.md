@@ -20,6 +20,9 @@ retain their original observations.
 The active round owns the worker package binding for a managed goal. The
 manager's native conversation lock owns its call receipts. A settled outcome
 with no continuation action displays the recorded outcome status as its phase.
+An answered goal follows its retained continuation across an authorized order
+revision. The observer binds the manager calls to the linked runs so a later
+amendment in the same conversation does not replace the answer.
 
 `progress` shows the active round, bound worker, active coordinator calls,
 last recorded worker activity and the latest available manager decision with its

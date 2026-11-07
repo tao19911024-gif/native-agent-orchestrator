@@ -19,11 +19,21 @@ The complete values remain under the checkpoint's `context` object. The
 Candidate and base commits, project checks, closure results, prior findings
 and the full context hash remain in the request.
 
+For a new automatic review in a descriptor project, Foundry compares the
+candidate with the locally recorded default integration branch
+(`refs/remotes/origin/HEAD`). When their merge base advances along the goal's
+recorded starting history, the review uses that merge base. The checkpoint
+records the original goal base, integration commit and selected base before
+either review starts. Projects without that ref and goals based on an
+unintegrated predecessor keep the recorded goal base. Standalone review uses
+its explicit base. Review recovery uses the base already in its checkpoint.
+
 Read the complete task requirements and any referenced execution decision
 before judging a candidate. Read the relevant project details and changed-file
 list from their indicated fields. Extract those fields from the JSON document
 instead of printing the whole checkpoint and its coding usage observations.
-The original base-to-candidate review scope remains in effect.
+The checkpoint defines the base-to-candidate review scope. All original
+acceptance criteria apply to that scope.
 
 ## Evidence reading policy
 
