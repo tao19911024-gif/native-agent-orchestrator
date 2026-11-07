@@ -7,6 +7,8 @@ WAIT_GUIDANCE = (
     "consistent with its progress-update requirements. A queued test is still the same operation: "
     "do not resubmit it, run a second status command, or repeatedly reread unchanged logs. "
     "Do independent useful work while it runs; when none remains, wait on that handle. "
+    "When no member owns outstanding work, use the retained command handle for process waiting. "
+    "If that handle has already returned a result, inspect it and continue instead of entering another member wait. "
     "Inspect new output on completion, failure, an input request or a meaningful progress change. "
     "For independent reviewers use the existing agent completion wait and follow-up identities. "
     "Do not send unchanged status or repeated keep-working messages to members. Coalesce updates "

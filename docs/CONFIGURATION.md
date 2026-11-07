@@ -105,6 +105,13 @@ retrieve the required missing ranges. Project-mandated full coverage and checks
 remain part of the task. This guidance uses the existing prompt and introduces
 no additional reading gate or output-limit override.
 
+New launches record tool-discipline policy version 7. Index-first guidance,
+reading budgets, repeated-read observations and model-cost heuristics return
+advice through the existing tool hook. They permit the selected call while
+identifying avoidable work. Explicit member model selection, storage ownership
+and independent reviewer admission retain their existing checks. Recovery uses
+the recorded policy version, including the rules of earlier launches.
+
 ## Execution owner and preflight
 
 Merge this object into the generated descriptor:
@@ -192,8 +199,15 @@ The Codex app-server sends process completion to a waiting owner when an
 observed command finishes during that owner's wait. Earlier results stay with
 the native command tool. If the root and all observed active members remain in
 mailbox waits with no visible command or pending input, the existing member
-progress threshold triggers one observation to the root per turn. The root
-reconciles retained handles and returns a result or identifies the dependency.
+progress threshold triggers an observation to the root, including a root waiting
+alone after all members have completed. The root checks the retained command
+handle and consumes an available result before choosing another wait. Successfully applied
+edits and changed command results make a subsequent quiet wait eligible for
+another observation. Repeated waits and identical results retain the previous
+observation. The member activity owner tracks resumed turns, commands and waits
+together. It discards the previous turn's pending observations when a member
+starts a successor turn. The root reconciles retained handles and returns a
+result or identifies the dependency.
 Native wait intervals and process custody remain in effect.
 
 For Codex, zero omits `tool_output_token_limit` from native arguments and keeps

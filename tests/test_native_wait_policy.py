@@ -24,6 +24,7 @@ def test_new_team_configures_native_wait_without_execution_timeout(monkeypatch, 
     assert team['process_completion_wait'] == 1
     assert not any('deadline' in k or 'runtime_seconds' in k for k in config)
     assert 'One implementation owner retains each process handle' in team['instructions']
+    assert 'When no member owns outstanding work, use the retained command handle' in team['instructions']
 
 
 @pytest.mark.parametrize('value,expected', [('60',60000),('7200',3600000),('bad',1800000),('-1',1800000)])
@@ -115,9 +116,13 @@ def observer():
     return app
 
 
-def event(kind, identity, *, method='item/completed', thread='root',turn='t',**extra):
+def observe_process(app, message):
+    return app.member_activity.observe(message, 1, thread_id=app.thread_id, turn_id=app.turn_id)
+
+
+def event(item_type, identity, *, method='item/completed', thread='root',turn='t',**extra):
     return {'method':method,'params':{'threadId':thread,'turnId':turn,
-        'item':{'id':identity,'type':kind,**({'processId':'native-process'} if kind=='commandExecution' else {}),**extra}}}
+        'item':{'id':identity,'type':item_type,**({'processId':'native-process'} if item_type=='commandExecution' else {}),**extra}}}
 
 
 @pytest.mark.parametrize('thread',['root','child'])
@@ -126,29 +131,29 @@ def test_native_process_completion_wakes_only_its_waiting_owner(thread):
     wait=event('collabAgentToolCall','w',method='item/started',thread=thread,tool='wait')
     start=event('commandExecution','cmd',method='item/started',thread=thread,status='inProgress')
     done=event('commandExecution','cmd',thread=thread,status='completed',exitCode=0)
-    assert app._process_wait_notice(start) is None
-    assert app._process_wait_notice(wait) is None
-    notice=app._process_wait_notice(done)
+    assert observe_process(app, start) is None
+    assert observe_process(app, wait) is None
+    notice=observe_process(app, done)
     assert notice=={'thread_id':thread,'turn_id':'t','wait_id':'w',
                     'commands':[{'item_id':'cmd','process_id':'native-process','status':'completed','exit_code':0}]}
-    assert app._process_wait_notice(done) is None
-    assert app._process_wait_notice(wait) is None
-    assert app._process_wait_notice(event('commandExecution','foreign',thread='unrelated')) is None
+    assert observe_process(app, done) is None
+    assert observe_process(app, wait) is None
+    assert observe_process(app, event('commandExecution','foreign',thread='unrelated')) is None
 
 
 @pytest.mark.parametrize('after_operator_wake', [False, True])
 def test_completed_command_is_not_replayed_on_a_later_wait(after_operator_wake):
     app=observer()
     start=event('commandExecution','cmd',method='item/started',status='inProgress',source='unifiedExecStartup')
-    app._process_wait_notice(start)
+    observe_process(app, start)
     if after_operator_wake:
-        app._process_wait_notice(event('collabAgentToolCall','w',method='item/started',tool='wait'))
-        app._process_wait_notice(event('collabAgentToolCall','w',tool='wait'))
-    assert app._process_wait_notice(event('commandExecution','cmd',exitCode=7,status='failed',
+        observe_process(app, event('collabAgentToolCall','w',method='item/started',tool='wait'))
+        observe_process(app, event('collabAgentToolCall','w',tool='wait'))
+    assert observe_process(app, event('commandExecution','cmd',exitCode=7,status='failed',
         source='unifiedExecStartup',aggregatedOutput='command result already returned')) is None
-    assert app._process_wait_notice(event('collabAgentToolCall','w2',method='item/started',tool='wait')) is None
-    app._process_wait_notice({'method':'turn/completed','params':{'threadId':'root','turn':{'id':'t'}}})
-    assert not app._process_waiting
+    assert observe_process(app, event('collabAgentToolCall','w2',method='item/started',tool='wait')) is None
+    observe_process(app, {'method':'turn/completed','params':{'threadId':'root','turn':{'id':'t'}}})
+    assert not app.member_activity.waiting
 
 
 def test_quiet_team_wait_prompts_root_once_after_existing_progress_threshold():
@@ -185,6 +190,120 @@ def test_idle_wait_notice_uses_root_without_interrupting_native_turn():
     assert options == {'stop_on_timeout': False}
     assert 'foundry_idle_wait_delivered_to_root' in app._log_handle.getvalue()
     assert not app._stopping.is_set()
+
+
+@pytest.mark.parametrize('had_member', [False, True])
+def test_root_wait_without_active_members_still_checks_retained_work(had_member):
+    app = observer()
+    app.process_completion_wait = True
+    if had_member:
+        app._notification(event('subAgentActivity', 'done', agentThreadId='child', kind='completed'), observed_at=1)
+    else:
+        app.member_activity.members.clear()
+    idle, completed = [], []
+    app._deliver_idle_wait_notice = idle.append
+    app._deliver_process_wait_notice = completed.append
+    app._notification(event('commandExecution', 'test-result', status='completed', exitCode=1), observed_at=2)
+    app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=3)
+    app._publish_idle_wait(302)
+    assert not idle and not completed
+    app._publish_idle_wait(303)
+    app._publish_idle_wait(900)
+    assert len(idle) == 1 and idle[0]['members'] == []
+    assert idle[0]['wait_id'] == 'root-only' and not completed
+
+
+def test_root_only_wait_does_not_publish_while_its_command_runs():
+    app = observer()
+    app.process_completion_wait = True
+    app.member_activity.members.clear()
+    idle = []
+    app._deliver_idle_wait_notice = idle.append
+    app._notification(event('commandExecution', 'background', method='item/started', status='inProgress'), observed_at=1)
+    app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=2)
+    app._publish_idle_wait(1802)
+    assert not idle
+
+
+def test_known_member_starts_another_turn_and_can_wake_the_root():
+    app = observer()
+    app.process_completion_wait = True
+    notices = []
+    app._deliver_idle_wait_notice = notices.append
+    app._notification(event('subAgentActivity', 'spawn', agentThreadId='child', kind='started'), observed_at=1)
+    app._notification(event('subAgentActivity', 'return', agentThreadId='child', kind='completed'), observed_at=2)
+    assert not app.member_activity.members
+    for thread in ('unrelated', 'child'):
+        app._notification({'method': 'turn/started', 'params': {'threadId': thread,
+                           'turn': {'id': 'new-turn', 'status': 'inProgress'}}}, observed_at=3)
+    assert app.member_activity.members.keys() == {'child'}
+    app._notification(event('collabAgentToolCall', 'root-wait', method='item/started', tool='wait'), observed_at=4)
+    app._publish_idle_wait(304)
+    assert not notices
+    app._notification(event('collabAgentToolCall', 'child-wait', method='item/started',
+                            thread='child', turn='new-turn', tool='wait'), observed_at=305)
+    app._publish_idle_wait(605)
+    assert [notice['wait_id'] for notice in notices] == ['root-wait']
+
+
+def test_quiet_wait_rearms_after_edit_but_not_after_wait_or_duplicate_edit():
+    app = observer()
+    app.process_completion_wait = True
+    notices = []
+    app._deliver_idle_wait_notice = notices.append
+
+    def wait(identity, start):
+        for thread in ('root', 'child'):
+            app._notification(event('collabAgentToolCall', identity + thread, method='item/started',
+                                    thread=thread, tool='wait'), observed_at=start)
+        app._publish_idle_wait(start + 301)
+        for thread in ('root', 'child'):
+            app._notification(event('collabAgentToolCall', identity + thread,
+                                    thread=thread, tool='wait'), observed_at=start + 302)
+
+    wait('first', 1)
+    wait('repeat', 310)
+    assert [notice['wait_id'] for notice in notices] == ['firstroot']
+    edit = event('fileChange', 'edit', thread='child', status='completed')
+    app._notification(edit, observed_at=620)
+    wait('after-edit', 621)
+    app._notification(edit, observed_at=930)
+    wait('after-replay', 931)
+    assert [notice['wait_id'] for notice in notices] == ['firstroot', 'after-editroot']
+
+
+def test_resumed_member_ignores_old_terminal_and_clears_parent_reported_work():
+    app = observer()
+    app.process_completion_wait = True
+    app._notification(event('subAgentActivity', 'spawn', agentThreadId='child', kind='started'), observed_at=1)
+    for turn, now in [('old', 2), ('new', 4)]:
+        app._notification({'method': 'turn/started', 'params': {'threadId': 'child',
+                          'turn': {'id': turn, 'status': 'inProgress'}}}, observed_at=now)
+        app._notification(event('commandExecution', turn, method='item/started',
+                                thread='child', turn=turn, status='inProgress'), observed_at=now + 1)
+    app._notification({'method': 'turn/completed', 'params': {'threadId': 'child',
+                      'turn': {'id': 'old', 'status': 'completed'}}}, observed_at=6)
+    assert app.member_activity.members.keys() == {'child'}
+    assert app.member_activity.running == {('child', 'new', 'new')}
+    app._notification(event('subAgentActivity', 'returned', agentThreadId='child', kind='completed'), observed_at=7)
+    assert not app.member_activity.members and not app.member_activity.running
+
+
+def test_changed_command_result_rearms_wait_without_rearming_repeated_result():
+    app = observer()
+    app.process_completion_wait = True
+    notices = []
+    app._deliver_idle_wait_notice = notices.append
+    for index, output in enumerate(('failed test A', 'failed test A', 'passed test A')):
+        now = index * 1000
+        app._notification(event('commandExecution', 'test-' + str(index), thread='child',
+                                command='pytest selected.py', aggregatedOutput=output,
+                                exitCode=0, status='completed'), observed_at=now)
+        for thread in ('root', 'child'):
+            app._notification(event('collabAgentToolCall', str(index) + thread, method='item/started',
+                                    thread=thread, tool='wait'), observed_at=now + 1)
+        app._publish_idle_wait(now + 301)
+    assert [notice['wait_id'] for notice in notices] == ['0root', '2root']
 
 
 @pytest.mark.parametrize('work', ['command', 'member', 'operator', 'manager'])
@@ -256,17 +375,17 @@ def test_observation_only_and_old_launch_never_send_completion_input():
     app.process_completion_wait=True
     app._observe(event('commandExecution','cmd',exitCode=0))
     app._observe(event('collabAgentToolCall','w',method='item/started',tool='wait'))
-    assert not app._writers and not app._process_waiting
+    assert not app._writers and not app.member_activity.waiting
 
 
 def test_empty_process_interactions_and_unknown_exit_do_not_wake_models():
     app=observer()
-    app._process_wait_notice(event('collabAgentToolCall','w',method='item/started',tool='wait'))
+    observe_process(app, event('collabAgentToolCall','w',method='item/started',tool='wait'))
     for i in range(20):
-        assert app._process_wait_notice(event('commandExecution',str(i),exitCode=None)) is None
-        assert app._process_wait_notice(event('commandExecution',str(i),exitCode=0,source='unifiedExecInteraction')) is None
-    app._process_wait_notice(event('commandExecution','actual-exit',method='item/started',status='inProgress'))
-    assert app._process_wait_notice(event('commandExecution','actual-exit',exitCode=1))['commands'][0]['exit_code']==1
+        assert observe_process(app, event('commandExecution',str(i),exitCode=None)) is None
+        assert observe_process(app, event('commandExecution',str(i),exitCode=0,source='unifiedExecInteraction')) is None
+    observe_process(app, event('commandExecution','actual-exit',method='item/started',status='inProgress'))
+    assert observe_process(app, event('commandExecution','actual-exit',exitCode=1))['commands'][0]['exit_code']==1
 
 
 @pytest.mark.parametrize('stop',[False,True])

@@ -45,7 +45,7 @@ def test_installed_help_from_unrelated_directory(tmp_path, module, flag):
     assert flag in result.stdout
 
 
-@pytest.mark.parametrize("backend,version", [("claude", 15), ("codex", 20)])
+@pytest.mark.parametrize("backend,version", [("claude", 16), ("codex", 21)])
 def test_member_lifecycle_installed(backend, version):
     team = compute.resolve_native_team("adaptive", backend=backend)
     assert team["version"] == version

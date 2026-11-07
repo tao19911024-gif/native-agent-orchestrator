@@ -268,9 +268,9 @@ _EXPERT_HANDOFF = (
     "Use the lowest capable tier for difficulty and risk. "
     "When a member cannot resolve a named failure with its evidence, use the existing member mechanism to escalate "
     "one tier with [decision: failed attempt and unresolved question]; do not replay the same failed request indefinitely. "
-    "A Fable expert brief must include [expert: specific question]; "
-    "an Opus/Astra decision brief must include [decision: specific decision or difficult final diff]. "
-    "A retrieval brief must explicitly request file:line references plus quotes/excerpts. "
+    "Use [expert: specific question] for a Fable expert brief and "
+    "[decision: specific decision or difficult final diff] for an Opus/Astra decision brief. "
+    "Request file:line references plus quotes/excerpts in retrieval briefs. "
     "Keep each Haiku retrieval job below 100k total prompt tokens, including inherited context and tool results; "
     "split larger evidence into scoped jobs or return a compact index-backed handoff before that boundary. "
     "Unknown context size is not proof of being below the boundary. "
@@ -279,7 +279,9 @@ _EXPERT_HANDOFF = (
     "Code fact gathering uses the investigator tier "
     "and implementation uses the worker tier. "
     "Read discipline: brief each member with relevant paths, line ranges, symbol signatures, decisions "
-    "and open questions. Manager direct reading is metered by the frozen launch policy; index queries remain available. "
+    "and open questions. The frozen launch policy observes manager reading and repeated source requests. "
+    "New policies report efficiency advice without refusing the selected call; "
+    "review independence, explicit member model selection and storage ownership remain required. "
     "Use #decide: specific reason for substantial decision reads, or #reread: specific reason for required repeats. "
     "Missing or unfamiliar observation formats do not prevent execution. For cross-file discovery or relationships, use codegraph_explore with query "
     "naming exact files or symbols; maxFiles bounds source files, not response tokens. Do not pass "
@@ -333,6 +335,17 @@ _EXPERT_HANDOFF = (
 )
 
 
+_MANAGED_EXECUTION_GUIDANCE = (
+    "You execute the Foundry manager's bounded assignment. Own implementation, focused tests and "
+    "the committed candidate handoff. Work directly when one context can complete the slice; "
+    "delegate when independent deliverables, distinct expertise or context separation justify it. "
+    "Make reversible implementation decisions within the assigned scope. Escalate scope changes, "
+    "unresolved cross-boundary decisions and conflicting requirements to the manager. The manager "
+    "owns scope and delivery readiness; independent candidate review remains separate. Return "
+    "results and unresolved questions at the assigned handback boundary. "
+)
+
+
 def is_managed(profile=None, state=None):
     return bool(profile or (state or {}).get('live_coordination'))
 
@@ -367,19 +380,17 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
     if backend == "claude":
         if profile not in {"none", "adaptive"}:
             raise ValueError("unknown Claude team profile")
-        team = {"profile": profile, "version": 15 if profile == "adaptive" else 1, "backend": "claude",
+        team = {"profile": profile, "version": 16 if profile == "adaptive" else 1, "backend": "claude",
             "worker_capacity": 10 if profile == "adaptive" else 0,
             "lead_role": "manager" if profile == "adaptive" and not managed else "executor",
             "config": {},
             "member_roles": member_roles('claude'),
-            "instructions": (EVIDENCE_GUIDANCE + WAIT_GUIDANCE + ("Execute the Foundry manager's bounded assignment with your native workers. "
-                "Return slice results and unresolved design questions to that manager; it owns design "
-                "and readiness decisions. " if managed else
+            "instructions": (EVIDENCE_GUIDANCE + WAIT_GUIDANCE + (_MANAGED_EXECUTION_GUIDANCE if managed else
                 "Manage this task's native Claude team. Delegate substantive implementation "
                 "and its focused tests to workers; retain requirements, architectural decisions, "
                 "conflicting evidence and final acceptance. ") + "While workers execute, resolve dependencies "
-                "instead of duplicating their investigation, edits or test loops. Direct work is appropriate "
-                "for trivial changes or decisions needing your expertise; briefly state why. "
+                "instead of duplicating their investigation, edits or test loops. " + ("" if managed else
+                "Direct work is appropriate for trivial changes or decisions needing your expertise; briefly state why. ") +
                 "Assign code fact gathering/investigator and mechanical extraction to Haiku, implementation "
                 "and causal analysis to Sonnet, and difficult "
                 "expert reasoning to Fable. The separate Foundry manager retains Opus and does not edit. "
@@ -443,7 +454,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
     if profile != "adaptive":
         raise ValueError("unknown native team profile: " + str(profile))
     wait_config = native_wait_config()
-    return {"profile": profile, "version": 20, "worker_capacity": 10, "expert_consultation": True,
+    return {"profile": profile, "version": 21, "worker_capacity": 10, "expert_consultation": True,
             "process_completion_wait": 1,
             "calibration_prompt_format": "tables-v2",
             "lead_role": "executor" if managed else "manager",
@@ -459,22 +470,18 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
                     "enabled": True, "expose_spawn_agent_model_overrides": True,
                     "max_concurrent_threads_per_session": 11}},
             "instructions": (EVIDENCE_GUIDANCE + WAIT_GUIDANCE +
-                ("You execute the Foundry manager's bounded assignment. Delegate substantive "
-                "implementation and its tests to native workers with fresh or bounded context. "
-                "The Foundry manager owns task decomposition, architectural decisions and readiness. "
-                "Return results and unresolved design questions at the assigned handback boundary. "
-                if managed else
+                (_MANAGED_EXECUTION_GUIDANCE if managed else
                 "You are the manager of this task's native agent team. Delegate substantive "
                 "implementation and its tests to a native worker with fresh or bounded context. "
                 "Keep requirements, decomposition, architectural decisions, conflicting evidence "
                 "and final acceptance in your own context. ") + (
-                "While workers execute, relay design questions to the Foundry manager; "
-                "do not decide architecture, summon native experts or declare readiness yourself. "
+                "Use the Foundry manager for unresolved design questions beyond the assigned slice. "
                 if managed else "While workers execute, resolve dependencies and decision questions; ") +
                 "Do not duplicate worker coding or tool loops. "
+                + ("" if managed else
                 "For genuinely trivial work or a problem needing your own expertise, direct work "
-                "is appropriate: briefly explain the reason rather than creating a token quota. "
-                + ("Follow the manager's decomposition; choose execution staffing for the assigned slice. " if managed else
+                "is appropriate: briefly explain the reason rather than creating a token quota. ")
+                + ("Choose execution staffing for the assigned slice. " if managed else
                    "Decide the decomposition and team size from the actual problem. ") + "Ten worker slots "
                 "are available, not a requirement to fill them. Solving the task to its "
                 "acceptance criteria comes first; optimize tokens/time only without reducing "

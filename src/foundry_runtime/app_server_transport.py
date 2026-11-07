@@ -98,9 +98,6 @@ class AppServer:
         self._unanswered_input = False
         self._message_items = set()
         self.process_completion_wait = False
-        self._process_waiting = {}
-        self._process_running = set()
-        self._idle_wait_notified = False
         from ._goal_intervention import LiveEvents
         self.live_events = LiveEvents(log=getattr(self._log_handle, 'name', None))
         self._stdout_thread = threading.Thread(
@@ -232,8 +229,10 @@ class AppServer:
 
     def _observe(self, message, observed_at=None):
         observed_at = time.monotonic() if observed_at is None else observed_at
-        if self._terminal is None:
-            self.member_activity.observe(message, observed_at, thread_id=self.thread_id, turn_id=self.turn_id)
+        notice = None
+        if self._terminal is None and not self._stopping.is_set():
+            notice = self.member_activity.observe(message, observed_at, thread_id=self.thread_id,
+                turn_id=self.turn_id, track_wait=self.process_completion_wait and not self.observation_only)
             if self.deadline is not None and observed_at >= self.deadline:
                 self.begin_stop('overall')
             elif (self.last_activity is not None and self.policy['inactivity_seconds'] is not None
@@ -250,7 +249,6 @@ class AppServer:
         params = message.get("params", {})
         if self.process_completion_wait and not self.observation_only:
             try:
-                notice = self._process_wait_notice(message, observed_at)
                 if notice is not None:
                     self._deliver_process_wait_notice(notice)
             except Exception as exc:
@@ -348,58 +346,6 @@ class AppServer:
     def _id(value):
         return isinstance(value, str) and bool(value.strip())
 
-    def _process_wait_notice(self, message, observed_at=None):
-        """Existing native event stream wakes only its recorded waiting owner.
-
-        A running command must finish during its owner's wait. Terminal results
-        observed outside that wait stay with the original command tool.
-        No OS scan, timer, process cancellation, manager decision or task resume.
-        """
-        params = message.get('params') or {}
-        if not isinstance(params, dict):
-            return
-        thread, turn = params.get('threadId'), params.get('turnId')
-        method = message.get('method')
-        if method == 'turn/completed':
-            terminal = params.get('turn') or {}
-            if not isinstance(terminal, dict):
-                return
-            turn = terminal.get('id')
-            key = (thread, turn)
-            self._process_waiting.pop(key, None)
-            self._process_running = {row for row in self._process_running if row[:2] != key}
-            return
-        if (not self._id(thread) or not self._id(turn)
-                or self._terminal is not None or self._stopping.is_set()
-                or (thread == self.thread_id and turn != self.turn_id)
-                or (thread != self.thread_id and thread not in self.member_activity.members)):
-            return
-        item = params.get('item') or {}
-        if not isinstance(item, dict):
-            return
-        identity = item.get('id')
-        if not self._id(identity):
-            return
-        key = (thread, turn)
-        if item.get('type') == 'collabAgentToolCall' and item.get('tool') == 'wait':
-            if method == 'item/started':
-                started = time.monotonic() if observed_at is None else observed_at
-                if self._process_waiting.get(key, (None,))[0] != identity:
-                    self._process_waiting[key] = (identity, started)
-            elif method == 'item/completed' and self._process_waiting.get(key, (None,))[0] == identity:
-                self._process_waiting.pop(key, None)
-        elif item.get('type') == 'commandExecution' and item.get('source') != 'unifiedExecInteraction':
-            command = (*key, identity)
-            if method == 'item/started' and item.get('status') == 'inProgress':
-                self._process_running.add(command)
-            elif method == 'item/completed' and command in self._process_running:
-                self._process_running.remove(command)
-                if (key in self._process_waiting and self._id(item.get('processId'))
-                        and type(item.get('exitCode')) is int):
-                    return {'thread_id': thread, 'turn_id': turn, 'wait_id': self._process_waiting[key][0],
-                            'commands': [{'item_id': identity, 'process_id': item['processId'],
-                                          'status': item.get('status'), 'exit_code': item['exitCode']}]}
-
     def _deliver_process_wait_notice(self, notice):
         # Multi-agent V2 rejects direct AppServer input to a child. Its existing
         # parent owns native member messaging; route through that root instead.
@@ -424,35 +370,22 @@ class AppServer:
         if not self.process_completion_wait or self.observation_only:
             return
         with self._turn_lock:
-            if (self._idle_wait_notified or self._terminal is not None or self._stopping.is_set()
-                    or self._process_running or self._input_requests or self._unanswered_input
+            if (self._terminal is not None or self._stopping.is_set()
+                    or self._input_requests or self._unanswered_input
                     or self.live_events.pending is not None or not self.live_events.events.empty()):
                 return
-            root = (self.thread_id, self.turn_id)
-            members = self.member_activity.members
-            if root not in self._process_waiting or not members:
+            notice = self.member_activity.idle_wait(
+                (self.thread_id, self.turn_id), now, self.last_activity)
+            if notice is None:
                 return
-            member_waits = [wait for (thread, _), wait in self._process_waiting.items() if thread in members]
-            waiting_members = {thread for thread, _ in self._process_waiting if thread in members}
-            if waiting_members != members.keys() or len(member_waits) != len(members):
-                return
-            wait_id, started = self._process_waiting[root]
-            quiet_since = max(started, self.last_activity or started,
-                              *(wait[1] for wait in member_waits),
-                              *(member.get('last', started) for member in members.values()))
-            if now - quiet_since < self.member_activity.threshold:
-                return
-            self._idle_wait_notified = True
-            notice = {'thread_id': root[0], 'turn_id': root[1], 'wait_id': wait_id,
-                      'members': sorted(members), 'quiet_seconds': int(now - quiet_since)}
         try:
             self._deliver_idle_wait_notice(notice)
         except RuntimeError as exc:
             self._log('idle wait observation delivery unavailable: ' + str(exc))
 
     def _deliver_idle_wait_notice(self, notice):
-        text = ('Foundry observation: the root and every observed active member are in mailbox waits, '
-                'and no command is visible as running. Check any retained handle once and request '
+        text = ('Foundry observation: the root is in a mailbox wait, no command is visible as running, '
+                'and no active member is observed outside a mailbox wait. Check any retained handle once and request '
                 'the pending result or actual blocker from its owner. If no work remains, hand back '
                 'the result. A member parked for future instructions should return its current result. '
                 'Keep any confirmed unfinished work with its existing owner.')

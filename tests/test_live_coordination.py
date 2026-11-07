@@ -15,12 +15,19 @@ from test_goal_preflight_recovery import retained_goal
 
 
 @pytest.mark.parametrize('backend', ['codex', 'claude'])
-def test_managed_worker_has_execution_not_design_authority(backend, monkeypatch):
+def test_managed_worker_owns_bounded_execution_with_manager_readiness(backend, monkeypatch):
     monkeypatch.setenv('PDCL_MODEL_CATALOGUE', 'snapshot')
     team = resolve_native_team('adaptive', backend=backend, managed=True)
     assert team['lead_role'] == 'executor'
     assert 'retain requirements, architectural decisions' not in team['instructions']
     assert 'final acceptance in your own context' not in team['instructions']
+    assert 'Work directly when one context can complete the slice' in team['instructions']
+    assert 'Make reversible implementation decisions within the assigned scope' in team['instructions']
+    assert 'owns scope and delivery readiness' in team['instructions']
+    assert 'independent candidate review remains separate' in team['instructions']
+    assert 'Delegate substantive implementation' not in team['instructions']
+    assert 'do not decide architecture' not in team['instructions']
+    assert 'for trivial changes' not in team['instructions']
     if backend == 'codex':
         from foundry_runtime._compute_selection import _EXPERT_HANDOFF
         assert _EXPERT_HANDOFF not in team['instructions']

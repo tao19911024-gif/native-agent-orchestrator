@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0a113 — 2026-11-07
+
+- Consolidate Codex member, command and mailbox-wait observations under the
+  existing member activity owner. Recognize resumed member turns and ignore
+  stale child-turn notifications.
+- Re-arm quiet-team delivery after new successful edits or changed command
+  results. Repeated waits and unchanged results retain their previous observation.
+  Include root-only mailbox waits after all members have completed.
+- Let managed execution roots implement assigned slices directly and make
+  reversible decisions within scope. The manager retains scope and readiness;
+  independent candidate review remains separate.
+- Report index, reading and model-cost heuristics as advice for new launches.
+  Preserve explicit model choice, storage ownership and reviewer admission,
+  including the root executor when coding work is shared with members.
+  Recovery retains its recorded launch policy and team instructions.
+
 ## 0.1.0a112 — 2026-11-06
 
 - Resolve the review base for a new automatic candidate review from the

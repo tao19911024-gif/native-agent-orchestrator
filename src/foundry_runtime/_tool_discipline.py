@@ -56,7 +56,7 @@ def spawn_reason(chosen, text, policy):
         if lookup and tier in readers and not (
                 re.search(r'file\s*:\s*line|文件.{0,6}行号', text, re.I)
                 and re.search(r'quotes?|excerpts?|原文|摘录|引用', text, re.I)):
-            return 'Reader brief must request file:line references plus quotes/excerpts; add those outputs and retry.'
+            return 'Reader brief needs file:line references plus quotes/excerpts for a verifiable result.'
     if activity is None and policy.get('version', 1) < 3:
         return ('Start the member brief with [activity: investigate|mechanical|execute|review|decision|expert] '
                 '(choose one). Reading needed for implementation belongs to execute; do not split every lookup.')
@@ -351,6 +351,7 @@ def check(event, policy):
     text = '\n'.join(str(value.get(k, '')) for k in ('description', 'prompt', 'message'))
     reason = None
     warnings = []
+    advisory = policy.get('version', 1) >= 7
     path = str(value.get('file_path') or value.get('path') or '')
     paths = [path] if name in ('Write', 'Edit') else []
     if name == 'apply_patch':
@@ -366,6 +367,9 @@ def check(event, policy):
             reason = 'Select the member model explicitly; routine work must not inherit an expensive parent model.'
         else:
             reason = spawn_reason(chosen, text, policy)
+            if advisory and reason:
+                warnings.append('Efficiency guidance: ' + reason + ' The selected call may proceed.')
+                reason = None
             activity = declared_activity(text)
             if reason is None and policy.get('version', 1) >= 4 and (activity == 'review' or
                     activity is None and re.search(r'^\s*(?:please\s+)?(?:review|audit)\b|^\s*(?:审查|评审)', text, re.I)):
@@ -375,9 +379,12 @@ def check(event, policy):
                 except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     participants = set()  # Unknown native observations do not block review.
                 basis = 'recorded coding-member assignment'
-                if not participants and policy.get('version', 1) >= 5 and policy.get('recorded_coding_model'):
-                    participants = {policy['recorded_coding_model'], *policy.get('recorded_coding_models', [])}
-                    basis = 'frozen coding-model fallback (editing authorship unobserved)'
+                if policy.get('version', 1) >= 5 and policy.get('recorded_coding_model'):
+                    executor = advisory and policy.get('root_role') == 'executor'
+                    if not participants or executor:
+                        basis = ('recorded executor or coding-member assignment' if participants else
+                                 'frozen coding-model fallback (editing authorship unobserved)')
+                        participants.update({policy['recorded_coding_model'], *policy.get('recorded_coding_models', [])})
                 if any(chosen == m or tier_for_model(chosen) is not None and tier_for_model(chosen) == tier_for_model(m) for m in participants):
                     reason = ('Reviewer matches a ' + basis + '. Choose another model, preferably another provider; '
                               'the implementation result is retained and needs no replay.')
@@ -401,10 +408,16 @@ def check(event, policy):
                   'then use scoped direct reads to verify missing/stale results. '
                   'If unavailable, unsuitable, or already checked, give #idx: concrete reason in the command comment '
                   'or tool description. Reuse that reason; do not repeatedly retry a failed index.')
+        if advisory:
+            warnings.append('Efficiency guidance: ' + reason + ' The selected call may proceed.')
+            reason = None
     if reason is None and policy.get('version', 1) >= 3:
         from ._tool_history import reading_check
         try:
             reason = reading_check(event, policy)
+            if advisory and reason:
+                warnings.append('Efficiency guidance: ' + reason + ' The selected call may proceed.')
+                reason = None
         except (OSError, ValueError, TypeError, KeyError, AttributeError):
             # Optional metering must not turn an unknown native format into a
             # denied operation. The native transcript remains the evidence.
