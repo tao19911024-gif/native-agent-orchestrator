@@ -25,8 +25,9 @@ completion and zero previously returned command notifications. The retained
 waiting-team replay continues to use the 300-second progress threshold.
 
 Two original empty waits lasted 300.018 and 300.017 seconds. Replaying the same
-events against the new observer makes them eligible after 0.153 and 0.365 seconds
-with a 0.5-second observation tick. Both versions emit two observations and zero
+events against the new observer makes them eligible after 0.010 and 0.365 seconds.
+The replay checks at recorded event timestamps and on a 0.5-second clock grid.
+Both versions emit two observations and zero
 replayed command completions. These are replay eligibility times; delivery and
 model response are measured separately in the native task.
 
