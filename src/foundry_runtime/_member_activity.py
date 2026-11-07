@@ -191,8 +191,14 @@ class CodexMemberActivity:
     def __init__(self, threshold=300):
         self.threshold = threshold
         self.members = {}
+        self.known_members = set()
+        self.member_turns = {}
         self.seen = set()
         self.next_check = 0
+        self.waiting = {}
+        self.running = set()
+        self.idle_notified = False
+        self.tool_results = {}
 
     def publish(self, app, now):
         if now < self.next_check:
@@ -208,26 +214,150 @@ class CodexMemberActivity:
             except (OSError, ValueError):
                 pass  # Observation failure does not change native execution.
 
-    def observe(self, message, now, *, thread_id, turn_id):
+    @staticmethod
+    def _valid_id(value):
+        return isinstance(value, str) and bool(value.strip())
+
+    def observe(self, message, now, *, thread_id, turn_id, track_wait=True):
+        params = message.get('params') or {}
+        if not isinstance(params, dict):
+            return
+        member = params.get('threadId')
+        turn = params.get('turn') or {}
+        current = turn.get('id') if isinstance(turn, dict) and message.get('method', '').startswith('turn/') else params.get('turnId')
+        if isinstance(member, str) and member in self.known_members and self._valid_id(current):
+            previous = self.member_turns.get(member)
+            if message.get('method') == 'turn/started' and turn.get('status') == 'inProgress':
+                if current != previous:
+                    self._forget_member(member)
+                    self.members[member] = {'last': now, 'reported': False, 'status': 'running'}
+                    self.member_turns[member] = current
+            elif previous is not None and current != previous:
+                return
+            elif member in self.members:
+                self.member_turns[member] = current
+        self._observe_members(message, now, thread_id=thread_id, turn_id=turn_id)
+        if track_wait:
+            return self._observe_wait(message, now, thread_id=thread_id, turn_id=turn_id)
+
+    def _forget_member(self, member):
+        self.members.pop(member, None)
+        self.waiting = {key: value for key, value in self.waiting.items() if key[0] != member}
+        self.running = {key for key in self.running if key[0] != member}
+
+    def _observe_wait(self, message, now, *, thread_id, turn_id):
+        """Existing native event stream wakes only its recorded waiting owner.
+
+        A running command must finish during its owner's wait. Terminal results
+        observed outside that wait stay with the original command tool.
+        No OS scan, timer, process cancellation, manager decision or task resume.
+        """
+        params = message.get('params') or {}
+        if not isinstance(params, dict):
+            return
+        thread, turn = params.get('threadId'), params.get('turnId')
+        method = message.get('method')
+        if method == 'turn/completed':
+            terminal = params.get('turn') or {}
+            if not isinstance(terminal, dict):
+                return
+            turn = terminal.get('id')
+            key = (thread, turn)
+            self.waiting.pop(key, None)
+            self.running = {row for row in self.running if row[:2] != key}
+            return
+        if (not self._valid_id(thread) or not self._valid_id(turn)
+                or (thread == thread_id and turn != turn_id)
+                or (thread != thread_id and thread not in self.members)):
+            return
+        item = params.get('item') or {}
+        if not isinstance(item, dict):
+            return
+        identity = item.get('id')
+        if not self._valid_id(identity):
+            return
+        key = (thread, turn)
+        if item.get('type') == 'collabAgentToolCall' and item.get('tool') == 'wait':
+            if method == 'item/started':
+                started = now
+                if self.waiting.get(key, (None,))[0] != identity:
+                    self.waiting[key] = (identity, started)
+            elif method == 'item/completed' and self.waiting.get(key, (None,))[0] == identity:
+                self.waiting.pop(key, None)
+        elif item.get('type') == 'fileChange' and method == 'item/completed' and item.get('status') == 'completed':
+            edit = ('fileChange', thread, turn, identity)
+            if edit not in self.seen:
+                self.seen.add(edit)
+                self.idle_notified = False
+        elif item.get('type') == 'commandExecution' and item.get('source') != 'unifiedExecInteraction':
+            if method == 'item/completed':
+                from ._goal_intervention import tool_observation
+                observation = tool_observation(item)
+                if observation is not None:
+                    request, result = observation
+                    scope = (thread, request)
+                    if self.tool_results.get(scope) != result:
+                        self.tool_results[scope] = result
+                        self.idle_notified = False
+            command = (*key, identity)
+            if method == 'item/started' and item.get('status') == 'inProgress':
+                self.running.add(command)
+            elif method == 'item/completed' and command in self.running:
+                self.running.remove(command)
+                if (key in self.waiting and self._valid_id(item.get('processId'))
+                        and type(item.get('exitCode')) is int):
+                    return {'thread_id': thread, 'turn_id': turn, 'wait_id': self.waiting[key][0],
+                            'commands': [{'item_id': identity, 'process_id': item['processId'],
+                                          'status': item.get('status'), 'exit_code': item['exitCode']}]}
+
+    def idle_wait(self, root, now, last_activity):
+        if self.idle_notified or self.running:
+            return
+        members = self.members
+        if root not in self.waiting:
+            return
+        member_waits = [wait for (thread, _), wait in self.waiting.items() if thread in members]
+        waiting_members = {thread for thread, _ in self.waiting if thread in members}
+        if waiting_members != members.keys() or len(member_waits) != len(members):
+            return
+        wait_id, started = self.waiting[root]
+        quiet_since = max(started, last_activity or started,
+                          *(wait[1] for wait in member_waits),
+                          *(member.get('last', started) for member in members.values()))
+        if now - quiet_since < self.threshold:
+            return
+        self.idle_notified = True
+        return {'thread_id': root[0], 'turn_id': root[1], 'wait_id': wait_id,
+                  'members': sorted(members), 'quiet_seconds': int(now - quiet_since)}
+
+    def _observe_members(self, message, now, *, thread_id, turn_id):
         params = message.get('params')
         if not isinstance(params, dict):
             return
         member = params.get('threadId')
         if not isinstance(member, str):
             return
+        method = message.get('method')
+        turn = params.get('turn')
         if member in self.members and member != thread_id:
             # Only an actual child item/delta is progress, not a repeated running state.
-            method = message.get('method', '')
-            if ((method in ('item/started', 'item/completed') and isinstance(params.get('item'), dict))
+            item = params.get('item')
+            item_activity = method in ('item/started', 'item/completed') and isinstance(item, dict)
+            if item_activity and self._valid_id(item.get('id')):
+                key = ('member_item', member, params.get('turnId'), item['id'], method)
+                completed = (*key[:-1], 'item/completed')
+                item_activity = key not in self.seen and completed not in self.seen
+                self.seen.add(key)
+            if (item_activity
                     or (method in ('item/agentMessage/delta', 'item/commandExecution/outputDelta', 'item/reasoning/textDelta')
                         and isinstance(params.get('delta'), str) and params['delta'].strip())):
                 self.members[member].update(last=now, reported=False)
-            if (method == 'turn/completed' and isinstance(params.get('turn'), dict)
-                    and params['turn'].get('status') in ('completed', 'failed', 'interrupted')):
-                self.members.pop(member, None)
+            if (method == 'turn/completed' and isinstance(turn, dict)
+                    and turn.get('status') in ('completed', 'failed', 'interrupted')):
+                self._forget_member(member)
             return
         if (member != thread_id or params.get('turnId') != turn_id
-                or message.get('method') != 'item/completed'):
+                or method != 'item/completed'):
             return
         item = params.get('item')
         if not isinstance(item, dict) or item.get('type') not in ('collabAgentToolCall', 'subAgentActivity'):
@@ -241,20 +371,22 @@ class CodexMemberActivity:
             if not isinstance(child, str) or not child or child == thread_id:
                 return
             if item.get('kind') == 'started':
+                self.known_members.add(child)
                 self.members[child] = {'last': now, 'reported': False, 'status': 'running'}
             elif item.get('kind') in ('completed', 'interrupted'):
-                self.members.pop(child, None)
+                self._forget_member(child)
             return  # Parent sending a message does not prove child progress.
         states = item.get('agentsStates', {})
         if not isinstance(states, dict):
             return
         for child, state in states.items():
-            if not isinstance(child, str) or not isinstance(state, dict):
+            if not isinstance(child, str) or child == thread_id or not isinstance(state, dict):
                 continue
             status = state.get('status')
             if status in ('completed', 'errored', 'interrupted', 'shutdown', 'notFound'):
-                self.members.pop(child, None)
+                self._forget_member(child)
             elif status in ('pendingInit', 'running'):
+                self.known_members.add(child)
                 previous = self.members.setdefault(child, {'last': now, 'reported': False, 'status': status})
                 if previous['status'] != status or item.get('tool') in ('spawnAgent', 'resumeAgent', 'followupTask'):
                     previous.update(last=now, reported=False, status=status)

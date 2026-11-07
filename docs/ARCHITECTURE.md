@@ -90,6 +90,23 @@ after the current native turn and its cleanup settle. The controller persists
 the coding checkpoint before publishing a question or advancing the next stage.
 Recovery consumes a saved readiness decision without repeating the manager call.
 
+Within a manager-assigned slice, the execution root owns implementation,
+focused checks and the committed candidate handoff. It can work directly and
+make reversible implementation decisions within that scope. Delegation serves
+independent deliverables, distinct expertise or useful context separation. Scope
+changes, unresolved cross-boundary decisions and conflicting requirements return
+to the manager, which owns delivery readiness. Candidate review retains its
+separate admission and independence rules. Native team guidance is frozen at
+launch; retained tasks keep their recorded instructions.
+
+For Codex execution, the existing member activity observer owns live membership,
+member turn identities, running commands and mailbox waits. The AppServer
+transport consumes its completion and quiet-wait observations and owns delivery.
+New member turns reset their earlier live work; terminal parent reports retire
+the member's commands and waits together. A successful edit or changed command
+result re-arms quiet-team delivery through the existing tool-observation digest.
+The goal manifest and journal retain durable task and attempt ownership.
+
 Operator input is incorporated before coordination and checked again before its
 returned decision advances execution. Updates arriving during a native call or
 quota wait return to the existing feedback phase before delegation, review,
