@@ -36,6 +36,8 @@ def test_goal_released_controller_does_not_remain_pending(tmp_path):
     (folder / 'manifest.json').write_text('{"run_id":"run"}')
     with goal._run_lock(folder):
         assert _followup.status(folder)['status'] == 'pending'
+    # Give the first interval a distinct timestamp on coarse filesystem clocks.
+    os.utime(folder.with_name('.goal.owner.lock'), ns=(1_000_000_000, 1_000_000_000))
     before = {p:p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
     report = _followup.status(folder)
     assert report['status'] == 'execution_stopped'
