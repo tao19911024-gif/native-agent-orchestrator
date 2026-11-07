@@ -82,6 +82,8 @@ jobs:
             tests/test_managed_coding_handoff.py tests/test_artifact_directories.py `
             tests/test_live_manager_events.py tests/test_live_waste_a63.py tests/test_live_coordination.py `
             tests/test_live_call_observation.py tests/test_live_question_followup.py `
+            tests/test_efficiency_advice.py tests/test_tool_discipline.py tests/test_model_tier_rework.py `
+            tests/test_member_followup.py tests/test_followup_liveness.py `
             tests/test_live_quota_status.py tests/test_live_quota_return.py `
             tests/test_project_intervention.py tests/test_review_convergence.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `

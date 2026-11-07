@@ -105,6 +105,13 @@ retrieve the required missing ranges. Project-mandated full coverage and checks
 remain part of the task. This guidance uses the existing prompt and introduces
 no additional reading gate or output-limit override.
 
+New launches record tool-discipline policy version 7. Index-first guidance,
+reading budgets, repeated-read observations and model-cost heuristics return
+advice through the existing tool hook. They permit the selected call while
+identifying avoidable work. Explicit member model selection, storage ownership
+and independent reviewer admission retain their existing checks. Recovery uses
+the recorded policy version, including the rules of earlier launches.
+
 ## Execution owner and preflight
 
 Merge this object into the generated descriptor:

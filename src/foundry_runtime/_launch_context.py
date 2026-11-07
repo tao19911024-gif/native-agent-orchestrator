@@ -94,7 +94,7 @@ def capture(workspace=None, *, enable_index=True, root_role='executor', backend=
     return {"settings": limits, "server": server,
             "index_policy": "prepare" if enable_index else "review-direct-reads",
             "index_observation": observation,
-            "tool_discipline": {"version": 6, "index_available": server is not None, "index_workspace": str(Path(workspace).resolve()) if workspace else None, 'root_role': root_role,
+            "tool_discipline": {"version": 7, "index_available": server is not None, "index_workspace": str(Path(workspace).resolve()) if workspace else None, 'root_role': root_role,
                 **({'recorded_coding_model': coding_model} if coding_model else {}),
                 'reading_budget': reading_budget(backend, limits)}}
 
