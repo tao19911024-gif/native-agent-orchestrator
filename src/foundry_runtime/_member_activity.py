@@ -341,7 +341,14 @@ class CodexMemberActivity:
         turn = params.get('turn')
         if member in self.members and member != thread_id:
             # Only an actual child item/delta is progress, not a repeated running state.
-            if ((method in ('item/started', 'item/completed') and isinstance(params.get('item'), dict))
+            item = params.get('item')
+            item_activity = method in ('item/started', 'item/completed') and isinstance(item, dict)
+            if item_activity and self._valid_id(item.get('id')):
+                key = ('member_item', member, params.get('turnId'), item['id'], method)
+                completed = (*key[:-1], 'item/completed')
+                item_activity = key not in self.seen and completed not in self.seen
+                self.seen.add(key)
+            if (item_activity
                     or (method in ('item/agentMessage/delta', 'item/commandExecution/outputDelta', 'item/reasoning/textDelta')
                         and isinstance(params.get('delta'), str) and params['delta'].strip())):
                 self.members[member].update(last=now, reported=False)

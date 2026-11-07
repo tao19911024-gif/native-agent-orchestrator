@@ -8,6 +8,7 @@
 - Re-arm quiet-team delivery after new successful edits or changed command
   results. Repeated waits and unchanged results retain their previous observation.
   Include root-only mailbox waits after all members have completed.
+  Replayed child item events retain their original transcript activity time.
 - Let managed execution roots implement assigned slices directly and make
   reversible decisions within scope. The manager retains scope and readiness;
   independent candidate review remains separate.

@@ -174,6 +174,47 @@ def test_quiet_team_wait_prompts_root_once_after_existing_progress_threshold():
     assert notices[0]['wait_id'] == 'root-wait'
 
 
+@pytest.mark.parametrize('kind', ['wait', 'command'])
+def test_replayed_child_item_does_not_postpone_quiet_notification(kind):
+    app = observer()
+    app.process_completion_wait = True
+    notices = []
+    app._deliver_idle_wait_notice = notices.append
+    for thread in ('root', 'child'):
+        app._notification(event('collabAgentToolCall', thread + '-wait', method='item/started',
+                                thread=thread, tool='wait'), observed_at=1)
+    original = (event('collabAgentToolCall', 'child-wait', method='item/started', thread='child', tool='wait')
+                if kind == 'wait' else event('commandExecution', 'result', thread='child',
+                    command='pytest selected.py', aggregatedOutput='passed', exitCode=0, status='completed'))
+    app._notification(original, observed_at=1)
+    for now in (100, 200, 290):
+        app._notification(original, observed_at=now)
+    app._publish_idle_wait(300)
+    assert not notices
+    app._publish_idle_wait(301)
+    assert len(notices) == 1
+    assert app.member_activity.members['child']['last'] == 1
+
+
+@pytest.mark.parametrize('kind', ['new_item', 'delta'])
+def test_new_child_activity_retains_its_quiet_interval(kind):
+    app = observer()
+    app.process_completion_wait = True
+    notices = []
+    app._deliver_idle_wait_notice = notices.append
+    for thread in ('root', 'child'):
+        app._notification(event('collabAgentToolCall', thread + '-wait', method='item/started',
+                                thread=thread, tool='wait'), observed_at=1)
+    message = (event('agentMessage', 'new-message', thread='child', text='New evidence')
+               if kind == 'new_item' else {'method': 'item/reasoning/textDelta',
+                   'params': {'threadId': 'child', 'turnId': 't', 'itemId': 'reasoning', 'delta': 'New analysis'}})
+    app._notification(message, observed_at=290)
+    app._publish_idle_wait(301)
+    assert not notices
+    app._publish_idle_wait(590)
+    assert len(notices) == 1
+
+
 def test_idle_wait_notice_uses_root_without_interrupting_native_turn():
     app = observer()
     calls = []
