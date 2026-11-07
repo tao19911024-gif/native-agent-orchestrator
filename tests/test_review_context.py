@@ -9,9 +9,54 @@ import pytest
 
 from foundry_runtime import foundry_goal as goal
 from foundry_runtime._foundry_native_request import build_prompt
-from test_installed_runtime import external, offline, git
+from test_installed_runtime import Analyst, external, offline, git
 
 LEGACY_REVIEW_HASH = '9f46fd345eea63cd6d71c570079cf8ea90b3ba0d6e5e2ceedb2cc1072a1af29a'
+
+
+def test_goal_reviews_only_candidate_delta_after_integration_advances(external, tmp_path, monkeypatch):
+    from foundry_runtime import _foundry_dispatch as dispatch
+
+    tree, scope, order, launches = external
+    original_base = git(tree, 'rev-parse', 'HEAD')
+    git(tree, 'switch', '-qc', 'integration')
+    (tree / 'upstream.txt').write_text('integration change')
+    git(tree, 'add', 'upstream.txt')
+    git(tree, 'commit', '-qm', 'integration change')
+    integration = git(tree, 'rev-parse', 'HEAD')
+    git(tree, 'update-ref', 'refs/remotes/origin/main', integration)
+    git(tree, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    git(tree, 'switch', '-qc', 'work', original_base)
+    original = dispatch.coding_argv
+
+    def coding(*args, **kwargs):
+        argv = original(*args, **kwargs)
+        argv[-1] += (
+            "; import subprocess; subprocess.run(['git','merge','--ff-only','origin/main'],check=True); "
+            "Path('candidate.txt').write_text('done'); subprocess.run(['git','add','candidate.txt'],check=True); "
+            "subprocess.run(['git','commit','-qm','candidate'],check=True); print('session id: fixture-session')"
+        )
+        return argv
+
+    monkeypatch.setattr(dispatch, 'coding_argv', coding)
+    monkeypatch.setattr(goal, 'NativeAnalyst', Analyst)
+    folder = tmp_path / 'goal'
+    result = goal.run_goal(order, folder, Path(sys.executable), coding_launcher='exec', project_record=scope.record())
+    assert result['status'] == 'candidate_verified'
+    manifest = json.loads((folder / 'manifest.json').read_bytes())
+    checkpoint = folder / 'review-checkpoint.json'
+    saved = checkpoint.read_bytes()
+    context = json.loads(saved)['context']
+    assert manifest['base_commit'] == original_base
+    assert context['base_commit'] == integration
+    assert context['changed_files'] == ['candidate.txt']
+    assert context['integration_base'] == result['integration_base'] == {
+        'base_commit': integration, 'goal_base_commit': original_base,
+        'integration_ref': 'refs/remotes/origin/HEAD', 'integration_commit': integration}
+    git(tree, 'update-ref', 'refs/remotes/origin/main', result['candidate_commit'])
+    assert goal.recover_goal(order, folder)['status'] == 'candidate_verified'
+    assert checkpoint.read_bytes() == saved
+    assert len(launches) == 1
 
 
 @pytest.mark.parametrize('backend', ['codex', 'claude'])

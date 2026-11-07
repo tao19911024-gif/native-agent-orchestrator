@@ -355,12 +355,20 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
 
     phase = "coding"
     project_review = None
+    review_base = base
+    integration_base = None
+    def select_review_base(head):
+        nonlocal review_base, integration_base
+        from ._foundry_goal_delivery import integration_review_base
+        integration_base = integration_review_base(owner, project, tree, base, head)
+        review_base = integration_base['base_commit'] if integration_base else base
+
     def observe_project_review(head):
         nonlocal project_review
         if project is not None:
             project_review = project.review_context(evidence_dir,
                 task={"tag": tag, "order": manifest["order"], "run_id": run_id},
-                subject={"base_commit": base, "candidate_commit": head,
+                subject={"base_commit": review_base, "candidate_commit": head,
                          "working_changes": _git(tree, "status", "--porcelain=v1").decode("utf-8", errors="replace")},
                 env=dispatch._utf8_env())
             if project_review["status"] != "ready":
@@ -372,8 +380,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         if project is None:
             return _candidate(tree, base)
         observed_head = _git(tree, "rev-parse", "HEAD").decode().strip()
+        select_review_base(observed_head)
         observe_project_review(observed_head)
-        candidate = _candidate(tree, base)
+        candidate = _candidate(tree, review_base)
         if candidate != observed_head:
             raise GoalBlocked("candidate changed during project observation; review the owner's final candidate",
                               "coding_incomplete", workspace={"project_review": project_review,
@@ -814,14 +823,24 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             return outcome
         if project is not None and project_review is None:
             phase = "candidate"
+            if retained is not None:
+                # Retrying candidate closure creates its first review checkpoint.
+                select_review_base(candidate)
+                if integration_base:
+                    _review_range(tree, review_base, candidate)
             observe_project_review(candidate)
         phase = "context"
 
-        changed_files = [item for item in _git(tree, "diff", "--name-only", "-z", base, candidate)
+        if integration_base:
+            print(f"Foundry review base: {review_base} (goal started at {base}; "
+                  f"integration {integration_base['integration_commit']})", file=sys.stderr)
+        changed_files = [item for item in _git(tree, "diff", "--name-only", "-z", review_base, candidate)
                          .decode("utf-8").split("\0") if item]
         context = {"original_order": project.prompt(order.read_text(encoding="utf-8-sig")) if project else order.read_text(encoding="utf-8-sig"),
-                   "base_commit": base, "candidate_commit": candidate, **({"project_record": project_record} if project else adapter.review_facts(tree, base, candidate)),
+                   "base_commit": review_base, "candidate_commit": candidate, **({"project_record": project_record} if project else adapter.review_facts(tree, base, candidate)),
                    "changed_files": changed_files, "coding_evidence": coding_evidence, "review_evidence_policy": 1}
+        if integration_base:
+            context['integration_base'] = integration_base
         if review_author_models:
             context['review_authorship'] = {'models': list(review_author_models), 'basis': 'operator-supplied design authors; not native model observation'}
         if project_review is not None:
@@ -853,7 +872,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 context["review_delta"] = {"base_commit": previous, "candidate_commit": candidate,
                     "changed_files": [p for p in _git(tree, "diff", "--name-only", "-z", previous, candidate)
                                       .decode("utf-8").split("\0") if p],
-                    "scope": "Focus for follow-up; original base-to-candidate acceptance remains in scope."}
+                    "scope": "Focus for follow-up; acceptance covers the checkpoint base-to-candidate range."}
 
         if owner._referenced_fields(context):
             context['review_field_reads'] = True

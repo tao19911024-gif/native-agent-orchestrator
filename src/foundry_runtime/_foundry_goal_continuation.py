@@ -387,27 +387,44 @@ def consumed_continuation(owner, folder, manifest, *, read_only=False):
         if not prior.get('path'):
             continue
         if ((saved.get('manager_state') or {}).get('native_dir') != state['native_dir']
-                or saved.get('worktree') != manifest.get('worktree')
-                or saved.get('order') != manifest.get('order')):
+                or saved.get('worktree') != manifest.get('worktree')):
             continue
-        records.append((path.parent, saved, prior))
+        previous = Path(prior['path']).resolve()
+        if previous.name == 'outcome.json':
+            records.append((path.parent, saved, prior, previous.parent))
     # Several answers may form a chain of sibling continuations. Follow their
     # declared prior records; neither lexicographic names nor timestamps order it.
-    reachable, candidates = {folder}, []
+    reachable = {folder: manifest}
+    candidates = []
     while True:
-        linked = [(path, saved, prior) for path, saved, prior in records
-                  if path not in reachable and Path(prior['path']).resolve().parent in reachable
-                  and Path(prior['path']).name == 'outcome.json']
-        if not linked:
-            break
-        for path, saved, prior in linked:
+        advanced = False
+        for path, saved, prior, previous in records:
+            if path in reachable or previous not in reachable:
+                continue
+            predecessor = reachable[previous]
+            if saved.get('order') != predecessor.get('order'):
+                effective, _ = owner.order_revision.records(owner, predecessor)
+                if saved.get('order') != effective:
+                    continue
             owner.goal_usage._reference(prior)
-            reachable.add(path)
+            reachable[path] = saved
             candidates.append((path, saved))
+            advanced = True
+        if not advanced:
+            break
     if not candidates:
         return folder, manifest
     from ._foundry_goal_transitions import manager_history
-    _, latest, _ = manager_history(owner, state, manifest['worktree'], read_only=read_only)
+    calls, latest, history = manager_history(owner, state, manifest['worktree'], read_only=read_only)
+    run_ids = {saved.get('run_id') for saved in reachable.values()}
+    # A later amendment can share this manager conversation without answering
+    # this question. An unlabelled historical call stays part of the observation.
+    for row in reversed(history):
+        call_id = row['call_id']
+        run_id = (calls[call_id]['envelope'].get('packet') or {}).get('run_id')
+        if run_id is None or run_id in run_ids:
+            latest = call_id
+            break
     if latest == state.get('last_call_id'):
         return folder, manifest
     consumed = [(path, saved) for path, saved in candidates

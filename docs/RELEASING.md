@@ -1,13 +1,13 @@
 # Release and runtime upgrade
 
 The [source authority](SOURCE_AUTHORITY.md) is this repository. The release
-operator publishes a candidate from a reviewed commit. Publication and default
-runtime selection are separate operations.
+operator publishes a verified distribution from a reviewed commit. For
+deployments with standing operator approval, selection follows publication in
+the same release operation.
 
 Release material fixes promptly after the pull request and package checks pass.
 This applies to defects that disrupt task execution, recovery, or delivery, or
 cause substantial repeated work or model usage. Minor fixes can share a release.
-An explicit operator approval can authorize runtime selection as described below.
 
 ## Build and publish
 
@@ -25,11 +25,14 @@ An explicit operator approval can authorize runtime selection as described below
 6. Publish the wheel, source archive and checksums under the matching GitHub
    tag. Mark Python alpha versions as prereleases. Record the source repository,
    full commit, tag, version, build command, package hashes and test results.
-7. Complete storage disposition. Retain compact evidence and remove the clean
+7. Apply the deployment's selection policy. With standing operator approval,
+   save the previous selection and select the verified published version for
+   new tasks. Verify the project entry points and record the rollback. Record
+   independent acceptance when it is completed after selection.
+8. Complete storage disposition. Retain compact evidence and remove the clean
    build checkout and disposable test outputs after verification. Rotate unused
    installations with the release-rotation skill; retain current, one qualified
-   rollback and explicit current-task dependencies. Publication alone does not
-   change the default selection.
+   rollback and explicit current-task dependencies.
 
 If a published release needs correction, issue a new version. A maintenance
 folder may hold build outputs and evidence; builds read the clean tagged checkout.
@@ -56,9 +59,9 @@ environment as the rollback runtime, including its original interpreter path.
 
 ## Select the runtime and project entry points
 
-Installation leaves the shared selection unchanged. A second reviewer accepts
-the exact release, or the operator explicitly approves that version for selection.
-Record that decision in an acceptance JSON file:
+Select the exact verified release under an independent acceptance, a version
+specific operator approval, or the deployment's standing operator approval for
+verified publications. Record the applicable authority in a selection receipt:
 
 ```json
 {
@@ -71,11 +74,12 @@ Record that decision in an acceptance JSON file:
 }
 ```
 
-Use `operator-approved` for an explicit operator decision and retain its source
-in `evidence`. The release operator records an existing decision; the operator's
-own build checks do not constitute a second review. Keep receipts local with the
-release record. The selection command requires a receipt for the target version,
-records its path and digest, and atomically updates the existing selection file.
+Use `operator-approved` for version specific or standing operator approval.
+Record the approval source, tag, and release verification evidence. With standing
+approval, record independent acceptance separately after selection and use the
+saved rollback when the selected release needs to be withdrawn. Keep receipts
+local with the release record. The selection command records the receipt path
+and digest and atomically updates the existing selection file.
 
 Wrappers use the selected interpreter for new work. Save the previous selection,
 then run:

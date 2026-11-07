@@ -110,6 +110,25 @@ def candidate(owner, tree, base=None):
     return head
 
 
+def integration_review_base(owner, project, tree, goal_base, candidate):
+    """Advance review scope only along history shared with the integration branch."""
+    ref = 'refs/remotes/origin/HEAD'
+    observed = project.repository_reader(
+        ['rev-parse', '--verify', '--quiet', ref + '^{commit}'], str(tree), timeout=5)
+    if observed.returncode:
+        return None
+    integration = observed.stdout.strip()
+    common = project.repository_reader(['merge-base', candidate, integration], str(tree), timeout=5)
+    if common.returncode:
+        return None
+    shared = common.stdout.strip()
+    git = owner._git
+    if shared == goal_base or git(tree, 'merge-base', goal_base, shared).decode().strip() != goal_base:
+        return None
+    return {'base_commit': shared, 'goal_base_commit': goal_base,
+            'integration_ref': ref, 'integration_commit': integration}
+
+
 def stop_cause(terminal):
     """Why a coding turn stopped, read from its transport's terminal record.
 

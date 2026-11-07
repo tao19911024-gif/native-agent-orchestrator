@@ -11,8 +11,8 @@ Use [the release-rotation skill](../skills/foundry-release-rotation/SKILL.md) fo
 publishing, adopting and cleaning runtime versions.
 
 1. Build and verify a new version following [RELEASING.md](RELEASING.md).
-2. After acceptance, save the previous selection and select the new runtime.
-   The previously selected qualified version becomes the rollback version.
+2. Apply the release selection policy after verified publication. Save the
+   previous selection as the qualified rollback before switching new tasks.
 3. Resolve current task holds from existing project ownership records. Follow
    the task's current execution or active round; an old root provenance record
    alone does not retain an installation after the execution has been upgraded.
@@ -26,8 +26,8 @@ publishing, adopting and cleaning runtime versions.
 6. Save removed paths, bytes, timings and retained reasons with the private
    release record. Close completed build/test output in the same release.
 
-Publication and default selection remain separate. A candidate installation
-without a current task owner does not receive an additional permanent slot.
+The selection command records the default used by new tasks. A candidate
+installation without a current task owner has disposable storage.
 Published assets and immutable source tags remain available after its disposable
 installation is removed.
 
