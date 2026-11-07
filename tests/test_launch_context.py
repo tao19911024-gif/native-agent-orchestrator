@@ -104,7 +104,7 @@ def test_codex_context_uses_input_without_double_counting_cache():
 def test_team_brief_is_versioned(monkeypatch):
     monkeypatch.setenv("PDCL_MODEL_CATALOGUE", "snapshot")
     from foundry_runtime._compute_selection import resolve_native_team
-    for provider, version in (("claude",15),("codex",20)):
+    for provider, version in (("claude",16),("codex",21)):
         team = resolve_native_team("adaptive", backend=provider)
         assert team["version"] == version
         assert "Read discipline" in team["instructions"]

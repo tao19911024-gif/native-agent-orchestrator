@@ -90,6 +90,15 @@ after the current native turn and its cleanup settle. The controller persists
 the coding checkpoint before publishing a question or advancing the next stage.
 Recovery consumes a saved readiness decision without repeating the manager call.
 
+Within a manager-assigned slice, the execution root owns implementation,
+focused checks and the committed candidate handoff. It can work directly and
+make reversible implementation decisions within that scope. Delegation serves
+independent deliverables, distinct expertise or useful context separation. Scope
+changes, unresolved cross-boundary decisions and conflicting requirements return
+to the manager, which owns delivery readiness. Candidate review retains its
+separate admission and independence rules. Native team guidance is frozen at
+launch; retained tasks keep their recorded instructions.
+
 Operator input is incorporated before coordination and checked again before its
 returned decision advances execution. Updates arriving during a native call or
 quota wait return to the existing feedback phase before delegation, review,
