@@ -105,6 +105,10 @@ transport consumes its completion and quiet-wait observations and owns delivery.
 New member turns reset their earlier live work; terminal parent reports retire
 the member's commands and waits together. A successful edit or changed command
 result re-arms quiet-team delivery through the existing tool-observation digest.
+An empty root mailbox is eligible for delivery on the next observation tick.
+Running commands, active members and pending input retain their existing owners;
+a waiting team retains its quiet-progress interval. A command completion that
+already owns a wait's wake-up suppresses an additional empty-wait observation.
 The goal manifest and journal retain durable task and attempt ownership.
 
 Operator input is incorporated before coordination and checked again before its

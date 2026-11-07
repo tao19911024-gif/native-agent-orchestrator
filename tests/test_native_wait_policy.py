@@ -246,9 +246,8 @@ def test_root_wait_without_active_members_still_checks_retained_work(had_member)
     app._deliver_process_wait_notice = completed.append
     app._notification(event('commandExecution', 'test-result', status='completed', exitCode=1), observed_at=2)
     app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=3)
-    app._publish_idle_wait(302)
-    assert not idle and not completed
-    app._publish_idle_wait(303)
+    app._publish_idle_wait(3)
+    assert len(idle) == 1 and idle[0]['quiet_seconds'] == 0
     app._publish_idle_wait(900)
     assert len(idle) == 1 and idle[0]['members'] == []
     assert idle[0]['wait_id'] == 'root-only' and not completed
@@ -264,6 +263,75 @@ def test_root_only_wait_does_not_publish_while_its_command_runs():
     app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=2)
     app._publish_idle_wait(1802)
     assert not idle
+
+
+def test_background_completion_does_not_also_send_an_empty_wait_notice():
+    app = observer()
+    app.process_completion_wait = True
+    app.member_activity.members.clear()
+    idle, completed = [], []
+    app._deliver_idle_wait_notice = idle.append
+    app._deliver_process_wait_notice = completed.append
+    app._notification(event('commandExecution', 'background', method='item/started',
+                            status='inProgress'), observed_at=1)
+    app._notification(event('collabAgentToolCall', 'w', method='item/started', tool='wait'), observed_at=2)
+    app._publish_idle_wait(2)
+    assert not idle and not completed
+    app._notification(event('commandExecution', 'background', status='completed', exitCode=0), observed_at=3)
+    app._publish_idle_wait(3)
+    app._publish_idle_wait(303)
+    assert len(completed) == 1 and not idle
+    app._notification(event('collabAgentToolCall', 'w', tool='wait'), observed_at=304)
+    app._notification(event('collabAgentToolCall', 'next', method='item/started', tool='wait'), observed_at=305)
+    app._publish_idle_wait(305)
+    assert len(idle) == 1 and idle[0]['wait_id'] == 'next'
+    assert len(completed) == 1
+
+
+@pytest.mark.parametrize('pending', ['request', 'unanswered', 'manager_queued', 'manager_pending'])
+def test_empty_wait_preserves_input_ownership_until_input_is_handled(pending):
+    app = observer()
+    app.process_completion_wait = True
+    app.member_activity.members.clear()
+    idle = []
+    app._deliver_idle_wait_notice = idle.append
+    if pending == 'request':
+        app._input_requests['decision'] = {}
+    elif pending == 'unanswered':
+        app._unanswered_input = True
+    elif pending == 'manager_queued':
+        app.live_events.events.put({'kind': 'worker_message'})
+    else:
+        app.live_events.pending = {'kind': 'worker_message'}
+    app._notification(event('collabAgentToolCall', 'w', method='item/started', tool='wait'), observed_at=1)
+    app._publish_idle_wait(1)
+    app._publish_idle_wait(1801)
+    assert not idle and not app.member_activity.idle_notified
+    app._input_requests.clear()
+    app._unanswered_input = False
+    app.live_events.pending = None
+    if not app.live_events.events.empty():
+        app.live_events.events.get_nowait()
+    app._publish_idle_wait(1802)
+    assert len(idle) == 1
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_empty_wait_rearms_for_changed_work_without_repeating_unchanged_results(changed):
+    app = observer()
+    app.process_completion_wait = True
+    app.member_activity.members.clear()
+    idle = []
+    app._deliver_idle_wait_notice = idle.append
+    for index in range(2):
+        app._notification(event('commandExecution', f'cmd{index}', status='completed', exitCode=0,
+            command='pytest selected.py', aggregatedOutput='passed' if changed and index else 'failed'),
+            observed_at=index * 10)
+        app._notification(event('collabAgentToolCall', f'w{index}', method='item/started', tool='wait'),
+                          observed_at=index * 10 + 1)
+        app._publish_idle_wait(index * 10 + 1)
+        app._notification(event('collabAgentToolCall', f'w{index}', tool='wait'), observed_at=index * 10 + 2)
+    assert len(idle) == (2 if changed else 1)
 
 
 def test_known_member_starts_another_turn_and_can_wake_the_root():
