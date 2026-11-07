@@ -199,7 +199,9 @@ The Codex app-server sends process completion to a waiting owner when an
 observed command finishes during that owner's wait. Earlier results stay with
 the native command tool. If the root and all observed active members remain in
 mailbox waits with no visible command or pending input, the existing member
-progress threshold triggers an observation to the root. Successfully applied
+progress threshold triggers an observation to the root, including a root waiting
+alone after all members have completed. The root checks the retained command
+handle and consumes an available result before choosing another wait. Successfully applied
 edits and changed command results make a subsequent quiet wait eligible for
 another observation. Repeated waits and identical results retain the previous
 observation. The member activity owner tracks resumed turns, commands and waits

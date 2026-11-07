@@ -24,6 +24,7 @@ def test_new_team_configures_native_wait_without_execution_timeout(monkeypatch, 
     assert team['process_completion_wait'] == 1
     assert not any('deadline' in k or 'runtime_seconds' in k for k in config)
     assert 'One implementation owner retains each process handle' in team['instructions']
+    assert 'When no member owns outstanding work, use the retained command handle' in team['instructions']
 
 
 @pytest.mark.parametrize('value,expected', [('60',60000),('7200',3600000),('bad',1800000),('-1',1800000)])
@@ -189,6 +190,39 @@ def test_idle_wait_notice_uses_root_without_interrupting_native_turn():
     assert options == {'stop_on_timeout': False}
     assert 'foundry_idle_wait_delivered_to_root' in app._log_handle.getvalue()
     assert not app._stopping.is_set()
+
+
+@pytest.mark.parametrize('had_member', [False, True])
+def test_root_wait_without_active_members_still_checks_retained_work(had_member):
+    app = observer()
+    app.process_completion_wait = True
+    if had_member:
+        app._notification(event('subAgentActivity', 'done', agentThreadId='child', kind='completed'), observed_at=1)
+    else:
+        app.member_activity.members.clear()
+    idle, completed = [], []
+    app._deliver_idle_wait_notice = idle.append
+    app._deliver_process_wait_notice = completed.append
+    app._notification(event('commandExecution', 'test-result', status='completed', exitCode=1), observed_at=2)
+    app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=3)
+    app._publish_idle_wait(302)
+    assert not idle and not completed
+    app._publish_idle_wait(303)
+    app._publish_idle_wait(900)
+    assert len(idle) == 1 and idle[0]['members'] == []
+    assert idle[0]['wait_id'] == 'root-only' and not completed
+
+
+def test_root_only_wait_does_not_publish_while_its_command_runs():
+    app = observer()
+    app.process_completion_wait = True
+    app.member_activity.members.clear()
+    idle = []
+    app._deliver_idle_wait_notice = idle.append
+    app._notification(event('commandExecution', 'background', method='item/started', status='inProgress'), observed_at=1)
+    app._notification(event('collabAgentToolCall', 'root-only', method='item/started', tool='wait'), observed_at=2)
+    app._publish_idle_wait(1802)
+    assert not idle
 
 
 def test_known_member_starts_another_turn_and_can_wake_the_root():

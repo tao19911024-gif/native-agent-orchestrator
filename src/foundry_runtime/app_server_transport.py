@@ -384,8 +384,8 @@ class AppServer:
             self._log('idle wait observation delivery unavailable: ' + str(exc))
 
     def _deliver_idle_wait_notice(self, notice):
-        text = ('Foundry observation: the root and every observed active member are in mailbox waits, '
-                'and no command is visible as running. Check any retained handle once and request '
+        text = ('Foundry observation: the root is in a mailbox wait, no command is visible as running, '
+                'and no active member is observed outside a mailbox wait. Check any retained handle once and request '
                 'the pending result or actual blocker from its owner. If no work remains, hand back '
                 'the result. A member parked for future instructions should return its current result. '
                 'Keep any confirmed unfinished work with its existing owner.')

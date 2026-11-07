@@ -12,6 +12,8 @@ The implementation is split into event ownership, executor guidance and advisory
 
 Independent review identified an integration gap in native reviewer exclusion when the execution root and members share implementation. Policy version 7 retains both the frozen executor assignments and the observed member assignments in the exclusion set. The correction passed independent review and regression checks; retained policies preserve their previous behavior.
 
+The paired execution also exposed a root-only mailbox wait after all members and the command had completed. The activity owner now evaluates that empty-member case with the same progress threshold and pending-work checks. A frozen replay of the observed stall produces one root observation at 300 seconds while preserving command-completion deduplication.
+
 Runtime source, relevant tests, configuration and architecture documentation are in scope. Existing installations and active project records remain owned by their recorded tasks. Release selection uses the existing release-rotation SOP with the prior qualified version as rollback.
 
 The release evidence records the isolated same-task comparison, tagged-package qualification, publication, new-task selection and storage disposition. Task quality, elapsed time and repeated work are measured separately. Private task logs and release inventory remain with the local operation evidence.

@@ -314,7 +314,7 @@ class CodexMemberActivity:
         if self.idle_notified or self.running:
             return
         members = self.members
-        if root not in self.waiting or not members:
+        if root not in self.waiting:
             return
         member_waits = [wait for (thread, _), wait in self.waiting.items() if thread in members]
         waiting_members = {thread for thread, _ in self.waiting if thread in members}
