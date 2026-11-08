@@ -51,10 +51,11 @@ def verify(owner, adapter, tree, head, folder, env):
         return {'status': 'not_configured', 'candidate_commit': head,
                 'reason': 'Project adapter does not declare a fresh-checkout closure command.'}
     root = Path(folder).resolve() / ('candidate-closure-' + uuid.uuid4().hex)
-    # Evidence remains under the goal; generated paths must not inherit its depth.
-    # C: is reserved for the OS on this host, matching the existing temp policy.
-    volume = Path('D:/') if root.drive.lower() == 'c:' else Path(root.anchor)
-    base = volume / 'Foundry/tmp' if os.name == 'nt' else Path(tempfile.gettempdir()) / 'foundry-closure'
+    # Durable evidence does not select the disposable storage device. Reuse the
+    # project's existing scratch setting and the host's short temp location.
+    configured = getattr(adapter, 'default_disposable_scratch_root', None)
+    base = (Path(configured) if configured else Path('D:/Foundry/tmp') if os.name == 'nt'
+            else Path(tempfile.gettempdir()) / 'foundry-closure')
     work = base / uuid.uuid4().hex
     checkout = work / 'checkout'
     try:
@@ -74,7 +75,8 @@ def verify(owner, adapter, tree, head, folder, env):
     options = ('-c', 'core.longpaths=true') if os.name == 'nt' else ()
     try:
         temporary.mkdir(parents=True)
-        env = {**(os.environ if env is None else env), 'TMP': str(temporary), 'TEMP': str(temporary)}
+        env = {**(os.environ if env is None else env), 'TMP': str(temporary), 'TEMP': str(temporary),
+               'TMPDIR': str(temporary), 'PYTEST_DEBUG_TEMPROOT': str(temporary)}
         if os.name == 'nt':
             # Worktrees share --local config with live tasks. Scope this override
             # to this process and its children; preserve prior config entries.

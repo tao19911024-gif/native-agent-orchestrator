@@ -115,6 +115,12 @@ versioned environments and evidence; updating the shared selection does not
 migrate an existing task. Project recovery wrappers must continue to pass the
 recorded interpreter where required by their recovery interface.
 
+The project wrapper resolves an ordinary new order through the current release
+selection, even when an older Python executable starts that wrapper. An explicit
+`--runtime-python` pins a new invocation. Diagnose the selected runtime from the
+original dispatch package and native manifest, rather than from the interpreter
+written in a launch script. Ordinary recovery does not read the current pointer.
+
 Tasks started on a95 retain a95 or a later explicitly accepted recovery runtime.
 Their review allocations may contain `review_field_reads`, which a94 does not
 accept. Selecting a94 for rollback changes new work only; preserve the a95

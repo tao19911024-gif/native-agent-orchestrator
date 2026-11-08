@@ -73,6 +73,15 @@ selects the reviewer pair. `--review-profile claude` explicitly selects the
 Claude-only pair. A known Claude coding model selects the Claude coding
 transport when its provider and launcher are omitted.
 
+Use `--review-model astra sonnet` to select an explicit pair for a new goal or
+standalone review. Each position accepts a catalogue tier or a model ID from a
+recognized provider family and uses high effort. This replaces the project's
+review profile; it cannot be combined with `--review-profile` or shared analyst
+overrides. Both reviewers must remain independent of observed coding authors.
+For example, a candidate authored by Sol and Opus can be reviewed by Astra and
+Sonnet through the existing standalone review route. Recovery retains its
+recorded pair and uses the existing explicit role-transfer route.
+
 `opus-sol` resolves both tiers through the existing vendor catalogue. The Sol
 slot therefore follows vendor model upgrades when a new goal is staffed.
 Recorded assignments keep their concrete model IDs. Automatic reviewer choices
@@ -238,6 +247,15 @@ directory under the goal evidence directory by default. Set
 `default_disposable_scratch_root` to place temporary files on a separate volume
 while retaining goal evidence in its project location. Worker instructions and
 the launch context carry the resulting directory.
+
+Fresh candidate closure checkouts also use `default_disposable_scratch_root`
+when configured. Otherwise Windows uses `D:/Foundry/tmp`; other platforms use
+`foundry-closure` under the system temporary directory. Each closure owns a
+unique child with its checkout and test temporary directory. TMP, TEMP, TMPDIR
+and the pytest temporary parent all refer to that child's temporary directory.
+The existing closure owner removes it after process cleanup and retains the
+verification receipt and logs under the goal evidence root. The evidence volume
+does not select the temporary storage volume.
 
 Use the registered directory for reproducible build and test outputs. Move
 deliverables and evidence needed by the project owner outside it. Foundry

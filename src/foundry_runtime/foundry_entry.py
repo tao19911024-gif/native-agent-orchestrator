@@ -70,6 +70,8 @@ def add_arguments(ap) -> None:
     ap.add_argument("--analyst-effort")
     ap.add_argument("--review-profile", choices=tuple(REVIEW_PROFILES),
                     help="two separately configured independent reviewers for goal or review")
+    ap.add_argument('--review-model', nargs=2, metavar=('MODEL_1', 'MODEL_2'),
+                    help='explicit independent review pair; accepts catalogue tiers or model IDs, with high effort')
     ap.add_argument("--auto-amend-model", help="opt in to automatic BLOCK corrections using this coding model")
     ap.add_argument("--auto-amend-effort", help="reasoning effort for --auto-amend-model")
     ap.add_argument("--coding-model")
@@ -130,6 +132,18 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
         ap.error('--recovery-file in Foundry requires --recover-goal with --prompt-file, or --amend-from with --coding-session')
     profile = getattr(a, "compute_profile", None)
     review_profile = getattr(a, "review_profile", None)
+    if getattr(a, 'review_model', None):
+        if review_profile:
+            ap.error('choose --review-model or --review-profile, not both')
+        from ._model_catalogue import tier_for_model
+        try:
+            review_profile = review_assignments([
+                {'backend': BACKEND[tier_for_model(name)],
+                 'model': model(name) if name in BACKEND else name, 'effort': 'high'}
+                for name in a.review_model])
+        except (KeyError, ValueError) as exc:
+            ap.error('invalid --review-model pair: ' + str(exc))
+        a.review_profile = review_profile
     compute_source = "explicit" if profile or any((a.coding_model, a.coding_effort,
         a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe,
         review_profile, auto_model, auto_effort)) else "native"

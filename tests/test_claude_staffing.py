@@ -79,6 +79,49 @@ def test_automatic_reselection_preserves_independent_opus_slot():
     assert chosen[1]['model'] == model('astra')
 
 
+@pytest.mark.parametrize('pair', [('astra', 'sonnet'), ('gpt-6-astra', 'claude-sonnet-5-5')])
+def test_explicit_review_models_replace_conflicting_project_profile(external, monkeypatch, pair):
+    tree, scope, order, workers = external
+    scope.path.write_text(json.dumps({**scope.project, 'default_provider': 'claude',
+        'default_staffing': {'review_profile': 'opus-sol'}}))
+    selected = []
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda _: Path(sys.executable))
+    def review(*args, **kwargs):
+        selected.extend(compute.independent_reviewers(kwargs['reviewers'],
+            kwargs['review_author_models'], explicit=True))
+        return {'status': 'candidate_verified'}
+    monkeypatch.setattr(goal, 'run_review', review)
+    assert cli.main(['--project-config', str(scope.path), '--order', str(order), '--foundry-review',
+        '--worktree', str(tree), '--review-base', 'base', '--review-head', 'head',
+        '--review-author-model', model('sol'), '--review-author-model', model('opus'),
+        '--review-model', *pair]) == 0
+    assert [(r['backend'], r['model']) for r in selected] == [
+        ('codex', model('astra')), ('claude', model('sonnet'))]
+    assert not workers
+
+
+def test_new_goal_explicit_review_pair_is_frozen_in_staffing(external, capsys):
+    _, scope, order, workers = external
+    assert cli.main(['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
+        '--review-model', 'astra', 'sonnet', '--print-staffing']) == 0
+    row = next(line for line in capsys.readouterr().err.splitlines() if line.startswith('FOUNDRY COMPUTE: '))
+    selected = json.loads(row.removeprefix('FOUNDRY COMPUTE: '))
+    assert [r['model'] for r in selected['reviewers']] == [model('astra'), model('sonnet')]
+    assert selected['staffing_sources']['reviewers'] == 'explicit'
+    assert not workers
+
+
+def test_recovery_does_not_replace_recorded_review_pair(external, monkeypatch, capsys):
+    from foundry_runtime import _foundry_recovery_preflight
+    _, scope, order, workers = external
+    monkeypatch.setattr(_foundry_recovery_preflight, 'prepare', lambda *args, **kwargs: None)
+    with pytest.raises(SystemExit):
+        cli.main(['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
+            '--recover-goal', 'retained-goal', '--review-model', 'astra', 'sonnet'])
+    assert 'recovery uses recorded reviewers' in capsys.readouterr().err
+    assert not workers
+
+
 def test_new_adaptive_claude_profile_uses_sonnet():
     options, assignment = compute.resolve_goal_profile('claude', coding_backend='claude',
         backend='claude', team_profile='adaptive', task_kind='cross-module')
