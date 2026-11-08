@@ -90,6 +90,12 @@ the recorded project descriptor and original task evidence at their paths.
 
 ### A manager decision is taking a long time
 
+Root status follows retained coding continuations in runtime a116 and later.
+Read `continuation_goal` and `active_round` to locate the current execution;
+the root's earlier incomplete outcome remains preserved. If the report lists
+multiple continuation tips, inspect the named child records. Status does not
+choose a branch by age or resume either branch.
+
 Read the existing goal with `--foundry-project status --status-goal <goal>`.
 `manager_wait_observation` distinguishes a reserved call without a published
 process, an observed native process, a native terminal awaiting its receipt,

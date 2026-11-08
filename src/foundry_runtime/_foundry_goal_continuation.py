@@ -370,32 +370,25 @@ def continuation_parent(folder):
     return parent
 
 
-def consumed_continuation(owner, folder, manifest, *, read_only=False):
-    """Resolve an answered question by its retained native chain, never mtime.
-
-    Historical continuations intentionally leave the question outcome immutable.
-    Its caller must follow the recorded answer when recovering without a new answer
-    or upgrading; a newer native call alone is not proof of a consumed decision.
-    """
-    state = manifest.get('manager_state') or {}
-    if not state.get('native_dir'):
-        return folder, manifest
+def _continuation_chain(owner, folder, manifest, *, native_dir=None):
+    """Read sibling links written by continue_coding; never order by time."""
     records = []
     for path in continuation_parent(folder).glob('continue-*/manifest.json'):
         saved = json.loads(path.read_bytes())
         prior = (saved.get('continuation') or {}).get('prior_record') or {}
         if not prior.get('path'):
             continue
-        if ((saved.get('manager_state') or {}).get('native_dir') != state['native_dir']
-                or saved.get('worktree') != manifest.get('worktree')):
+        if (saved.get('worktree') != manifest.get('worktree') or
+                (native_dir is not None and
+                 (saved.get('manager_state') or {}).get('native_dir') != native_dir)):
             continue
         previous = Path(prior['path']).resolve()
-        if previous.name == 'outcome.json':
+        if previous.name in ({'outcome.json'} if native_dir is not None else {'outcome.json', 'manifest.json'}):
             records.append((path.parent, saved, prior, previous.parent))
     # Several answers may form a chain of sibling continuations. Follow their
     # declared prior records; neither lexicographic names nor timestamps order it.
     reachable = {folder: manifest}
-    candidates = []
+    parents = {}
     while True:
         advanced = False
         for path, saved, prior, previous in records:
@@ -408,10 +401,39 @@ def consumed_continuation(owner, folder, manifest, *, read_only=False):
                     continue
             owner.goal_usage._reference(prior)
             reachable[path] = saved
-            candidates.append((path, saved))
+            parents[path] = previous
             advanced = True
         if not advanced:
             break
+    return reachable, parents
+
+
+def observed_continuation(owner, folder, manifest):
+    """Select the unique retained continuation tip for read-only goal status."""
+    reachable, parents = _continuation_chain(owner, folder, manifest)
+    tips = set(reachable) - set(parents.values())
+    if len(tips) != 1:
+        # Repeated answers can share one prior outcome. The existing manager
+        # receipt chain identifies the consumed answer without ordering folders.
+        selected, saved = consumed_continuation(owner, folder, manifest, read_only=True)
+        if selected in tips:
+            return selected, saved
+        raise owner.GoalBlocked('multiple continuation tips: ' + ', '.join(sorted(map(str, tips))))
+    selected = tips.pop()
+    return selected, reachable[selected]
+
+
+def consumed_continuation(owner, folder, manifest, *, read_only=False):
+    """Resolve an answered question by its retained native chain, never mtime.
+
+    Recovery and upgrade still require the manager receipt proving consumption.
+    Status observation only follows the recorded continuation relationship.
+    """
+    state = manifest.get('manager_state') or {}
+    if not state.get('native_dir'):
+        return folder, manifest
+    reachable, parents = _continuation_chain(owner, folder, manifest, native_dir=state['native_dir'])
+    candidates = [(path, reachable[path]) for path in parents]
     if not candidates:
         return folder, manifest
     from ._foundry_goal_transitions import manager_history
