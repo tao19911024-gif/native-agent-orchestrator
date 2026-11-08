@@ -227,16 +227,25 @@ def continuation_records(tmp_path):
 
 
 @pytest.mark.parametrize('phase', ['feedback_pending', 'awaiting_input', 'coding_incomplete'])
-def test_root_status_follows_coding_continuation_without_native_manager_receipt(continuation_records, phase):
+def test_root_status_follows_coding_continuation_without_native_manager_receipt(continuation_records, phase, monkeypatch):
     root, parent, child = continuation_records
     manifest = json.loads((parent / 'manifest.json').read_bytes())
     goal._write(parent / 'manifest.json', {**manifest, 'manager_phase': phase})
     current = child('current')
+    def dispatch_observation(folder, manifest):
+        if folder == current:
+            return {'status': 'observed', 'executions': [{'status': 'pending',
+                    'dispatch': 'retained-package', 'live_event_log': 'retained-worker-log'}]}
+        return {'status': 'none_observed', 'executions': []}
+    monkeypatch.setattr(_followup, '_current_dispatch', dispatch_observation)
     before = {p: p.read_bytes() for p in root.parent.rglob('*.json')}
     report = _followup.status(root)
     assert report['goal'] == str(root) and report['run_id'] == 'root'
     assert report['continuation_goal'] == report['active_round'] == str(current)
     assert report['phase'] == 'dispatch_pending' and report['status'] == 'pending'
+    assert report['summary']['next_action'] == 'wait'
+    assert report['summary']['dispatch_status'] == 'observed'
+    assert report['summary']['evidence']['worker_live_event_log'] == 'retained-worker-log'
     assert not report['errors']
     assert before == {p: p.read_bytes() for p in root.parent.rglob('*.json')}
 
@@ -266,6 +275,7 @@ def test_status_reports_fork_without_selecting_a_branch_or_mutating_it(continuat
     assert 'continuation_goal' not in report
     assert any('multiple continuation tips' in error and all(str(c) in error for c in children)
                for error in report['errors'])
+    assert report['summary']['errors'] == report['errors']
     assert before == {p: p.read_bytes() for p in root.parent.rglob('*.json')}
 
 

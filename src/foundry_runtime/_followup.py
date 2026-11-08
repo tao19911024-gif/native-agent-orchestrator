@@ -85,7 +85,7 @@ def _current_dispatch(folder, manifest):
 
 def _summary(report, *, runtime_selection=None):
     """A consumer view of existing owners, not another task state."""
-    selected, errors = None, []
+    selected, errors = None, list(report.get('errors', []))
     if runtime_selection:
         try:
             value = json.loads(Path(runtime_selection).read_text(encoding='utf-8-sig'))
