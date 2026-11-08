@@ -1,5 +1,7 @@
 # Review selection and closure storage
 
+Release: 0.1.0a115. Pull request: #57.
+
 ## Problem and ownership
 
 A candidate implemented by models from both providers can conflict with every
@@ -13,6 +15,11 @@ Archived evidence therefore placed disposable checkout and test files on the
 archive volume. Closure now consumes the existing project scratch-root setting
 and retains its unique child, owned process and exact-child cleanup lifecycle.
 There is no second storage configuration or cleanup service.
+
+The architecture review also found two upgrade-boundary gaps. Explicit review
+pairs now participate in the existing request identity and command projection.
+The successor preserves recorded scratch policy while its goal execution owner
+registers a fresh directory. Native launch refresh no longer erases this policy.
 
 ## Contract
 

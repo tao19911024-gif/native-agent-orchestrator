@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a115 — 2026-11-07
 
 - Accept an explicit independent review model pair through the existing frozen
   assignment mechanism, including candidates implemented by both providers.
 - Place candidate closure checkouts and all test temporary paths under the
   project's scratch root instead of deriving their volume from durable evidence.
 - Clarify new-task release selection and recorded-runtime recovery semantics.
+- Bind explicit review pairs to whole-goal upgrade request identities and
+  reconstruct their continuation arguments without losing either model.
+- Retain the recorded scratch policy across whole-goal upgrades while registering
+  a fresh directory for the successor round.
 
 ## 0.1.0a114 — 2026-11-07
 

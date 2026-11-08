@@ -147,6 +147,12 @@ Continuation and recovery reconcile those same records. The
 interrupted attempts. A runtime or role transition records its selected successor
 through that lifecycle.
 
+Whole-goal upgrade request identity includes explicit review model pairs; replay
+and operator advice consume the same recorded overrides. An upgraded round
+inherits the prior round's disposable-storage policy and registers its own
+directory through the existing goal execution owner. Capturing new native
+launch settings does not erase the retained storage policy.
+
 The dispatcher owns the terminal and cleanup proof for each attempt. The goal
 owns the pending package reference and consumes it when publishing worker
 feedback. A capacity-retry admission error retains the last completed package;
