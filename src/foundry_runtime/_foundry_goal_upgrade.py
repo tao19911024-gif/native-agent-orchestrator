@@ -40,6 +40,9 @@ def route(a, argv, *, project_adapter=None):
         'provider', 'launcher', 'coding_model', 'coding_effort', 'compute_profile',
         'analyst_backend', 'analyst_model', 'analyst_effort', 'analyst_exe', 'review_profile',
         'task_kind', 'team_profile', 'manager_profile', 'auto_amend_model', 'auto_amend_effort', 'task_deadline')}
+    if getattr(a, 'review_model', None) is not None:
+        # An omitted new option must not change a retained request's identity.
+        a._upgrade_options['review_model'] = a.review_model
     root, value, key = request(a)
     saved = next((row for row in read(root/'manifest.json').get('runtime_upgrades', [])
                   if row['request_id'] == key), None)
@@ -199,6 +202,12 @@ def prepare_invocation(owner, a, ap, root, target, prior, prepared, *, project, 
         prepared['worktree'],
         root_role=(options.get('native_team') or {}).get('lead_role', 'executor'),
         backend='claude' if options.get('coding_launcher') == 'claude' else 'codex')
+    retained_launch = prepared.get('launch_context') or {}
+    if retained_launch.get('worker_environment'):
+        # The new round registers its own directory through run_owned. Retain
+        # the storage policy, not the previous round's concrete temp paths.
+        options['disposable_scratch'] = True
+        options['disposable_scratch_root'] = retained_launch.get('disposable_scratch_root')
     state = configuration_for(options, target)
     if state is not None:
         options['manager_state'] = state
@@ -215,6 +224,7 @@ def prepare_invocation(owner, a, ap, root, target, prior, prepared, *, project, 
 def policy(record):
     """Audit projection of the same frozen configuration execution consumes."""
     state = record.get('manager_state') or {}
+    launch = record.get('launch_context') or {}
     return {'task_staffing': copy.deepcopy(record.get('task_staffing')),
             'compute_assignment': copy.deepcopy(record.get('compute_assignment')),
             'native_team': {k: copy.deepcopy(v) for k, v in (record.get('native_team') or {}).items()
@@ -223,6 +233,8 @@ def policy(record):
                 {'native_dir', 'expert_native_dir', 'last_call_id', 'session_id', 'handoff'}},
             'coding_launcher': record.get('coding_launcher'),
             'launch_context': copy.deepcopy(record.get('launch_context')),
+            'disposable_scratch': bool(record.get('disposable_scratch') or launch.get('worker_environment')),
+            'disposable_scratch_root': record.get('disposable_scratch_root') or launch.get('disposable_scratch_root'),
             'task_deadline_at': record.get('task_deadline_at'),
             **({'time_budget': record['time_budget']} if 'time_budget' in record else {})}
 
@@ -243,7 +255,8 @@ def advice(root, manifest):
     extra = ['--upgrade-runtime', saved['request']['target']]
     for key, value in saved['request'].get('overrides', {}).items():
         if value is not None:
-            extra.extend(['--' + key.replace('_', '-'), str(value)])
+            extra.extend(['--' + key.replace('_', '-'),
+                          *([str(item) for item in value] if isinstance(value, list) else [str(value)])])
     command = recovery_invocation(manifest['order']['path'], root, manifest,
         python=saved['python'], prompt_file='<prompt-file>', extra_args=extra)
     return {**{key: saved[key] for key in ('request_id', 'round', 'python', 'input')},

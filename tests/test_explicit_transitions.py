@@ -52,7 +52,7 @@ print(json.dumps(state))
     monkeypatch.setenv('FOUNDRY_COMPACT_TOKENS', '0')
     plan = preflight.inspect_recovery(folder, manifest, order)
     assert plan['status'] == 'ready', plan
-    assert plan['runtime_python'] == os.environ['FOUNDRY_TEST_OLD_PYTHON']
+    assert Path(plan['runtime_python']) == Path(os.environ['FOUNDRY_TEST_OLD_PYTHON'])
     assert plan['environment']['FOUNDRY_COMPACT_TOKENS'] == '240000'
     routed = []
     monkeypatch.setattr(preflight, 'execute_recorded', lambda plan, argv, **kw: routed.append((plan, argv)) or 0)
@@ -70,6 +70,9 @@ print(json.dumps(state))
 def test_manager_transfer_reads_retry_history_without_replaying_old_calls(conversation, external, tmp_path, monkeypatch, target):
     state, requests, failures = conversation
     state.update(context_reuse=1, quota_recovery=1, design_convergence=1, review_convergence=1)
+    from foundry_runtime import _goal_scratch
+    (tmp_path/'scratch-owner').mkdir()
+    state['worker_environment'] = _goal_scratch.register(tmp_path/'scratch-owner', {'run_id': 'scratch-owner'})
     tree, scope, order, _ = external
     with pytest.raises(native.NativeError):
         manager.turn(state, tree, {'stage': 'assign'})
@@ -88,6 +91,7 @@ def test_manager_transfer_reads_retry_history_without_replaying_old_calls(conver
     transferred = transitions.manager(goal, folder, manifest, provider=target,
         migrate=target == 'claude', answer='继续处理')
     new = transferred['manager_state']
+    assert new['worker_environment'] == state['worker_environment']
     for key in ('context_reuse', 'quota_recovery', 'design_convergence', 'review_convergence'):
         assert new[key] == 1
     assert new['native_dir'] != str(old) and new['last_call_id'] is None
@@ -135,6 +139,8 @@ def test_panel_prepares_shared_launch_once_for_parallel_members(tmp_path, monkey
 
 def test_coding_runtime_migration_dispatches_fresh_with_recorded_compute(external, tmp_path, monkeypatch):
     from foundry_runtime import _foundry_dispatch as dispatch
+    from foundry_runtime import foundry_native_support
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
     tree, scope, order, launches = external
     original = dispatch.coding_argv
     observed = []

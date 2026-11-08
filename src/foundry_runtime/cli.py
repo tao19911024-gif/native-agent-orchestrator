@@ -139,7 +139,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
     new_goal = a.foundry_goal and not (a.amend_from or a.recover_goal or getattr(a, '_boundary_continuation', None))
     defaults = (goal_defaults(project if project is not None else project_adapter)
                 if new_goal or a.foundry_review else {})
-    if a.foundry_review and not any((a.review_profile, a.provider, a.launcher, a.compute_profile,
+    if a.foundry_review and not any((a.review_profile, a.review_model, a.provider, a.launcher, a.compute_profile,
                                    a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
         a.review_profile = defaults['staffing'].get('review_profile') or (
             'opus-sol' if defaults.get('provider') == 'claude' else None)

@@ -62,6 +62,7 @@ def test_upgrade_retains_identity_history_and_replays(boundary, outcome):
     assert parent['run_id'] == old['run_id']
     assert parent['worktree'] == old['worktree']
     assert parent['runtime_upgrades'][0]['python'] == sys.executable
+    assert 'review_model' not in parent['runtime_upgrades'][0]['request']['overrides']
     assert Path(parent['runtime_upgrades'][0]['previous_manifest']['path']).read_bytes() == original
     options = calls[0][1]
     assert options['manager_profile'] == 'opus'
@@ -71,6 +72,43 @@ def test_upgrade_retains_identity_history_and_replays(boundary, outcome):
     assert '中文' in packet['operator_answer']
     assert cli.main(args) == 0
     assert len(calls) == 1
+
+
+def test_upgrade_review_pair_binds_request_and_replay(boundary):
+    from foundry_runtime._model_catalogue import model
+    root, old, args, calls = boundary
+    first = [*args, '--review-model', 'astra', 'sonnet']
+    assert cli.main(first) == 0
+    parent = upgrade.read(root / 'manifest.json')
+    saved = parent['runtime_upgrades'][0]
+    assert saved['request']['overrides']['review_model'] == ['astra', 'sonnet']
+    command = upgrade.advice(root, parent)['recovery']['argv']
+    index = command.index('--review-model')
+    assert command[index + 1:index + 3] == ['astra', 'sonnet']
+    assert [r['model'] for r in calls[0][1]['reviewers']] == [model('astra'), model('sonnet')]
+    assert cli.main(first) == 0
+    assert len(calls) == 1
+    assert cli.main([*args, '--review-model', 'astra', 'haiku']) == 0
+    parent = upgrade.read(root / 'manifest.json')
+    assert len(calls) == 2
+    assert parent['runtime_upgrades'][1]['request_id'] != saved['request_id']
+
+
+def test_upgrade_retains_scratch_policy_without_reusing_old_paths(boundary):
+    root, old, args, calls = boundary
+    base = str(root.parent / 'fast-scratch')
+    old['launch_context'] = {'worker_environment': {'TMP': str(root / 'old-tmp')},
+                             'disposable_scratch_root': base}
+    goal._write(root / 'manifest.json', old)
+    assert cli.main(args) == 0
+    options = calls[0][1]
+    assert options['disposable_scratch'] is True
+    assert options['disposable_scratch_root'] == base
+    assert 'worker_environment' not in options['launch_context']
+    change = upgrade.read(root / 'manifest.json')['runtime_upgrades'][0]['policy_change']
+    for side in ('old', 'new'):
+        assert change[side]['disposable_scratch'] is True
+        assert change[side]['disposable_scratch_root'] == base
 
 
 @pytest.mark.parametrize('runtime_dependency', [True, False])

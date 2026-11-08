@@ -69,11 +69,12 @@ class Panel:
     max_concurrency = 2
 
     def __init__(self, settings, requests, factory, folder, workspace, *, resume=False, validate=None,
-                 rejected_review=(), transfers=None):
+                 rejected_review=(), transfers=None, worker_environment=None):
         self.members, self.routes, self.history, self.results, self.pending = {}, {}, {}, {}, {}
         self.requests, self.active_requests = {}, {}
         self.factory, self.workspace = factory, workspace
         self.launch, self.launch_lock = {}, threading.Lock()
+        self.worker_environment = dict(worker_environment or {})
         self.validate = validate
         for index, spec in enumerate(settings):
             name = "review-" + str(index)
@@ -160,6 +161,8 @@ class Panel:
                 if backend not in self.launch:
                     from ._launch_context import capture
                     self.launch[backend] = capture(self.workspace, backend=backend, root_role='reviewer')
+                    if self.worker_environment:
+                        self.launch[backend]['worker_environment'] = self.worker_environment
             self.members[name] = self.factory(executable, evidence, workspace=self.workspace,
                 max_concurrency=1, timeout_seconds=None, launch_context=self.launch[backend], **options)
         from .foundry_native import NativeSchemaError

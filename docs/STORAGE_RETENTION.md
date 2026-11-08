@@ -114,13 +114,16 @@ The worker receives the exact directory in its execution instructions. New
 registrations create `tmp` and `pytest` children and freeze `TMPDIR`, `TMP` and
 `TEMP` to the former and `PYTEST_DEBUG_TEMPROOT` to the latter in the existing
 launch context. Codex exec, Codex app-server and Claude coding workers inherit
-these values, including native continuation. Standard temporary-file APIs and
+these values, including native continuation. New independent review, manager
+and expert calls use the same registered directories while retaining their
+role-specific model and tool settings. Manager provider transfers retain this
+environment. Standard temporary-file APIs and
 pytest's default temporary directory use those children. An explicit pytest
 `--basetemp` or a program's explicit output path still selects its stated location.
 Reports, original failures, deliverables and recovery inputs belong
 outside the disposable directory. Workers move required evidence out before
 requesting review or delivering artifacts. No host-wide environment changes
-are made. Manager and reviewer environments retain their existing settings.
+are made. Completed native calls replay their recorded launch context.
 Historical launch contexts without `worker_environment` preserve their original
 environment behavior.
 

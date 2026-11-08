@@ -158,6 +158,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
     if execution_decision is not None:
         manifest["execution_decision"] = execution_decision
     if manager_state is not None:
+        if (launch_context or {}).get('worker_environment'):
+            manager_state = {**manager_state, 'worker_environment': launch_context['worker_environment']}
         if task_deadline_at is not None:
             manager_state = {**manager_state, 'task_deadline_at': task_deadline_at}
         if time_budget is not None:
@@ -211,6 +213,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         from ._compute_selection import member_roles
         manifest['expert_state'] = {'native_dir': str(evidence_dir / 'expert-owner'), 'context_reuse': 1,
             'expert': {'backend': coding_backend, **((native_team or {}).get('member_roles') or member_roles(coding_backend))['expert']}}
+        if (launch_context or {}).get('worker_environment'):
+            manifest['expert_state']['worker_environment'] = launch_context['worker_environment']
         if project_record:
             manifest['expert_state']['execution_profiles'] = project_record['context']['execution_profiles']
         manifest['expert_packet'] = {'prior_review': amendment['prior_outcome'] if amendment else None,

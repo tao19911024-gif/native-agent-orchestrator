@@ -182,7 +182,12 @@ def test_pdcl_entry_uses_recorded_runtime_without_dispatch(tmp_path):
             windows.call('remove', {'name': hosted.read(directory / 'request.json')['task_name']})
 
 
-def test_actual_example_app_wrapper_with_synthetic_rejected_preflight(external, tmp_path):
+def test_configured_project_wrapper_with_synthetic_rejected_preflight(external, tmp_path):
+    configured = os.environ.get('FOUNDRY_TEST_PROJECT_WRAPPER')
+    if not configured:
+        pytest.skip('Project-wrapper integration requires FOUNDRY_TEST_PROJECT_WRAPPER')
+    wrapper = Path(configured)
+    assert wrapper.is_file(), 'Configured project wrapper must exist'
     workspace, selected, order, _ = external
     probe = workspace / 'fixture-preflight.py'
     probe.write_text('''
@@ -194,7 +199,6 @@ raise SystemExit(7)
     project['execution']['preflight_argv'] = [sys.executable, str(probe)]
     selected.path.write_text(json.dumps(project), encoding='utf-8')
     directory = tmp_path / 'launch'
-    wrapper = Path('C:/Users/example/Desktop/example_app/scripts/dispatch-codex.ps1')
     powershell = str(Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe')
     try:
         result = subprocess.run([powershell, '-NoProfile', '-NonInteractive', '-File', str(wrapper),

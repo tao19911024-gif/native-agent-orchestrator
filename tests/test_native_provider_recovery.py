@@ -166,6 +166,11 @@ def test_late_provider_stop_does_not_hide_execution_failure(conversation, tmp_pa
                 receipt = replace(receipt, cleanup_verified=False, reason='injected cleanup uncertainty')
             return receipt
         process.stdout = SimpleNamespace(buffer=SimpleNamespace(read=delayed_read))
+        if primary == 'timeout':
+            # Keep the synthetic root logically live until cleanup starts.
+            # Its tiny output producer can otherwise exit before the deadline.
+            poll = process.poll
+            process.poll = lambda: poll() if cleanup_started.is_set() else None
         if primary in ('capture', 'cleanup'):
             process.stderr = SimpleNamespace(buffer=SimpleNamespace(read=bad_read))
         process.stop_and_verify = cleanup_with_late_output

@@ -75,10 +75,11 @@ jobs:
             tests/test_launch_context.py tests/test_retained_path_identity.py tests/test_worker_recovery_dispatch_routing.py `
             tests/test_failed_manager_handback.py tests/test_completed_turn_recovery.py `
             tests/test_goal_preflight_recovery.py tests/test_goal_order_revision.py tests/test_execution_stop.py `
-            tests/test_project_default_provider.py tests/test_claude_staffing.py tests/test_goal_scratch.py `
+            tests/test_project_default_provider.py tests/test_claude_staffing.py tests/test_fable_expert.py tests/test_goal_scratch.py `
             tests/test_goal_checkpoint_publication.py tests/test_review_authorship_recovery.py `
             tests/test_project_hooks_deadline.py tests/test_root_exit_cleanup.py tests/test_native_wait_policy.py `
             tests/test_worker_scratch_environment.py `
+            tests/test_native_provider_recovery.py tests/test_explicit_transitions.py tests/test_expert_consultation.py `
             tests/test_managed_coding_handoff.py tests/test_artifact_directories.py `
             tests/test_live_manager_events.py tests/test_live_waste_a63.py tests/test_live_coordination.py `
             tests/test_live_call_observation.py tests/test_live_question_followup.py `

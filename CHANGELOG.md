@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0a115 — 2026-11-07
+
+- Accept an explicit independent review model pair through the existing frozen
+  assignment mechanism, including candidates implemented by both providers.
+- Place candidate closure checkouts and all test temporary paths under the
+  project's scratch root instead of deriving their volume from durable evidence.
+- Clarify new-task release selection and recorded-runtime recovery semantics.
+- Bind explicit review pairs to whole-goal upgrade request identities and
+  reconstruct their continuation arguments without losing either model.
+- Retain the recorded scratch policy across whole-goal upgrades while registering
+  a fresh directory for the successor round.
+- Allow an instructed amendment when a completed review reports BLOCK and the
+  other review is interrupted by provider failure. Retain the findings and
+  original coding session; the corrected candidate receives a fresh review pair.
+- Propagate registered temporary directories to independent reviewers, managers
+  and experts through their existing native launch contexts, including manager
+  provider transfers and completed-call replay.
+
 ## 0.1.0a114 — 2026-11-07
 
 - Return empty root mailbox waits on the next observation tick when no native

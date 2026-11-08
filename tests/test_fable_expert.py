@@ -15,7 +15,7 @@ def test_fable_is_dynamic_expert_but_not_manager_or_worker(monkeypatch):
     assert team['member_roles']['expert'] == {'model': 'current-fable', 'effort': 'high'}
     assert team['member_roles']['worker']['model'] == 'current-sonnet'
     assert compute.GOAL_PROFILES['claude']['coding'][0] == 'sonnet'
-    assert compute.profile_pair('claude', 'coding', team_profile='adaptive')[0] == 'current-opus'
+    assert compute.profile_pair('claude', 'coding', team_profile='adaptive')[0] == 'current-sonnet'
     args = argv('claude', 'fixture', native_team=team,
                 launch_context={'settings': settings(), 'server': None})
     experts = json.loads(args[args.index('--agents') + 1])

@@ -47,6 +47,22 @@ def test_adapter_failure_is_retained_not_evaluated(tmp_path):
     assert Path(result['receipt']['path']).is_file()
 
 
+def test_closure_uses_project_scratch_and_overrides_inherited_temp(checkout_case, tmp_path):
+    tree, head, adapter = checkout_case
+    adapter.default_disposable_scratch_root = str(tmp_path / 'fast-scratch')
+    adapter.candidate_closure_command = lambda checkout, source: [sys.executable, '-c',
+        "import os; from pathlib import Path; "
+        "assert all(Path(os.environ[k]) == Path.cwd().parent / 'tmp' "
+        "for k in ('TMP', 'TEMP', 'TMPDIR', 'PYTEST_DEBUG_TEMPROOT'))"]
+    import os
+    result = verify(owner, adapter, tree, head, tmp_path / 'archive' / 'evidence',
+        {**os.environ, 'TMPDIR': 'Z:/archive/tmp', 'PYTEST_DEBUG_TEMPROOT': 'Z:/archive/pytest'})
+    assert result['status'] == 'passed'
+    assert Path(result['checkout']).parent.parent == Path(adapter.default_disposable_scratch_root)
+    assert result['checkout_cleanup'] == 'removed'
+    assert Path(result['receipt']['path']).is_relative_to(tmp_path / 'archive')
+
+
 @pytest.fixture
 def checkout_case(tmp_path):
     tree = tmp_path / 'source'; tree.mkdir()
