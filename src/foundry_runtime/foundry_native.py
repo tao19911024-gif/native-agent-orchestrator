@@ -418,11 +418,13 @@ class NativeAnalyst:
                  max_concurrency=1, max_total_input_bytes=16 * 1024 * 1024,
                  max_total_output_bytes=None, backend="codex", model=None, effort=None,
                   shadow_identity=None, role_compute=None, workspace=None, execution_profiles=None, launch_context=None,
+                  worker_environment=None,
                   recorded_coding_model=None):
         if backend not in ("codex", "claude"):
             raise NativeError("unknown analyst backend")
         self.backend = backend
         self.launch_context = json.loads(json.dumps(launch_context)) if launch_context is not None else None
+        self.worker_environment = dict(worker_environment or {})
         self.recorded_coding_model = recorded_coding_model
         self.execution_profiles = json.loads(json.dumps(execution_profiles)) if execution_profiles is not None else None
         self._compute = compute_kwargs(model, effort, backend=backend)

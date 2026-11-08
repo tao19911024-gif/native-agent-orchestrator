@@ -70,6 +70,13 @@ Select additional tests for the changed contracts. Native-client, desktop-host,
 Windows service, and real-project integration checks use their selected
 environments. Record each command, result, and the behavior verified.
 
+The Windows project-wrapper integration test uses a separately maintained
+PowerShell wrapper. Set `FOUNDRY_TEST_PROJECT_WRAPPER` to its absolute path to
+run that check. The test supplies a synthetic project whose preflight rejects
+execution, then verifies hosted input capture and cleanup. Without this setting
+the external-wrapper check is skipped; it does not assume a developer's local
+project path.
+
 Complete the [storage disposition](docs/STORAGE_RETENTION.md) for environments
 and outputs created by the work. Retain verification and failure evidence;
 remove finished disposable environments and duplicate generated artifacts.

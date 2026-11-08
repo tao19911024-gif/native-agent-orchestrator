@@ -217,6 +217,7 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
                   if native_manifest.exists() else Path(state['executable']) if state.get('executable') else resolve_executable(state['backend']))
     analyst = NativeAnalyst(executable, folder, backend=state['backend'],
         recorded_coding_model=state.get('recorded_coding_model'),
+        **({'worker_environment': state['worker_environment']} if state.get('worker_environment') else {}),
         workspace=workspace, **compute_kwargs(state['model'], state['effort'], backend=state['backend']),
         timeout_seconds=None, max_total_input_bytes=None, resume=folder.exists(),
         **({"execution_profiles": state["execution_profiles"]} if state.get("execution_profiles") else {}))

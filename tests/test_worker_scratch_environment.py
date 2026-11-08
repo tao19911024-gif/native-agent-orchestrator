@@ -11,6 +11,7 @@ from foundry_runtime import _foundry_dispatch as dispatch, foundry_goal as goal
 from foundry_runtime import _dispatch_claude, app_server_transport as transport, _code_index
 from test_installed_runtime import external, offline, Analyst
 from test_manager_input_wait import manager_io
+from test_expert_consultation import consultation
 
 
 ENV_KEYS = ('TMPDIR', 'TMP', 'TEMP', 'PYTEST_DEBUG_TEMPROOT')
@@ -69,7 +70,12 @@ def test_worker_tempfile_and_pytest_use_declared_goal_environment(external, tmp_
     class Review(Analyst):
         def __init__(self, *a, **k):
             assert {key: os.environ.get(key) for key in ENV_KEYS} == before
-            assert 'worker_environment' not in (k.get('launch_context') or {})
+            launch = k.get('launch_context') or {}
+            if enabled:
+                expected = {key: str(folder/'disposable'/('pytest' if key == 'PYTEST_DEBUG_TEMPROOT' else 'tmp')) for key in ENV_KEYS}
+                assert launch['worker_environment'] == expected
+            else:
+                assert 'worker_environment' not in launch
             super().__init__(*a, **k)
         def __call__(self, request):
             if enabled == 'resume':
@@ -235,5 +241,83 @@ def test_artifact_answer_gets_new_scratch_after_parent_reclaimed(external, manag
         manifest = json.loads((target/'manifest.json').read_bytes())
         assert target/'disposable'/'tmp' in path.parents
         assert manifest['launch_context']['worker_environment']['TEMP'] == str(target/'disposable'/'tmp')
+        assert manifest['manager_state']['worker_environment'] == manifest['launch_context']['worker_environment']
         assert not (target/'disposable').exists()
     assert all(p.read_bytes() == content for p, content in prior.items())
+
+
+@pytest.mark.parametrize('backend', ['codex', 'claude'])
+def test_native_review_uses_goal_scratch_and_replays_without_new_process(tmp_path, monkeypatch, backend):
+    from foundry_runtime import foundry_native as native, _goal_scratch, _foundry_review_group as reviews
+    monkeypatch.setenv('PDCL_MODEL_CATALOGUE', 'snapshot')
+    monkeypatch.setattr(_code_index, 'prepare', lambda *a, **k: None)
+    before = dict(os.environ)
+    (tmp_path/'goal').mkdir()
+    env = _goal_scratch.register(tmp_path/'goal', {'run_id': 'goal'})
+    probe = tmp_path/'review-temp.json'
+    result = {'candidate_commit': 'a'*40, 'packet_sha256': 'b'*64, 'verdict': 'PASS', 'findings': []}
+    if backend == 'codex':
+        rows = [{'type': 'thread.started', 'thread_id': SID}, {'type': 'turn.started'},
+            {'type': 'item.completed', 'item': {'id': 'answer', 'type': 'agent_message', 'text': json.dumps(result)}},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 10, 'cached_input_tokens': 0, 'output_tokens': 5}}]
+    else:
+        rows = [{'type': 'system', 'subtype': 'init', 'session_id': SID, 'model': 'fixture',
+                 'tools': ['StructuredOutput'], 'mcp_servers': [], 'skills': [], 'plugins': []},
+            {'type': 'assistant', 'message': {'role': 'assistant', 'content': [
+                {'type': 'tool_use', 'name': 'StructuredOutput', 'id': 'format', 'input': result}]}},
+            {'type': 'user', 'message': {'role': 'user', 'content': [
+                {'type': 'tool_result', 'tool_use_id': 'format', 'content': 'Structured output provided successfully'}]}},
+            {'type': 'result', 'subtype': 'success', 'is_error': False, 'num_turns': 2, 'session_id': SID,
+             'result': json.dumps(result), 'structured_output': result, 'total_cost_usd': 0.0,
+             'usage': {'input_tokens': 10, 'output_tokens': 5, 'iterations': []}}]
+    spawn = native.OwnedProcess.spawn
+    def local(argv, **kwargs):
+        script = ('import sys,json,os,tempfile;from pathlib import Path;sys.stdin.buffer.read();'
+            'Path(' + repr(str(probe)) + ').write_text(json.dumps({"path":tempfile.mkdtemp(),'
+            '"env":{k:os.environ.get(k) for k in ' + repr(ENV_KEYS) + '}}));'
+            'sys.stdout.write(' + repr('\n'.join(map(json.dumps, rows))+'\n') + ')')
+        return spawn([sys.executable, '-B', '-c', script], **kwargs)
+    monkeypatch.setattr(native.OwnedProcess, 'spawn', local)
+    settings = [{'backend': backend, 'executable': sys.executable}]
+    request = {'kind': 'review', 'call_id': 'c'*64, 'packet': {'candidate_commit': 'a'*40}}
+    folder = tmp_path/'reviews'
+    panel = reviews.Panel(settings, {'review-0': request}, native.NativeAnalyst, folder, tmp_path,
+                          worker_environment=env)
+    assert panel(request) == result
+    observed = json.loads(probe.read_bytes())
+    assert observed['env'] == env and Path(env['TEMP']) in Path(observed['path']).parents
+    invocation = json.loads(next(folder.glob('review-0/attempt-*/call-*/invocation.json')).read_bytes())
+    assert invocation['launch_context']['tool_discipline']['root_role'] == 'reviewer'
+    assert invocation['launch_context']['worker_environment'] == env
+    frozen = {p: p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+    monkeypatch.setattr(native.OwnedProcess, 'spawn', lambda *a, **k: pytest.fail('completed review replay spawned'))
+    restored = reviews.Panel(settings, {'review-0': request}, native.NativeAnalyst, folder, tmp_path,
+        resume=True, worker_environment={'TEMP': 'different-current-default'})
+    assert restored(request) == result
+    assert all(p.read_bytes() == raw for p, raw in frozen.items())
+    assert dict(os.environ) == before
+
+
+def test_manager_and_expert_keep_registered_environment_on_replay(consultation, tmp_path, monkeypatch):
+    from foundry_runtime import _foundry_manager as manager, foundry_native as native, _goal_scratch
+    state, calls, _ = consultation
+    (tmp_path/'goal').mkdir()
+    state['worker_environment'] = _goal_scratch.register(tmp_path/'goal', {'run_id': 'goal'})
+    spawn = native.OwnedProcess.spawn
+    observed = []
+    def local(argv, **kwargs):
+        observed.append({key: kwargs['env'][key] for key in ENV_KEYS})
+        return spawn(argv, **kwargs)
+    monkeypatch.setattr(native.OwnedProcess, 'spawn', local)
+    packet = {'stage': 'assign'}
+    result = manager.turn(state, tmp_path, packet)
+    assert len(calls) == 3 and observed == [state['worker_environment']]*3
+    roles = set()
+    for path in tmp_path.glob('**/invocation.json'):
+        launch = json.loads(path.read_bytes())['launch_context']
+        assert launch['worker_environment'] == state['worker_environment']
+        roles.add(launch['tool_discipline']['root_role'])
+    assert roles == {'manager', 'expert'}
+    monkeypatch.setattr(_code_index, 'prepare', lambda *a, **k: pytest.fail('completed replay prepared an index'))
+    assert manager.turn(state, tmp_path, packet)[0] == result[0]
+    assert len(calls) == 3

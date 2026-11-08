@@ -48,13 +48,16 @@ def argv(analyst, claude_argv, folder, attempt_id, schema, kind, *, resume_sessi
 
 
 def environment(analyst, kind, launch_context=None):
+    from ._launch_context import worker_environment
     if analyst.backend == "codex":
         from .foundry_codex import codex_backend_env
-        return codex_backend_env(analyst.executable)
-    from .foundry_claude import environment
-    compute = compute_for_kind(analyst._role_compute, kind, analyst._compute)
-    return environment(compute.get("effort"), launch_context=launch_context, **({"execution_environment": analyst.execution_profiles["claude_environment"]}
+        selected = codex_backend_env(analyst.executable)
+    else:
+        from .foundry_claude import environment
+        compute = compute_for_kind(analyst._role_compute, kind, analyst._compute)
+        selected = environment(compute.get("effort"), launch_context=launch_context, **({"execution_environment": analyst.execution_profiles["claude_environment"]}
                         if analyst.execution_profiles is not None else {}))
+    return worker_environment(selected, launch_context)
 
 
 def invocation(analyst, request, prompt, context, schema, now):
@@ -68,6 +71,8 @@ def invocation(analyst, request, prompt, context, schema, now):
                    'manager' if request['kind'] == 'coordinate' else
                    'reviewer' if request['kind'] == 'review' else 'executor'), backend=analyst.backend,
         coding_model=analyst.recorded_coding_model)
+    if analyst.worker_environment:
+        launch = {**launch, 'worker_environment': analyst.worker_environment}
     args = analyst._argv(folder, allocation["attempt_id"], schema, request["kind"],
         resume_session=allocation.get("resume_session"), persistent=allocation.get("persistent_session", False),
         launch_context=launch)

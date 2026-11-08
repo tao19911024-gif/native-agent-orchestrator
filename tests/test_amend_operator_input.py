@@ -99,7 +99,7 @@ def test_removed_bundled_reviewer_names_explicit_upgrade(external, tmp_path, mon
     assert not launches and {p: p.read_bytes() for p in prior.iterdir()} == before
 
 
-@pytest.mark.parametrize('completed', [False, True])
+@pytest.mark.parametrize('completed', [None, 'PASS', 'BLOCK'])
 def test_provider_failed_review_allows_operator_amendment(external, tmp_path, monkeypatch, capsys, completed):
     tree, scope, order, launches = external
     base = git(tree, 'rev-parse', 'HEAD')
@@ -116,7 +116,8 @@ def test_provider_failed_review_allows_operator_amendment(external, tmp_path, mo
         'base_commit': base, 'coding_launcher': 'claude', 'project_record': scope.record(),
         'review_checkpoint': goal._fact(checkpoint), 'runtime_provenance': {'python': sys.executable}})
     review = {'candidate_commit': head, 'packet_sha256': goal._sha(goal._json_bytes(context)),
-              'verdict': 'PASS', 'findings': []}
+              'verdict': completed or 'PASS', 'findings': ([{'severity': 'P1', 'file': 'candidate.txt',
+                  'line': '1', 'summary': 'Correct the candidate before another review.'}] if completed == 'BLOCK' else [])}
     outcome = prior/'outcome.json'
     recorded = {'status': 'review_blocked', 'candidate_commit': head, 'review_completion_required': True,
                 'reason': 'provider_failure: request timed out', 'reviews': [review] if completed else []}
@@ -153,6 +154,8 @@ def test_provider_failed_review_allows_operator_amendment(external, tmp_path, mo
         '--goal-evidence', str(tmp_path/'amended')]) == 2
     assert len(received) == 1, capsys.readouterr().err
     assert received[0][0] == session and 'Merge upstream.' in received[0][1]
+    if completed == 'BLOCK':
+        assert 'Correct the candidate before another review.' in received[0][1]
     assert outcome.read_bytes() == before and not launches
 
 

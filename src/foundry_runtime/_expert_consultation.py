@@ -73,7 +73,7 @@ def consult(turn, state, workspace, question, source):
     expert = {**state['expert'], 'native_dir': str(folder), 'last_call_id': None}
     if state.get('design_convergence') == 1:
         expert['design_convergence'] = 1
-    for name in ('quota_recovery', 'task_deadline_at', 'context_reuse'):
+    for name in ('quota_recovery', 'task_deadline_at', 'context_reuse', 'worker_environment'):
         if name in state:
             expert[name] = state[name]
     if state.get('execution_profiles'):

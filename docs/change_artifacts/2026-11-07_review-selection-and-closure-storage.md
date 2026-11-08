@@ -21,6 +21,17 @@ pairs now participate in the existing request identity and command projection.
 The successor preserves recorded scratch policy while its goal execution owner
 registers a fresh directory. Native launch refresh no longer erases this policy.
 
+Independent reviewers could previously execute tests without the registered
+temporary environment used by coding workers. Review attempts now consume the
+goal manifest's existing environment through their own role-specific launch
+context. Managers, expert consultations and provider transfers retain the same
+environment. Historical native calls continue to replay their recorded context.
+
+A provider-interrupted review pair can include a completed BLOCK verdict. The
+existing instructed amendment path now accepts that state and forwards the
+completed findings to the original coding session. The new candidate still
+requires the complete independent review pair.
+
 ## Contract
 
 - `--review-model MODEL_1 MODEL_2` selects a new goal or standalone review pair.
@@ -37,7 +48,7 @@ registers a fresh directory. Native launch refresh no longer erases this policy.
 
 Regression fixtures cover mixed-author review selection, new-goal assignment,
 recorded recovery, configured closure storage and inherited temporary paths.
-The published baseline fails all five new cases. The candidate is checked from
+The published baseline fails the initial five regression cases. The candidate is checked from
 an isolated wheel installation using synthetic native processes.
 
 This change does not modify installed versions, current selection, running
