@@ -203,3 +203,106 @@ def test_unknown_intent_with_live_process_requires_reconciliation_not_stopped(ex
     report = _followup.dispatch_status(path)
     assert report['status'] == 'reconciliation_required'
     assert report['process_observation'] == {'owner': 'alive', 'root': 'alive'}
+
+
+@pytest.fixture
+def continuation_records(tmp_path):
+    root = tmp_path / 'goal'; parent = root / 'round-0'
+    parent.mkdir(parents=True)
+    manifest = {'run_id': 'original', 'worktree': str(tmp_path / 'project'),
+                'order': {'path': str(tmp_path / 'order.md'), 'sha256': 'order'},
+                'manager_phase': 'feedback_pending'}
+    goal._write(root / 'manifest.json', {'run_id': 'root', 'mode': 'auto-amend',
+                                       'active_round': str(parent)})
+    goal._write(parent / 'manifest.json', manifest)
+    goal._write(parent / 'outcome.json', {'status': 'coding_incomplete'})
+
+    def child(name, predecessor=parent, prior_name='outcome.json', **changes):
+        folder = tmp_path / ('continue-' + name); folder.mkdir()
+        saved = {**manifest, 'run_id': name, 'manager_phase': 'dispatch_pending',
+                 'continuation': {'prior_record': goal._fact(predecessor / prior_name)}, **changes}
+        goal._write(folder / 'manifest.json', saved)
+        return folder
+    return root, parent, child
+
+
+@pytest.mark.parametrize('phase', ['feedback_pending', 'awaiting_input', 'coding_incomplete'])
+def test_root_status_follows_coding_continuation_without_native_manager_receipt(continuation_records, phase, monkeypatch):
+    root, parent, child = continuation_records
+    manifest = json.loads((parent / 'manifest.json').read_bytes())
+    goal._write(parent / 'manifest.json', {**manifest, 'manager_phase': phase})
+    current = child('current')
+    def dispatch_observation(folder, manifest):
+        if folder == current:
+            return {'status': 'observed', 'executions': [{'status': 'pending',
+                    'dispatch': 'retained-package', 'live_event_log': 'retained-worker-log'}]}
+        return {'status': 'none_observed', 'executions': []}
+    monkeypatch.setattr(_followup, '_current_dispatch', dispatch_observation)
+    before = {p: p.read_bytes() for p in root.parent.rglob('*.json')}
+    report = _followup.status(root)
+    assert report['goal'] == str(root) and report['run_id'] == 'root'
+    assert report['continuation_goal'] == report['active_round'] == str(current)
+    assert report['phase'] == 'dispatch_pending' and report['status'] == 'pending'
+    assert report['summary']['next_action'] == 'wait'
+    assert report['summary']['dispatch_status'] == 'observed'
+    assert report['summary']['evidence']['worker_live_event_log'] == 'retained-worker-log'
+    assert not report['errors']
+    assert before == {p: p.read_bytes() for p in root.parent.rglob('*.json')}
+
+
+def test_status_follows_manifest_link_and_multi_hop_chain_not_latest_directory(continuation_records):
+    root, parent, child = continuation_records
+    first = child('z-first', prior_name='manifest.json')
+    goal._write(first / 'outcome.json', {'status': 'coding_incomplete'})
+    last = child('a-last', first, manager_phase='review_pending',
+                 manager_state={'backend': 'claude', 'native_dir': str(root.parent / 'transferred-manager')})
+    child('unrelated', worktree='another-worktree')
+    os.utime(first / 'manifest.json', (2_000_000_000, 2_000_000_000))
+    report = _followup.status(root)
+    assert report['continuation_goal'] == str(last)
+    assert report['phase'] == 'review_pending'
+    goal._write(last / 'outcome.json', {'status': 'candidate_verified'})
+    completed = _followup.status(root)
+    assert completed['status'] == 'outcome_available'
+    assert completed['outcome_status'] == 'candidate_verified'
+
+
+def test_status_reports_fork_without_selecting_a_branch_or_mutating_it(continuation_records):
+    root, parent, child = continuation_records
+    children = [child('one'), child('two')]
+    before = {p: p.read_bytes() for p in root.parent.rglob('*.json')}
+    report = _followup.status(root)
+    assert 'continuation_goal' not in report
+    assert any('multiple continuation tips' in error and all(str(c) in error for c in children)
+               for error in report['errors'])
+    assert report['summary']['errors'] == report['errors']
+    assert before == {p: p.read_bytes() for p in root.parent.rglob('*.json')}
+
+
+def test_status_does_not_follow_changed_prior_evidence(continuation_records):
+    root, parent, child = continuation_records
+    child('current')
+    goal._write(parent / 'outcome.json', {'status': 'project_handoff'})
+    report = _followup.status(root)
+    assert 'continuation_goal' not in report
+    assert any('continuation observation:' in error for error in report['errors'])
+
+
+def test_root_status_resolves_repeated_answers_using_retained_manager_chain(continuation_records, monkeypatch):
+    from foundry_runtime import _foundry_goal_transitions as transitions
+    root, parent, child = continuation_records
+    manifest = json.loads((parent / 'manifest.json').read_bytes())
+    state = {'native_dir': str(root.parent / 'manager'), 'last_call_id': 'original-call'}
+    goal._write(parent / 'manifest.json', {**manifest, 'manager_state': state})
+    first = child('first', manager_state={**state, 'last_call_id': 'first-call'})
+    last = child('last', manager_state={**state, 'last_call_id': 'last-call'})
+    goal._write(first / 'outcome.json', {'status': 'coding_incomplete'})
+    calls = {call: {'envelope': {'packet': {'run_id': run}}} for call, run in
+             [('original-call', 'original'), ('first-call', 'first'), ('last-call', 'last')]}
+    def history(*args, **kwargs):
+        assert kwargs['read_only'] is True
+        return calls, 'last-call', [{'call_id': call} for call in calls]
+    monkeypatch.setattr(transitions, 'manager_history', history)
+    report = _followup.status(root)
+    assert report['continuation_goal'] == str(last)
+    assert report['phase'] == 'dispatch_pending' and not report['errors']

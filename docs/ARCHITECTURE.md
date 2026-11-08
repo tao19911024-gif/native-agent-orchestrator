@@ -39,6 +39,16 @@ Runtime selection is an optional read-only input, separate from recorded
 controller/worker provenance. Status summaries reuse existing feedback and input
 continuation commands, including their recorded environment.
 
+Root-goal observation follows the active round's existing
+`continuation.prior_record` links to the unique continuation tip, including
+coding and provider-interruption continuations. The original goal identity stays
+in the report; `continuation_goal` and `active_round` identify its current work.
+Link traversal is shared with answered-question recovery. Observation does not
+require a new manager receipt, while recovery retains its consumption checks.
+Repeated answers sharing a prior record use the existing manager receipt chain
+to resolve their current tip. Unresolved branches are reported as observation
+errors without choosing by timestamp.
+
 Usage summaries project already reconciled native identities. Saved full reports
 provide fixed comparison baselines; cumulative sessions contribute their growth
 once, including sessions shared across roles. The session selector is shared with

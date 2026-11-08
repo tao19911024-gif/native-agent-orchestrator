@@ -85,7 +85,7 @@ def _current_dispatch(folder, manifest):
 
 def _summary(report, *, runtime_selection=None):
     """A consumer view of existing owners, not another task state."""
-    selected, errors = None, []
+    selected, errors = None, list(report.get('errors', []))
     if runtime_selection:
         try:
             value = json.loads(Path(runtime_selection).read_text(encoding='utf-8-sig'))
@@ -282,17 +282,16 @@ def _goal_status(folder):
     try:
         from ._foundry_goal_auto import active_round
         active_folder, active = active_round(folder, manifest)
-        if active.get('manager_phase') == 'awaiting_input':
-            from . import foundry_goal as owner
-            from ._foundry_goal_continuation import consumed_continuation
-            try:
-                child, _ = consumed_continuation(owner, active_folder, active, read_only=True)
-                if child != active_folder:
-                    current = _goal_status(child)
-                    return {**current, **report, 'errors': current['errors'] + report['errors'],
-                            'continuation_goal': current.get('continuation_goal', str(child))}
-            except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
-                report['errors'].append('continuation observation: ' + str(exc))
+        from . import foundry_goal as owner
+        from ._foundry_goal_continuation import observed_continuation
+        try:
+            child, _ = observed_continuation(owner, active_folder, active)
+            if child != active_folder:
+                current = _goal_status(child)
+                return {**current, **report, 'errors': current['errors'] + report['errors'],
+                        'continuation_goal': current.get('continuation_goal', str(child))}
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            report['errors'].append('continuation observation: ' + str(exc))
         report['phase'] = active.get('manager_phase')
         report['active_round'] = str(active_folder)
         report['runtime_observation'] = active.get('runtime_provenance')

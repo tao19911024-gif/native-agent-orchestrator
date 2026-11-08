@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0a116 — 2026-11-08
+
+- Follow retained coding continuations when observing a root goal, including
+  continuations after incomplete coding or provider interruption. Project the
+  current child's execution, review and delivery through the original root.
+- Resolve continuation chains from existing prior-record references, sharing
+  link traversal with recovery. Report branching evidence without selecting by
+  directory age. Recovery retains its manager-receipt consumption checks.
+
 ## 0.1.0a115 — 2026-11-07
 
 - Accept an explicit independent review model pair through the existing frozen
