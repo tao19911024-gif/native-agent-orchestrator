@@ -52,7 +52,7 @@ print(json.dumps(state))
     monkeypatch.setenv('FOUNDRY_COMPACT_TOKENS', '0')
     plan = preflight.inspect_recovery(folder, manifest, order)
     assert plan['status'] == 'ready', plan
-    assert plan['runtime_python'] == os.environ['FOUNDRY_TEST_OLD_PYTHON']
+    assert Path(plan['runtime_python']) == Path(os.environ['FOUNDRY_TEST_OLD_PYTHON'])
     assert plan['environment']['FOUNDRY_COMPACT_TOKENS'] == '240000'
     routed = []
     monkeypatch.setattr(preflight, 'execute_recorded', lambda plan, argv, **kw: routed.append((plan, argv)) or 0)
@@ -139,6 +139,8 @@ def test_panel_prepares_shared_launch_once_for_parallel_members(tmp_path, monkey
 
 def test_coding_runtime_migration_dispatches_fresh_with_recorded_compute(external, tmp_path, monkeypatch):
     from foundry_runtime import _foundry_dispatch as dispatch
+    from foundry_runtime import foundry_native_support
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
     tree, scope, order, launches = external
     original = dispatch.coding_argv
     observed = []
