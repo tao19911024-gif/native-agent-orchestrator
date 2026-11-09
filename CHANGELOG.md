@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a117 — 2026-11-08
 
 - Validate each independent review against its frozen packet and validate the
   shared candidate workspace after both reviewers settle. Temporary reproduction
