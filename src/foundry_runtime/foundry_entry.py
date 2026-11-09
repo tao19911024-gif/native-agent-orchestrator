@@ -271,7 +271,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             print("REFUSE Foundry recovery: %s" % exc, file=sys.stderr)
             from ._foundry_cli_help import announce_recovery_failure, announce_runtime_upgrade
             announce_runtime_upgrade(order, recovery, exc, prompt_file=getattr(a, 'prompt_file', None))
-            announce_recovery_failure(order, recovery)
+            announce_recovery_failure(order, recovery, prompt_file=getattr(a, 'prompt_file', None))
             announce_review_recovery(order, recovery)
             return 2
         _print_report(result)
@@ -285,6 +285,16 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 raise ValueError('--prompt-file is empty')
             from .foundry_goal import amendment_manifest, amendment_launcher
             prior = amendment_manifest(amend_from, getattr(a, 'coding_session', None))
+            if project is not None and prior.get('project_record') is not None:
+                # Omitted CLI inputs inherit the admitted invocation. In particular,
+                # an explicit empty resume input is different from falling back to
+                # the original launch preflight after the worker has committed.
+                record = project_options['project_record']
+                for key in ('preflight_input', 'resume_preflight_input'):
+                    if not getattr(a, 'project_' + key, None):
+                        record.pop(key, None)
+                        if key in prior['project_record']:
+                            record[key] = prior['project_record'][key]
             prior_review_backend = (prior.get("requested_compute", {}).get("review") or {}).get("backend")
             if not profile and a.analyst_backend is None:
                 backend = prior_review_backend or "codex"

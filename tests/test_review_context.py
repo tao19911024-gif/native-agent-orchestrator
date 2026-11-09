@@ -109,10 +109,10 @@ def test_long_fields_are_readable_from_the_retained_checkpoint(tmp_path, backend
     assert reconstructed == context
     verdict = {'candidate_commit': context['candidate_commit'], 'packet_sha256': envelope['packet_sha256'],
                'verdict': 'PASS', 'findings': []}
-    goal._validate_review(verdict, context, tmp_path, retained_only=True)
+    goal._validate_review(verdict, context)
     with pytest.raises(goal.InvalidReview, match='identity differs'):
         goal._validate_review({**verdict, 'packet_sha256': goal._sha(goal._json_bytes(envelope['packet']))},
-                              context, tmp_path, retained_only=True)
+                              context)
     assert envelope['packet']['project_review'] == context['project_review']
     assert envelope['packet']['prior_review'] == context['prior_review']
     legacy = build_prompt(goal._role_request('run', 'review-0', context), backend, ValueError)

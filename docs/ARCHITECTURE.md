@@ -192,6 +192,10 @@ the existing outcome and manifest. The delivery projection reuses the goal's
 finding deduplicator and amendment settings. Recovery and amendment advice
 share the recorded-entry command formatter; the existing amendment controller
 resumes the coding session and records the successor candidate and reviews.
+The CLI inherits omitted amendment preflight inputs from that retained project
+record before validating the supplied invocation. Launch preflight and resume
+preflight remain distinct, including an explicitly empty resume input. Explicit
+input differences and descriptor differences name their affected fields.
 
 ## Verification and rollback
 
@@ -222,6 +226,11 @@ The review checkpoint also owns the complete review input. For new goals, the
 review request builder [references long context fields](REVIEW_CONTEXT.md)
 before native admission. Rendering and recovery consume the same request;
 verdict validation remains bound to the complete checkpoint context hash.
+Each slot validates its own response and packet. The review-pair owner validates
+the shared candidate after both calls settle, including HEAD, index and
+untracked files. A temporary reproduction created by an active reviewer is not
+a completed-pair workspace observation. Both verdicts remain recorded when the
+final candidate check fails, together with the observed dirty workspace.
 The checkpoint also retains the native evidence-reading policy. Normal review,
 recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.

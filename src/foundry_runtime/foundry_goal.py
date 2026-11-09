@@ -237,7 +237,7 @@ def _referenced_fields(context):
             if field in context and len(json.dumps(context[field], ensure_ascii=False).encode('utf-8')) > 4096}
 
 
-def _validate_review(value, context, tree, *, retained_only=False):
+def _validate_review(value, context):
     validate_response_shape(value, response_contract("review", correction_routing=context.get("correction_routing") is True, review_field_reads=context.get("review_field_reads") is True))
     if context.get('review_field_reads') is True:
         reads = value.get('read_fields', [])
@@ -252,8 +252,9 @@ def _validate_review(value, context, tree, *, retained_only=False):
         raise InvalidReview("PASS review carries a blocking finding", "review_blocked")
     if value["verdict"] == "BLOCK" and not _blocking(value["findings"]):
         raise InvalidReview("BLOCK review lacks a blocking finding", "review_blocked")
-    if not retained_only and _candidate(tree) != context["candidate_commit"]:
-        raise GoalBlocked("candidate changed during independent review", "review_blocked")
+    # A returned verdict owns its packet, not the shared workspace lifecycle.
+    # The pair owner checks HEAD, index and worktree after both calls settle;
+    # another reviewer may still be cleaning up its reproduction files here.
 
 
 def _role_request(run_id, name, packet, *, context_reference=None, read_policy=None):
@@ -570,8 +571,11 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
         if prior.get("project_record") is not None:
             from ._project_execution import from_record
             supplied = from_record(kwargs.get("project_record", prior["project_record"]))
-            if from_record(prior["project_record"], selected=supplied).record() != prior["project_record"]:
-                raise ValueError("amendment project input differs from original run")
+            observed = from_record(prior["project_record"], selected=supplied).record()
+            if observed != prior["project_record"]:
+                fields = sorted(key for key in observed.keys() | prior["project_record"].keys()
+                                if observed.get(key) != prior["project_record"].get(key))
+                raise ValueError("amendment project input differs from original run: " + ", ".join(fields))
             kwargs["project_record"] = prior["project_record"]
         if prior.get("task_staffing"):
             kwargs["task_staffing"] = dict(prior["task_staffing"])
@@ -889,7 +893,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                          for row in reviewers]
         analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
                                      folder / 'reviews', tree, resume=resume,
-                                     validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                                     validate=lambda value: _validate_review(value, context),
                                      rejected_review=InvalidReview, transfers=transfers,
                                      worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
         if transfer_provider or migrate_runtime:
@@ -899,7 +903,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             if transfers != manifest.get('review_transfers', {}):
                 analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
                     folder/'reviews', tree, resume=resume,
-                    validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                    validate=lambda value: _validate_review(value, context),
                     rejected_review=InvalidReview, transfers=transfers,
                     worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
         if transfers != manifest.get('review_transfers', {}):
@@ -926,7 +930,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     if transfers:
                         analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
                             folder/'reviews', tree, resume=resume,
-                            validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                            validate=lambda value: _validate_review(value, context),
                             rejected_review=InvalidReview, transfers=transfers,
                             worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
                         selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
@@ -982,7 +986,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     previous_panel = analyst
                     analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
                         folder / 'reviews', tree, resume=True,
-                        validate=lambda value: _validate_review(value, context, tree, retained_only=retained_only),
+                        validate=lambda value: _validate_review(value, context),
                         rejected_review=InvalidReview, transfers=transfers,
                         worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
                     for name, saved in previous_panel.results.items():
@@ -1041,6 +1045,8 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             outcome = {'status': 'review_blocked', 'candidate_commit': context['candidate_commit'],
                        'coding': checkpoint['coding'], 'reviews': completed_reviews or [], 'reason': str(exc),
                        'review_completion_required': True}
+            if getattr(exc, 'workspace', None) is not None:
+                outcome['workspace'] = exc.workspace
             if manifest.get('review_tier_decisions'):
                 outcome['review_tier_decisions'] = manifest['review_tier_decisions']
         raise

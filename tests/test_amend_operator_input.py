@@ -23,6 +23,8 @@ def local_manager_only(monkeypatch):
 def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, monkeypatch, launcher, managed):
     tree, scope, order, _ = external
     base = git(tree, 'rev-parse', 'HEAD')
+    from foundry_runtime._project_execution import open_project
+    scope = open_project(scope.path, preflight_input={'expectHeadSha': base}, resume_preflight_input={})
     (tree/'candidate.txt').write_text('candidate')
     git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'candidate')
     head = git(tree, 'rev-parse', 'HEAD')
@@ -60,6 +62,7 @@ def test_pass_amendment_carries_additions_and_retains_them(external, tmp_path, m
     assert manager_packets[0]['operator_answer'] == marker
     assert received[0].index('Prior findings') < received[0].index(marker)
     saved = json.loads((folder/'manifest.json').read_bytes())['amendment']
+    assert json.loads((folder/'manifest.json').read_bytes())['project_record'] == scope.record()
     prompt.unlink()
     assert saved['operator_additions'] == marker
     assert marker in goal.amendment_prompt(order, saved, None, project=scope)

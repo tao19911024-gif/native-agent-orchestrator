@@ -45,6 +45,8 @@ Show the installed package and entry points with:
 | Repository identity mismatch or missing rule source | Restore the recorded workspace and rule file, or register the intended new workspace before starting a new task |
 | `project execution owner is not configured` | Add the `execution` object described in the [configuration reference](CONFIGURATION.md#execution-owner-and-preflight), then check the descriptor before its first dispatch |
 | `project preflight did not pass` | Read the printed preflight receipt's `argv`, `returncode`, `stdout`, and `stderr`; run the project check in its workspace and correct the reported project issue |
+| `amendment project input differs from original run` | The error names the differing input fields. Omit preflight flags to inherit the recorded launch and resume inputs, or supply matching inputs explicitly |
+| `project context differs from retained invocation` | Inspect the named context fields and use the recorded project descriptor and workspace |
 | `explicit compute requires both nonempty model and effort` | For Codex, supply `--coding-model` and `--coding-effort` together, or omit both to use native assignment |
 
 The quickstart helper requires a new destination directory. Select another
@@ -59,6 +61,8 @@ If the README quickstart already created the project, continue at
 | The same command returns a prior result | The execution intent was replayed. Read the result; submit new instructions through the recorded session to continue |
 | `unknown`, or an exited owner with unfinished state | Follow the exact task's reconciliation advice in the [recovery guide](RECOVERY.md#reconcile-interrupted-execution) |
 | `candidate_verified` | The goal verified a committed candidate through its coding and review lifecycle. Inspect the candidate diff and project acceptance result |
+| New instructions supplied through `--recover-goal` after candidate review | Recovery exits with code 2. Use the printed `--amend-from`, recorded coding session and `--prompt-file` command for additional code changes |
+| `candidate worktree is dirty` after independent review | Inspect `workspace.status_porcelain` in the review refusal. Reviewers must finish their reproductions and remove untracked probes before the pair completes; HEAD and index must still describe the reviewed candidate |
 | `task_acceptance: not_evaluated` | The project has no recorded acceptance observation for that result. Run its acceptance checks and record the maintainer's decision, or configure its observation hook |
 | `Foundry code index unavailable` | Execution uses scoped direct reads. Configure `FOUNDRY_CODEGRAPH_ARGV` when the project requires indexed navigation |
 | Codex reports `Reconnecting... n/m` with retries remaining | The current native turn is retrying. Keep its existing operation handle; inspect the terminal result when the client finishes |
