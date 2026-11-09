@@ -310,6 +310,9 @@ def from_record(record, *, selected=None):
         selected = open_project(context["descriptor"], preflight_input=record.get("preflight_input"),
                                 resume_preflight_input=record.get("resume_preflight_input"))
     selected = replace(selected, execution_profiles_json=json.dumps(context["execution_profiles"], sort_keys=True))
-    if selected.context.record() != context:
-        raise ValueError("project context differs from retained invocation")
+    observed = selected.context.record()
+    if observed != context:
+        fields = sorted(key for key in observed.keys() | context.keys()
+                        if observed.get(key) != context.get(key))
+        raise ValueError("project context differs from retained invocation: " + ", ".join(fields))
     return selected

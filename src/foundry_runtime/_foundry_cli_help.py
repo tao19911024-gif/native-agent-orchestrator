@@ -150,8 +150,20 @@ def unresolved_native_calls(folder):
             for row in snapshot.get('calls', []) if row.get('state') == 'unknown']
 
 
-def announce_recovery_failure(order, evidence):
+def announce_recovery_failure(order, evidence, *, prompt_file=None):
     try:
+        if prompt_file is not None:
+            from ._foundry_goal_auto import active_round
+            folder = Path(evidence)
+            active, current = active_round(folder, _read_manifest(folder / 'manifest.json'))
+            outcome = active / 'outcome.json'
+            saved = _read_manifest(outcome) if outcome.is_file() else {}
+            if saved.get('status') in ('candidate_verified', 'review_blocked'):
+                session = saved.get('coding_session') or '<existing-coding-session>'
+                invocation = amendment_invocation(order, outcome, session, current, prompt_file=prompt_file)
+                print('Recovery did not execute the new instructions. This candidate has a review outcome; '
+                      'submit coding changes through its amendment entry:\n' + invocation['powershell'], file=sys.stderr)
+                return
         advice = recovery_advice(order, evidence)
     except (OSError, ValueError, TypeError, KeyError):
         return

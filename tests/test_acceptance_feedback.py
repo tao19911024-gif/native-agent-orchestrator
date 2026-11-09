@@ -102,18 +102,18 @@ def test_required_review_field_receipt_and_legacy_context(tmp_path):
     verdict = {'candidate_commit': 'a'*40, 'packet_sha256': goal._sha(goal._json_bytes(context)),
                'verdict': 'PASS', 'findings': [], 'read_fields': []}
     with pytest.raises(goal.InvalidReview, match='required field unread.*original_order'):
-        goal._validate_review(verdict, context, tmp_path, retained_only=True)
+        goal._validate_review(verdict, context)
     read = {'pointer': '/context/original_order', 'sha256': goal._sha(goal._json_bytes(context['original_order']))}
-    goal._validate_review({**verdict, 'read_fields': [read]}, context, tmp_path, retained_only=True)
+    goal._validate_review({**verdict, 'read_fields': [read]}, context)
     with pytest.raises(goal.InvalidReview, match='digest differs'):
-        goal._validate_review({**verdict, 'read_fields': [{**read, 'sha256': '0'*64}]}, context, tmp_path, retained_only=True)
+        goal._validate_review({**verdict, 'read_fields': [{**read, 'sha256': '0'*64}]}, context)
     request = goal._role_request('run', 'review-0', context, context_reference={'path': 'checkpoint'})
     assert contracts.response_contract_for_request(request) == contracts.allocation_contract(
         {'kind': 'review', 'message_recipients': [], 'review_field_reads': True})
     context.pop('review_field_reads')
     verdict.pop('read_fields')
     verdict['packet_sha256'] = goal._sha(goal._json_bytes(context))
-    goal._validate_review(verdict, context, tmp_path, retained_only=True)
+    goal._validate_review(verdict, context)
 
 
 def test_role_defaults_and_retained_worker_settings(monkeypatch):

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Validate each independent review against its frozen packet and validate the
+  shared candidate workspace after both reviewers settle. Temporary reproduction
+  files no longer invalidate the other reviewer's returned verdict. Final HEAD,
+  index and worktree checks remain required before candidate acceptance.
+- Inherit omitted project preflight inputs when amending a reviewed candidate,
+  including an explicitly empty resume input. Report the fields that differ
+  when supplied inputs or retained project context do not match.
+- On recovery refusal for new instructions against a reviewed candidate, show
+  the candidate's amendment command instead of another recovery command.
+
 ## 0.1.0a116 — 2026-11-08
 
 - Follow retained coding continuations when observing a root goal, including
