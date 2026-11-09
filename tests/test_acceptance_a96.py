@@ -35,7 +35,7 @@ def test_review_group_captures_reviewer_settings(tmp_path, monkeypatch):
 @pytest.mark.parametrize('value', [None, [], 'PASS', 1])
 def test_invalid_review_shape_uses_schema_error(value, tmp_path):
     with pytest.raises(SchemaResponseError):
-        goal._validate_review(value, {'review_field_reads': True}, tmp_path, retained_only=True)
+        goal._validate_review(value, {'review_field_reads': True})
 
 
 @pytest.mark.parametrize('progress', [False, True])
