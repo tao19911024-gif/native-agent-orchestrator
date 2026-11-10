@@ -50,6 +50,7 @@ import threading
 import json
 import hashlib
 import os
+import re
 from pathlib import Path
 import time
 from contextvars import copy_context
@@ -58,10 +59,57 @@ from . import _foundry_goal_telemetry as _telemetry
 from ._compute_selection import compute_kwargs
 
 
+TRANSPORT_RETRY_DELAY_SECONDS = 5
+
+
+def transport_failure_receipt(error):
+    """A settled transport failure can reuse the existing slot recovery path."""
+    evidence = getattr(error, 'evidence', None)
+    if not evidence:
+        return None
+    path = Path(evidence) / 'receipt.json'
+    try:
+        record = json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict):
+        return None
+    cleanup = record.get('cleanup')
+    if (record.get('outcome') != 'provider_failure' or not isinstance(cleanup, dict)
+            or not cleanup.get('cleanup_verified')):
+        return None
+    message = record.get('error') or ''
+    if not isinstance(message, str):
+        return None
+    # Native clients can include a network phrase in an authorization/model
+    # error. Those errors require a different action, not another paid review.
+    if re.search(r'quota|rate.?limit|usage.?limit|billing|credit|authenticat|unauthori[sz]ed|'
+                 r'authori[sz]ation|credential|login|log in|sign in|permission|forbidden|api.?key|'
+                 r'invalid.?model|unsupported.?model|model.{0,40}(?:not found|not supported|unavailable|does not exist)|'
+                 r'\b(?:401|403|404|429)\b|context.{0,15}(?:length|window)|task deadline', message, re.I):
+        return None
+    if re.search(r'\b(?:ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT)\b|'
+                 r'request (?:timed out|timeout)|connection (?:reset|timed out)|'
+                 r'(?:dns|name resolution).{0,30}(?:fail|error)|'
+                 r'tls handshake (?:eof|timeout)', message, re.I):
+        return path
+    return None
+
+
+def wait_for_transport_retry():
+    from ._task_deadline import remaining
+    left = remaining()
+    if left is not None and left <= TRANSPORT_RETRY_DELAY_SECONDS:
+        return False
+    time.sleep(TRANSPORT_RETRY_DELAY_SECONDS)
+    return remaining() != 0
+
+
 class Panel:
     """Independent slots; retain receipts and replace only unfinished reviews.
 
-    Each explicit goal recovery can open one new attempt per failed slot.
+    Explicit goal recovery and the goal's recorded one-time transport retry
+    open a new attempt only for failed slots.
     Historical shared-owner and per-slot layouts remain evidence, not live
     owners. New attempts use separate NativeAnalysts so one failure cannot
     cancel the other slot. No worker/coding/manager phase is repeated here.
