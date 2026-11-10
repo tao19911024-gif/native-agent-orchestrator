@@ -231,6 +231,11 @@ the shared candidate after both calls settle, including HEAD, index and
 untracked files. A temporary reproduction created by an active reviewer is not
 a completed-pair workspace observation. Both verdicts remain recorded when the
 final candidate check fails, together with the observed dirty workspace.
+The goal also owns one delayed retry per slot for a settled transport failure.
+It records that decision in the existing manifest and reopens the existing
+review panel, which preserves completed verdicts and binds the next native
+attempt to its predecessor receipts. No worker, closure or successful reviewer
+is dispatched again. Explicit recovery remains available after another failure.
 The checkpoint also retains the native evidence-reading policy. Normal review,
 recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.

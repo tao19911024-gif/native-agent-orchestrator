@@ -891,21 +891,23 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
         if context.get("project_record"):
             reviewers = [{**row, "execution_profiles": context["project_record"]["context"]["execution_profiles"]}
                          for row in reviewers]
-        analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
-                                     folder / 'reviews', tree, resume=resume,
-                                     validate=lambda value: _validate_review(value, context),
-                                     rejected_review=InvalidReview, transfers=transfers,
-                                     worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
+        def panel(resuming, previous=None):
+            current = review_group.Panel(reviewers, requests, NativeAnalyst,
+                folder / 'reviews', tree, resume=resuming,
+                validate=lambda value: _validate_review(value, context),
+                rejected_review=InvalidReview, transfers=transfers,
+                worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
+            if previous is not None:
+                for name, saved in previous.results.items():
+                    current.results.setdefault(name, {**saved, 'session': previous.native_session(requests[name])})
+            return current
+        analyst = panel(resume)
         if transfer_provider or migrate_runtime:
             from ._foundry_goal_transitions import reviewers as transfer_reviewers
             transfers = transfer_reviewers(checkpoint, transfers, role=transfer_role,
                 provider=transfer_provider, migrate=migrate_runtime, completed=analyst.results)
             if transfers != manifest.get('review_transfers', {}):
-                analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
-                    folder/'reviews', tree, resume=resume,
-                    validate=lambda value: _validate_review(value, context),
-                    rejected_review=InvalidReview, transfers=transfers,
-                    worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
+                analyst = panel(resume)
         if transfers != manifest.get('review_transfers', {}):
             manifest['review_transfers'] = {name: list(rows) for name, rows in transfers.items()}
             _write(folder/'manifest.json', manifest)
@@ -928,11 +930,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                         if name in default_pending and chosen != current:
                             transfers.setdefault(name, []).append(chosen)
                     if transfers:
-                        analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
-                            folder/'reviews', tree, resume=resume,
-                            validate=lambda value: _validate_review(value, context),
-                            rejected_review=InvalidReview, transfers=transfers,
-                            worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
+                        analyst = panel(resume)
                         selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
                         selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
                 independent_reviewers(selected, [*excluded, *declared_authors], explicit=True)
@@ -947,6 +945,22 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             if retained_only and any(name not in analyst.results for name in names):
                 raise GoalBlocked('retained review is incomplete; no model calls were made', 'review_blocked')
             outcomes = review_group.prewarm(names, requests, analyst)
+            retried = {row['slot'] for row in manifest.get('review_transport_retries', [])}
+            transport = []
+            for name in names:
+                if retained_only or name in retried or outcomes[name][1] is None:
+                    continue
+                receipt = review_group.transport_failure_receipt(outcomes[name][1])
+                if receipt is not None:
+                    transport.append({'slot': name, 'receipt': _fact(receipt),
+                                      'delay_seconds': review_group.TRANSPORT_RETRY_DELAY_SECONDS})
+            if transport and review_group.wait_for_transport_retry():
+                # The goal owns the retry decision; native attempt receipts own
+                # execution. Persist before admission so restart cannot reset it.
+                manifest.setdefault('review_transport_retries', []).extend(transport)
+                _write(folder / 'manifest.json', manifest)
+                analyst = panel(True, analyst)
+                outcomes.update(review_group.prewarm([row['slot'] for row in transport], requests, analyst))
             source = ((manifest.get('task_staffing') or {}).get('review_source_detail') or {}).get('model')
             automatic = source in ('kind', 'project', 'provider-default')
             if not retained_only and automatic and (checkpoint.get('compute_assignment') or {}).get('profile_version', 0) >= 6:
@@ -983,14 +997,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                 if retry:
                     manifest['review_transfers'] = transfers
                     _write(folder / 'manifest.json', manifest)
-                    previous_panel = analyst
-                    analyst = review_group.Panel(reviewers, requests, NativeAnalyst,
-                        folder / 'reviews', tree, resume=True,
-                        validate=lambda value: _validate_review(value, context),
-                        rejected_review=InvalidReview, transfers=transfers,
-                        worker_environment=(manifest.get('launch_context') or {}).get('worker_environment'))
-                    for name, saved in previous_panel.results.items():
-                        analyst.results.setdefault(name, {**saved, 'session': previous_panel.native_session(requests[name])})
+                    analyst = panel(True, analyst)
                     outcomes.update(review_group.prewarm(retry, requests, analyst))
             completed_reviews = [outcomes[name][0] for name in names if outcomes[name][1] is None]
             reviews, sessions = [], []

@@ -232,6 +232,24 @@ corrections. Transferring one unfinished slot applies before independence
 selection for the remaining automatic slots. Completed verdicts and the frozen
 checkpoint remain available throughout that transition.
 
+When a review ends with a confirmed transport failure and its process cleanup
+is complete, the goal waits five seconds and retries that failed slot once in
+the same run. Request timeouts, DNS resolution failures, connection resets,
+`ECONNREFUSED`, and `TLS handshake timeout` or `EOF` use this path. Reconnect exhaustion
+requires an explicit transport cause. The candidate, request, provider and model
+remain fixed, and completed slots retain their verdicts. A retry can still
+return BLOCK; transport recovery does not accept the candidate.
+
+The goal manifest records `review_transport_retries` with each slot, original
+receipt reference and delay before launching the next attempt. The existing
+`reviews/review-N/attempt-*` receipts and predecessor references retain both
+executions and their usage. Restart or a provider transfer does not renew this
+per-slot allowance. If the retry also fails, use the recorded recovery command.
+Model, authentication, quota,
+schema and unresolved-cleanup errors do not trigger this transport retry; the
+delay does not extend the task deadline. Existing explicit provider transfers
+and model-tier decisions retain their separate rules.
+
 New staffing separates the non-editing coordinator from observed coding
 participants. Its automatic reviewer choices and tier decisions are described in
 [Configuration](CONFIGURATION.md). Older checkpoints retain their recorded

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0a118 — 2026-11-10
+
+Explicitly migrated older goals receive the same per-slot retry allowance when
+first run on this release; ordinary recovery keeps its recorded runtime.
+
+- Retry a settled independent-review transport failure once after five seconds,
+  using the existing review-slot recovery path. Keep the frozen candidate,
+  request, model and provider, and reuse the other slot's completed verdict.
+- Record the retry decision and failed receipt in the goal manifest before
+  admission. Preserve both native attempt receipts and their predecessor link;
+  restart does not renew the automatic retry allowance. Repeated failures remain
+  available through explicit recovery.
+- Exclude model, authentication, quota, schema, task-deadline and unresolved
+  cleanup failures from transport retry. Existing reviewer selection and
+  independent-review acceptance requirements remain in force.
+
 ## 0.1.0a117 — 2026-11-08
 
 - Validate each independent review against its frozen packet and validate the
