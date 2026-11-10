@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Extend independent-review connection recovery to a five-minute admission
+  window, with delays of 15, 30, 60, 60, 60 and 60 seconds. Persist the original
+  deadline and attempt count in the existing goal manifest. Failed-call time
+  counts toward the window; a running review retains its ordinary task deadline.
+- Retry only explicit DNS or connection-refused failures whose complete native
+  stream records no prior work or uncertain-delivery error. Timeouts, resets and
+  interrupted responses stop automatic replay even when no output was received.
+- Recover complete recorded review verdicts before issuing another request.
+  Completed slots and historical one-shot retry limits remain preserved.
+
 ## 0.1.0a118 — 2026-11-10
 
 Explicitly migrated older goals receive the same per-slot retry allowance when

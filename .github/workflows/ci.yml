@@ -60,7 +60,7 @@ jobs:
         run: |
           $RuntimePython = Join-Path $env:RUNNER_TEMP 'nao-runtime/Scripts/python.exe'
           & $RuntimePython -m pytest tests/test_task_observation_summary.py tests/test_usage_summary.py `
-            tests/test_amend_operator_input.py tests/test_review_amend_boundaries.py tests/test_review_transport_retry.py tests/test_boundary_runtime_upgrade.py `
+            tests/test_amend_operator_input.py tests/test_review_amend_boundaries.py tests/test_review_transport_retry.py tests/test_review_outage.py tests/test_boundary_runtime_upgrade.py `
             tests/test_closed_intent_restart.py tests/test_late_operator_update.py `
             tests/test_coordination_recurrence.py tests/test_effective_coordination.py `
             tests/test_rework_handover.py tests/test_live_manager_boundaries.py tests/test_manager_progress.py `

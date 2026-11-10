@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 import subprocess, sys, uuid
 from contextlib import contextmanager
@@ -20,7 +21,7 @@ from ._compute_selection import resolve_native_team, is_managed, team_kwargs, re
 from .foundry_native_support import resolve_executable
 from ._foundry_response_contract import _BLOCKING_SEVERITIES
 from .foundry_collaboration import response_contract, validate_response_shape
-from .foundry_native import NativeAnalyst
+from .foundry_native import NativeAnalyst, NativeError
 from . import _foundry_review_group as review_group
 from . import _foundry_goal_usage as goal_usage
 from . import _foundry_goal_auto as goal_auto
@@ -944,23 +945,34 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
             # a fresh attempt on explicit recovery, retaining every prior receipt.
             if retained_only and any(name not in analyst.results for name in names):
                 raise GoalBlocked('retained review is incomplete; no model calls were made', 'review_blocked')
-            outcomes = review_group.prewarm(names, requests, analyst)
-            retried = {row['slot'] for row in manifest.get('review_transport_retries', [])}
-            transport = []
-            for name in names:
-                if retained_only or name in retried or outcomes[name][1] is None:
-                    continue
-                receipt = review_group.transport_failure_receipt(outcomes[name][1])
-                if receipt is not None:
-                    transport.append({'slot': name, 'receipt': _fact(receipt),
-                                      'delay_seconds': review_group.TRANSPORT_RETRY_DELAY_SECONDS})
-            if transport and review_group.wait_for_transport_retry():
-                # The goal owns the retry decision; native attempt receipts own
-                # execution. Persist before admission so restart cannot reset it.
-                manifest.setdefault('review_transport_retries', []).extend(transport)
-                _write(folder / 'manifest.json', manifest)
-                analyst = panel(True, analyst)
-                outcomes.update(review_group.prewarm([row['slot'] for row in transport], requests, analyst))
+            retry_lock = threading.Lock()
+            def review_slot(name, request):
+                while True:
+                    try:
+                        return analyst(request)
+                    except NativeError as error:
+                        if retained_only:
+                            raise
+                        try:
+                            analyst.reopen_slot(name)
+                        except Exception as recovery_error:
+                            raise error from recovery_error
+                        if name in analyst.results:
+                            return analyst.results[name]['value']
+                        with retry_lock:
+                            history = [row for row in manifest.get('review_transport_retries', []) if row['slot'] == name]
+                            retry = review_group.transport_retry_plan(error, history)
+                            if retry is None:
+                                raise
+                            row = {'slot': name, **retry, 'receipt': _fact(retry['receipt'])}
+                            # The goal remains the sole persistence owner. Reserve
+                            # before waiting so interruption retains the window.
+                            manifest.setdefault('review_transport_retries', []).append(row)
+                            _write(folder / 'manifest.json', manifest)
+                        if not review_group.wait_for_transport_retry(row['retry_at'], row['retry_deadline_at'],
+                                wait=analyst.wait_for_cancel, max_delay=row['delay_seconds']):
+                            raise
+            outcomes = review_group.prewarm(names, requests, analyst, invoke=review_slot)
             source = ((manifest.get('task_staffing') or {}).get('review_source_detail') or {}).get('model')
             automatic = source in ('kind', 'project', 'provider-default')
             if not retained_only and automatic and (checkpoint.get('compute_assignment') or {}).get('profile_version', 0) >= 6:

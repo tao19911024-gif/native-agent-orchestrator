@@ -54,16 +54,25 @@ import re
 from pathlib import Path
 import time
 from contextvars import copy_context
+from datetime import datetime
+from time import time as timestamp, sleep
 
 from . import _foundry_goal_telemetry as _telemetry
 from ._compute_selection import compute_kwargs
 
 
-TRANSPORT_RETRY_DELAY_SECONDS = 5
+TRANSPORT_RETRY_DELAYS = (15, 30, 60, 60, 60, 60)
+TRANSPORT_RETRY_WINDOW_SECONDS = 300
 
 
 def transport_failure_receipt(error):
-    """A settled transport failure can reuse the existing slot recovery path."""
+    """Only observed pre-connection failures permit another review request.
+
+    A timeout/reset can follow server acceptance. Startup/session identifiers
+    are local events, not delivery acknowledgments. Inspect the whole captured
+    attempt to reject recorded earlier work or uncertain retries. Unreported
+    client-internal requests cannot be classified from this stream.
+    """
     evidence = getattr(error, 'evidence', None)
     if not evidence:
         return None
@@ -81,34 +90,94 @@ def transport_failure_receipt(error):
     message = record.get('error') or ''
     if not isinstance(message, str):
         return None
+    if not _connection_not_sent(message) or record.get('truncated') is not False:
+        return None
+    # Reuse the native stream boundary decoder and receipt digest contract.
+    from .foundry_native import _event_json, NativeError
+    digest, size, errors = hashlib.sha256(), 0, 0
+    try:
+        with path.with_name('stdout.jsonl').open('rb') as stream:
+            for line in stream:
+                digest.update(line)
+                size += len(line)
+                if not line.strip():
+                    continue
+                row = _event_json(line, record['backend'])
+                kind = row.get('type')
+                if record['backend'] == 'codex' and kind in ('thread.started', 'turn.started'):
+                    continue
+                if record['backend'] == 'claude' and kind == 'system' and row.get('subtype') == 'init':
+                    continue
+                if kind not in ('error', 'turn.failed'):
+                    return None  # Output, tools, usage or unfamiliar progress: no replay.
+                detail = row.get('error', row.get('message'))
+                if isinstance(detail, dict):
+                    detail = detail.get('message')
+                if not isinstance(detail, str) or not _connection_not_sent(detail):
+                    return None
+                errors += 1
+    except (OSError, ValueError, KeyError, AttributeError, NativeError):
+        return None
+    return path if (errors and size == record.get('stdout_bytes')
+        and digest.hexdigest() == record.get('stdout_sha256')) else None
+
+
+def _connection_not_sent(message):
     # Native clients can include a network phrase in an authorization/model
     # error. Those errors require a different action, not another paid review.
     if re.search(r'quota|rate.?limit|usage.?limit|billing|credit|authenticat|unauthori[sz]ed|'
                  r'authori[sz]ation|credential|login|log in|sign in|permission|forbidden|api.?key|'
                  r'invalid.?model|unsupported.?model|model.{0,40}(?:not found|not supported|unavailable|does not exist)|'
                  r'\b(?:401|403|404|429)\b|context.{0,15}(?:length|window)|task deadline', message, re.I):
-        return None
-    if re.search(r'\b(?:ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT)\b|'
-                 r'request (?:timed out|timeout)|connection (?:reset|timed out)|'
-                 r'(?:dns|name resolution).{0,30}(?:fail|error)|'
-                 r'tls handshake (?:eof|timeout)', message, re.I):
-        return path
-    return None
-
-
-def wait_for_transport_retry():
-    from ._task_deadline import remaining
-    left = remaining()
-    if left is not None and left <= TRANSPORT_RETRY_DELAY_SECONDS:
         return False
-    time.sleep(TRANSPORT_RETRY_DELAY_SECONDS)
-    return remaining() != 0
+    return bool(re.search(r'\b(?:ENOTFOUND|EAI_AGAIN|ECONNREFUSED)\b|connection refused|'
+                          r'(?:dns|name resolution).{0,30}(?:fail|error)|'
+                          r'target machine actively refused', message, re.I)) and not re.search(
+        r'timed out|timeout|ECONNRESET|connection reset|response (?:body|stream)|after send|after upload|'
+        r'disconnect|before completion|\bEOF\b|socket hang up|\bEPIPE\b|broken pipe|aborted|closed', message, re.I)
+
+
+def transport_retry_plan(error, history):
+    """Schedule within the original receipt's window; old one-shot rows are spent."""
+    if len(history) >= len(TRANSPORT_RETRY_DELAYS) or any('retry_deadline_at' not in r for r in history):
+        return None
+    receipt = transport_failure_receipt(error)
+    if receipt is None:
+        return None
+    try:
+        record = json.loads(receipt.read_bytes())
+        ended_at = datetime.fromisoformat(record['ended_utc'])
+        if ended_at.tzinfo is None:
+            return None
+        ended = ended_at.timestamp()
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    deadline = history[0]['retry_deadline_at'] if history else ended + TRANSPORT_RETRY_WINDOW_SECONDS
+    delay = TRANSPORT_RETRY_DELAYS[len(history)]
+    due = ended + delay
+    if max(timestamp(), due) >= deadline:
+        return None
+    return {'receipt': receipt, 'delay_seconds': delay, 'retry_at': due, 'retry_deadline_at': deadline}
+
+
+def wait_for_transport_retry(due, deadline, *, wait=None, max_delay=60):
+    from ._task_deadline import remaining
+    delay = min(max_delay, max(0, due - timestamp()))
+    left = remaining()
+    if timestamp() + delay >= deadline or (left is not None and left <= delay):
+        return False
+    if wait is not None:
+        if wait(delay):
+            return False
+    else:
+        sleep(delay)
+    return timestamp() < deadline and remaining() != 0
 
 
 class Panel:
     """Independent slots; retain receipts and replace only unfinished reviews.
 
-    Explicit goal recovery and the goal's recorded one-time transport retry
+    Explicit goal recovery and the goal's recorded bounded transport retries
     open a new attempt only for failed slots.
     Historical shared-owner and per-slot layouts remain evidence, not live
     owners. New attempts use separate NativeAnalysts so one failure cannot
@@ -117,7 +186,11 @@ class Panel:
     max_concurrency = 2
 
     def __init__(self, settings, requests, factory, folder, workspace, *, resume=False, validate=None,
-                 rejected_review=(), transfers=None, worker_environment=None):
+                 rejected_review=(), transfers=None, worker_environment=None, _slots=None):
+        self._reopen_args = (settings, requests, factory, folder, workspace)
+        self._reopen_options = dict(validate=validate, rejected_review=rejected_review,
+            transfers=transfers, worker_environment=worker_environment)
+        self._cancelled = threading.Event()
         self.members, self.routes, self.history, self.results, self.pending = {}, {}, {}, {}, {}
         self.requests, self.active_requests = {}, {}
         self.factory, self.workspace = factory, workspace
@@ -126,6 +199,8 @@ class Panel:
         self.validate = validate
         for index, spec in enumerate(settings):
             name = "review-" + str(index)
+            if _slots is not None and name not in _slots:
+                continue
             accepted = [spec, *({**row, **({'execution_profiles': spec['execution_profiles']}
                 if spec.get('execution_profiles') else {})} for row in (transfers or {}).get(name, []))]
             options = dict(accepted[-1])
@@ -198,21 +273,37 @@ class Panel:
                                       **({'review_transition': transition} if transition else {})}})
             self.routes[requests[name]["call_id"]] = name
 
+    def reopen_slot(self, name):
+        """Reuse archived-attempt restoration without touching a live peer slot."""
+        current = type(self)(*self._reopen_args, resume=True, _slots={name}, **self._reopen_options)
+        with self.launch_lock:
+            for field in ('members', 'results', 'history', 'pending', 'requests', 'active_requests'):
+                target, source = getattr(self, field), getattr(current, field)
+                target.pop(name, None)
+                if name in source:
+                    target[name] = source[name]
+
+    def wait_for_cancel(self, seconds):
+        return self._cancelled.wait(seconds)
+
     def __call__(self, request):
         name = self.routes[request['call_id']]
         if name in self.results:
             return self.results[name]['value']
-        if name not in self.members:
-            executable, evidence, options = self.pending[name]
-            backend = options.get('backend', 'codex')
-            with self.launch_lock:
+        from .foundry_native import NativeError
+        with self.launch_lock:
+            if self._cancelled.is_set():
+                raise NativeError('review panel cancelled; no new attempt started')
+            if name not in self.members:
+                executable, evidence, options = self.pending[name]
+                backend = options.get('backend', 'codex')
                 if backend not in self.launch:
                     from ._launch_context import capture
                     self.launch[backend] = capture(self.workspace, backend=backend, root_role='reviewer')
                     if self.worker_environment:
                         self.launch[backend]['worker_environment'] = self.worker_environment
-            self.members[name] = self.factory(executable, evidence, workspace=self.workspace,
-                max_concurrency=1, timeout_seconds=None, launch_context=self.launch[backend], **options)
+                self.members[name] = self.factory(executable, evidence, workspace=self.workspace,
+                    max_concurrency=1, timeout_seconds=None, launch_context=self.launch[backend], **options)
         from .foundry_native import NativeSchemaError
         actual = self.requests[name]
         self.active_requests[name] = actual
@@ -238,7 +329,10 @@ class Panel:
         return self.members[name].native_session(self.active_requests[name])
 
     def cancel(self, reason):
-        for name, member in self.members.items():
+        with self.launch_lock:
+            self._cancelled.set()
+            members = list(self.members.items())
+        for name, member in members:
             if name not in self.results:
                 member.cancel(reason)
 
@@ -356,12 +450,12 @@ def plan(names, *, completed, historical, analyst):
     return pending
 
 
-def prewarm(pending, invocations, analyst, timing=None):
+def prewarm(pending, invocations, analyst, timing=None, *, invoke=None):
     """Issue each pending reviewer's native call at once; return outcome per name.
 
-    Returns `{name: (value, exception)}`. Exactly one analyst invocation per
-    name. Every thread is joined before returning, so no call outlives the
-    group and no reviewer's effect is left unobserved.
+    Returns `{name: (value, exception)}`. One worker per name invokes either the
+    analyst once or the goal's bounded retry callback. Threads join before
+    returning, so no call outlives the group and no effect is left unobserved.
 
     `timing`, when given, is filled with each member's wall time. The group must
     measure its own cost: once the native call moves here, the reviewer's phase
@@ -376,7 +470,8 @@ def prewarm(pending, invocations, analyst, timing=None):
     def work(name):
         started = _telemetry.started()
         try:
-            value, error = analyst(invocations[name]), None
+            value = invoke(name, invocations[name]) if invoke else analyst(invocations[name])
+            error = None
         except BaseException as exc:  # captured, re-raised by the serial pass in index order
             value, error = None, exc
         # THE OUTCOME IS RECORDED BEFORE ANY TIMING WORK, AND SEPARATELY FROM IT.
@@ -395,8 +490,14 @@ def prewarm(pending, invocations, analyst, timing=None):
         thread = threading.Thread(target=copy_context().run, args=(work, name), name="foundry-review-" + name)
         threads.append(thread)
         thread.start()
-    for thread in threads:
-        thread.join()
+    try:
+        for thread in threads:
+            thread.join()
+    except BaseException:
+        analyst.cancel('review controller interrupted')
+        for thread in threads:
+            thread.join()
+        raise
     return outcomes
 
 

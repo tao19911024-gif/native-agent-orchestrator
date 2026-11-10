@@ -232,23 +232,46 @@ corrections. Transferring one unfinished slot applies before independence
 selection for the remaining automatic slots. Completed verdicts and the frozen
 checkpoint remain available throughout that transition.
 
-When a review ends with a confirmed transport failure and its process cleanup
-is complete, the goal waits five seconds and retries that failed slot once in
-the same run. Request timeouts, DNS resolution failures, connection resets,
-`ECONNREFUSED`, and `TLS handshake timeout` or `EOF` use this path. Reconnect exhaustion
-requires an explicit transport cause. The candidate, request, provider and model
-remain fixed, and completed slots retain their verdicts. A retry can still
-return BLOCK; transport recovery does not accept the candidate.
+When an independent review fails, the goal first reads its settled native
+receipts and reuses any complete, validated verdict. For explicit DNS resolution
+or connection-refused failures, it can retry the failed slot within five minutes
+of the first failed receipt. Delays are 15, 30, 60, 60, 60 and 60 seconds, with at
+most six automatic attempts. Failed-call time counts toward this window. An
+attempt already performing a review retains the ordinary task deadline; the
+retry admission window does not interrupt that work.
 
-The goal manifest records `review_transport_retries` with each slot, original
-receipt reference and delay before launching the next attempt. The existing
-`reviews/review-N/attempt-*` receipts and predecessor references retain both
-executions and their usage. Restart or a provider transfer does not renew this
-per-slot allowance. If the retry also fails, use the recorded recovery command.
-Model, authentication, quota,
-schema and unresolved-cleanup errors do not trigger this transport retry; the
-delay does not extend the task deadline. Existing explicit provider transfers
-and model-tier decisions retain their separate rules.
+Automatic replay requires a complete, receipt-bound stream containing only
+startup events and explicit pre-connection failures. A final DNS error does not
+override recorded earlier errors or work. Request timeouts, connection
+resets, TLS interruptions and response loss have uncertain delivery, including
+when no output reached the client; they stop automatic replay. Model output,
+tool activity, usage, unfamiliar progress or incomplete cleanup also stop it.
+A native session identifier alone does not establish whether the server accepted
+a request. These CLI review paths provide no request-result lookup or idempotent
+resubmission contract. Inspect the retained attempt before authorizing another
+request through explicit recovery. Resuming a conversation supplies another
+input; it is not a lookup of the lost response.
+
+Classification is limited to events captured by the native client. Internal
+requests or retries that the client does not report cannot be distinguished;
+this mechanism does not provide exactly-once server execution. The connection
+retry path is verified for Codex exec error events. Claude assistant/result
+error responses remain uncertain delivery and do not trigger automatic replay.
+
+The existing goal manifest records `review_transport_retries` with the slot,
+failed receipt, delay, scheduled time and original deadline before waiting.
+Each record reserves one attempt, including an interrupted wait; actual calls
+and usage remain in native receipts. This preserves the window across a restart
+during the first delay.
+Each slot waits and retries on its existing review thread. Manifest writes are
+serialized; a peer's running review does not hold that slot's retry schedule.
+Controller cancellation wakes the delays and prevents new attempt admission.
+The `reviews/review-N/attempt-*` receipts and predecessor references retain every
+attempt and its usage. Restart and provider transfer do not reset the allowance.
+An a118 one-shot record remains spent when read by this implementation. The
+candidate, request, provider and model stay fixed, completed slots retain their
+verdicts, and a real BLOCK continues to block delivery. Existing model-tier
+selection and explicit recovery retain their separate rules.
 
 New staffing separates the non-editing coordinator from observed coding
 participants. Its automatic reviewer choices and tier decisions are described in
