@@ -117,6 +117,13 @@ manager requests and review checkpoints retain their frozen contracts. Newly
 created final-review checkpoints use the whole-order review guidance, including
 review-only and amendment runs.
 
+Correction feedback uses the retained amendment or continuation's prior-review
+reference for manager, expert and final-review inputs. The last two review
+results follow those same links. An automatic goal summary resolves to its
+recorded final round and is not counted as another review. Missing historical
+references retain the existing context-gap behavior; they do not introduce a
+new task admission rule or a review-round limit.
+
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and
 make reversible implementation decisions within that scope. Delegation serves

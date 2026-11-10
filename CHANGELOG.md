@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a119 — 2026-11-10
+
+- Preserve prior review findings and the last two review results when an
+  interrupted correction resumes. Resolve continuation and automatic-round
+  references through existing owners so manager and expert decisions receive
+  the same feedback as final reviewers.
 
 - Preserve whole-goal handback through intermediate design reviews. New manager
   decisions record remaining work; incomplete final handoffs return through the

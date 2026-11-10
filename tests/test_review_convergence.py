@@ -6,6 +6,7 @@ import pytest
 from foundry_runtime import _expert_consultation as experts, _foundry_manager as manager
 from foundry_runtime._foundry_native_request import build_prompt
 from test_expert_consultation import consultation
+from test_installed_runtime import external, offline
 
 
 def reference(path, value):
@@ -21,6 +22,64 @@ def test_history_uses_immutable_existing_amendment_sources(tmp_path):
     assert [r['evidence'] for r in experts.review_history(amendment)] == [first, second]
     (tmp_path/'first.json').write_text('{}')
     assert experts.review_history(amendment) == []  # no new task-blocking gate
+
+
+@pytest.mark.parametrize('container', ['continuation', 'automatic', 'automatic_continuation'])
+def test_history_follows_existing_continuation_and_round_ownership(tmp_path, container):
+    first = reference(tmp_path/'first.json', {'candidate_commit': '1'*40, 'reviews': [{'findings': []}]})
+    latest = {'status': 'review_blocked', 'candidate_commit': '2'*40, 'coding_session': 'worker',
+              'reviews': [{'findings': []}]}
+    second = reference(tmp_path/'outcome.json', latest)
+    identity = {'order': {'path': 'order.md', 'sha256': 'a'*64}, 'worktree': 'project', 'base_commit': '0'*40}
+    if container == 'continuation':
+        body = {**identity, 'continuation': {'prior_review': {'prior_outcome': first}}}
+    else:
+        child = tmp_path/'round-1'; child.mkdir()
+        final = reference(child/'outcome.json', latest)
+        link = ({'continuation': {'prior_review': {'prior_outcome': first}}}
+                if container == 'automatic_continuation' else {'amendment': {'prior_outcome': first}})
+        reference(child/'manifest.json', {**identity, **link})
+        body = {**identity, 'mode': 'auto-amend', 'active_round': str(child),
+                'rounds': [{'outcome': first}, {'outcome': final}]}
+    manifest = reference(tmp_path/'manifest.json', body)
+    amendment = {'prior_manifest': manifest, 'prior_outcome': second}
+    history = experts.review_history(amendment)
+    assert [row['evidence'] for row in history] == [first, second]
+    assert [row['candidate_commit'] for row in history] == ['1'*40, '2'*40]
+    if container.startswith('automatic'):
+        reference(tmp_path/'round-1/outcome.json', {**latest, 'candidate_commit': '3'*40})
+        assert experts.review_history(amendment) == []
+
+
+from test_settled_failure_recovery import failed_goal
+from test_manager_input_wait import manager_io, wait
+
+
+def test_coding_recovery_keeps_prior_findings_for_manager(failed_goal, manager_io, tmp_path):
+    from foundry_runtime import foundry_goal as goal
+    _, _, order, folder, worker_calls = failed_goal
+    requests, decisions = manager_io
+    first = reference(tmp_path/'first-review.json', {'reviews': [{'findings': []}]})
+    prior_manifest = reference(tmp_path/'review-manifest.json', {'amendment': {'prior_outcome': first}})
+    prior_outcome = reference(tmp_path/'second-review.json', {'reviews': [{'findings': []}]})
+    amendment = {'prior_manifest': prior_manifest, 'prior_outcome': prior_outcome}
+    manifest = json.loads((folder/'manifest.json').read_bytes())
+    checkpoint = json.loads((folder/'coding-checkpoint.json').read_bytes())
+    state = {'backend': 'claude', 'model': None, 'effort': None, 'review_convergence': 1,
+             'native_dir': str(tmp_path/'manager')}
+    checkpoint['options']['manager_state'] = state
+    reference(folder/'coding-checkpoint.json', checkpoint)
+    manifest.update(amendment=amendment, manager_state=state, manager_phase='feedback_pending',
+                    coding_checkpoint=goal._fact(folder/'coding-checkpoint.json'))
+    reference(folder/'manifest.json', manifest)
+    decisions.append(wait('Retained feedback received; operator decision needed'))
+    result = goal.recover_goal(order, folder, answer='Continue the interrupted correction')
+    assert result['status'] == 'awaiting_input' and len(worker_calls) == 1
+    packet = requests[0]['packet']
+    assert packet['prior_review'] == prior_outcome
+    assert [row['evidence'] for row in packet['review_history']] == [first, prior_outcome]
+    assert goal.recover_goal(order, folder, answer='Continue the interrupted correction') == result
+    assert len(requests) == 1  # Retained manager result, no second paid decision.
 
 
 def test_repeated_blocking_review_consults_before_manager_on_both_backends(consultation, tmp_path):

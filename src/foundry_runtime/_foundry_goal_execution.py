@@ -86,6 +86,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         base, candidate = _review_range(tree, *review_range)
     if project is not None and tree != project.workspace.resolve():
         raise ValueError("goal workspace differs from project descriptor")
+    previous_review = amendment or (continuation or {}).get('prior_review')
     if backend not in {"codex", "claude"} or coding_launcher not in {"exec", "app-server", "claude"}:
         raise ValueError("unknown Foundry backend or coding transport")
 
@@ -217,7 +218,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             manifest['expert_state']['worker_environment'] = launch_context['worker_environment']
         if project_record:
             manifest['expert_state']['execution_profiles'] = project_record['context']['execution_profiles']
-        manifest['expert_packet'] = {'prior_review': amendment['prior_outcome'] if amendment else None,
+        from ._expert_consultation import review_history
+        manifest['expert_packet'] = {'prior_review': (previous_review or {}).get('prior_outcome'),
+            'review_history': review_history(previous_review),
             'tier_escalation': (execution_decision or {}).get('tier_escalation')}
         manifest['manager_start'] = {'executable': str(executable), 'coding_session': coding_session,
                                     'options': execution_options}
@@ -466,13 +469,13 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             manager_repeat = False
             manager_packet = {"stage": "assign", "run_id": run_id, "order": manifest["order"],
                 'tier_escalation': (execution_decision or {}).get('tier_escalation'),
-                "prior_review": amendment['prior_outcome'] if amendment else None,
+                "prior_review": (previous_review or {}).get('prior_outcome'),
                 "operator_answer": continuation["answer"] if continuation else (amendment or {}).get('operator_additions'),
                 **({'question_checkpoint': continuation['checkpoint']} if continuation else {}),
                 "coding_session": coding_session}
             if (manager_state or {}).get('review_convergence') == 1:
                 from ._expert_consultation import review_history
-                manager_packet['review_history'] = review_history(amendment)
+                manager_packet['review_history'] = review_history(previous_review)
             if manager_state is not None and not manager_state.get('last_call_id'):
                 manager_packet['original_order'] = project.prompt(order.read_text(encoding='utf-8-sig')) if project else order.read_text(encoding='utf-8-sig')
             if (continuation or {}).get('manager_input'):
@@ -880,7 +883,6 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             raise GoalBlocked('fresh candidate closure failed; inspect its retained receipt',
                               'coding_incomplete', workspace={'candidate_closure': closure})
 
-        previous_review = amendment or (continuation or {}).get("prior_review")
         if previous_review:
             # Historical continuation receipts may only retain findings and a
             # reference, without the candidate needed to calculate a delta.
