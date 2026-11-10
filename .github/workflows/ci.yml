@@ -86,7 +86,7 @@ jobs:
             tests/test_efficiency_advice.py tests/test_tool_discipline.py tests/test_model_tier_rework.py `
             tests/test_member_followup.py tests/test_followup_liveness.py `
             tests/test_live_quota_status.py tests/test_live_quota_return.py `
-            tests/test_project_intervention.py tests/test_review_convergence.py `
+            tests/test_project_intervention.py tests/test_review_convergence.py tests/test_goal_completion_boundary.py `
             tests/test_capacity_recovery.py tests/test_acceptance_feedback.py tests/test_assignment_refusal.py `
             tests/test_acceptance_a96.py tests/test_acceptance_a69.py tests/test_acceptance_a67.py `
             --junitxml ci-results/pytest.xml -x -q

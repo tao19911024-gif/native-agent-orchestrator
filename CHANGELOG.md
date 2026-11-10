@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve whole-goal handback through intermediate design reviews. New manager
+  decisions record remaining work; incomplete final handoffs return through the
+  existing feedback loop. Intermediate independent reviews use worker delegation,
+  while final reviewers assess the complete ordered deliverable.
 - Extend independent-review connection recovery to a five-minute admission
   window, with delays of 15, 30, 60, 60, 60 and 60 seconds. Persist the original
   deadline and attempt count in the existing goal manifest. Failed-call time

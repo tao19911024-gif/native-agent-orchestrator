@@ -674,7 +674,7 @@ class NativeAnalyst:
         return record, streams, total
 
     def _validate_allocation(self, saved, folder, *, stable_only=False):
-        if (not isinstance(saved, dict) or set(saved) - {"resume_session", "retry_of", "review_field_reads", "correction_routing", "persistent_session", "artifact_delivery", "expert_consultation", "operator_input", "member_tier_decisions"} != {"schema_version", "call_id", "attempt_id", "kind",
+        if (not isinstance(saved, dict) or set(saved) - {"resume_session", "retry_of", "review_field_reads", "correction_routing", "persistent_session", "artifact_delivery", "expert_consultation", "operator_input", "member_tier_decisions", "goal_completion"} != {"schema_version", "call_id", "attempt_id", "kind",
                                                           "stdin_sha256", "input_bytes", "capture_allowance_bytes",
                                                           "message_recipients"}
                 or type(saved.get("schema_version")) is not int or saved["schema_version"] != 2
@@ -903,6 +903,7 @@ class NativeAnalyst:
                                                **({'correction_routing': True}
                                                   if request.get('correction_routing') is True else {}),
                                                **{k: True for k in ('artifact_delivery', 'expert_consultation', 'operator_input', 'review_field_reads') if request.get(k) is True},
+                                               **({'goal_completion': 1} if request.get('goal_completion') == 1 else {}),
                                                **({'member_tier_decisions': request['member_tier_decisions']} if request.get('member_tier_decisions') else {}),
                                                **({'persistent_session': True}
                                                   if request['kind'] == 'review' and self.backend == 'codex' else {}),

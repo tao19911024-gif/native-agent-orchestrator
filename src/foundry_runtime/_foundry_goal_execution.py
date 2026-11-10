@@ -414,26 +414,35 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         manifest.pop('review_refusal_observation', None)
         manifest.pop('worker_progress_observation', None)
 
-    def review_or_feedback():
+    def review_or_feedback(*, artifact_handoff=False):
         nonlocal manager_packet
         try:
-            return candidate_for_review()
+            remaining = (execution_decision or {}).get('manager', {}).get('remaining_work')
+            if remaining:
+                raise GoalBlocked('whole-goal handback still has unfinished ordered work',
+                                  'coding_incomplete', workspace={'remaining_work': remaining})
+            return True if artifact_handoff else candidate_for_review()
         except GoalBlocked as exc:
-            if not manager_state or not (exc.workspace or {}).get('status_porcelain', '').strip():
+            workspace = exc.workspace or {}
+            unfinished = workspace.get('remaining_work')
+            if not manager_state or not (unfinished or workspace.get('status_porcelain', '').strip()):
                 raise
             source = progress_snapshot()
             observation = {'reason': str(exc), 'source': source,
+                **({'remaining_work': unfinished} if unfinished else {}),
                 'operator_answer': (execution_decision or {}).get('manager', {}).get('operator_answer')}
             previous = manifest.pop('review_refusal_observation', None)
             if source is not None:
                 manifest['review_refusal_observation'] = observation
                 if previous == observation:
                     repeated_work_question(
-                        'Review was requested again for the same dirty candidate without new evidence. Commander ruling required.',
+                        ('The same incomplete handoff was requested again without new evidence. Commander ruling required.' if unfinished else
+                         'Review was requested again for the same dirty candidate without new evidence. Commander ruling required.'),
                         'repeated_review_refusal')
             manager_packet = {**manager_packet, 'stage': 'worker_returned',
                 'review_refusal': {'reason': str(exc), 'workspace': exc.workspace,
-                    'instruction': 'Review requires a committed, clean candidate. Resolve the project handoff/commit prerequisites through the worker, or request an operator decision; then route again.'}}
+                    'instruction': ('Delegate the remaining ordered work, including intermediate independent review through the existing worker; retain its evidence and continue toward the whole-goal handback.' if unfinished else
+                        'Review requires a committed, clean candidate. Resolve the project handoff/commit prerequisites through the worker, or request an operator decision; then route again.')}}
             manifest.update(manager_packet=manager_packet, manager_phase='feedback_pending')
             _write(evidence_dir / 'manifest.json', manifest)
             return None
@@ -490,8 +499,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 migrated_manager = True
             while True:
                 if manifest.get('manager_phase') == 'artifacts_pending' and not owner.order_revision.pending(manifest):
-                    phase = 'artifacts'
-                    break
+                    if review_or_feedback(artifact_handoff=True) is not None:
+                        phase = 'artifacts'
+                        break
                 if manager_state is not None and not ((recovery_file or migrate_recovered_manager) and not manager_repeat):
                     if manifest.get('manager_phase') == 'awaiting_input' and not owner.order_revision.pending(manifest):
                         raise GoalBlocked(manifest['execution_decision']['manager']['instruction'], 'awaiting_input')
@@ -588,8 +598,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         if guidance['action'] == 'await_input':
                             raise GoalBlocked(guidance['instruction'], 'awaiting_input')
                         if guidance['action'] == 'deliver_artifacts':
-                            phase = 'artifacts'
-                            break
+                            if review_or_feedback(artifact_handoff=True) is not None:
+                                phase = 'artifacts'
+                                break
+                            continue
                         if guidance['action'] == 'review':
                             phase = 'candidate'
                             candidate = review_or_feedback()
@@ -747,6 +759,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     manager_packet = {"stage": "worker_returned", "coding_session": coding_session,
                         "worker_evidence": turn_evidence, "returncode": rc,
                         "observed_head": _git(tree, 'rev-parse', 'HEAD').decode().strip(), "run_id": run_id}
+                    if manager_state.get('goal_completion') == 1:
+                        manager_packet['order'] = manifest['order']
                     last_turn = coding_turns[-1]
                     if last_turn.get('execution_intent_id') and last_turn.get('attempt_id'):
                         manager_packet['execution'] = {'intent_id': last_turn['execution_intent_id'],
@@ -843,6 +857,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         context = {"original_order": project.prompt(order.read_text(encoding="utf-8-sig")) if project else order.read_text(encoding="utf-8-sig"),
                    "base_commit": review_base, "candidate_commit": candidate, **({"project_record": project_record} if project else adapter.review_facts(tree, base, candidate)),
                    "changed_files": changed_files, "coding_evidence": coding_evidence, "review_evidence_policy": 1}
+        context['goal_completion'] = 1
         if integration_base:
             context['integration_base'] = integration_base
         if review_author_models:

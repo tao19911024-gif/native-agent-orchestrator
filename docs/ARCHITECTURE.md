@@ -100,6 +100,23 @@ after the current native turn and its cleanup settle. The controller persists
 the coding checkpoint before publishing a question or advancing the next stage.
 Recovery consumes a saved readiness decision without repeating the manager call.
 
+New manager requests distinguish a stage handback from completion of the whole
+order. Intermediate independent design or slice reviews use ordinary delegation
+to the existing worker and a separate qualified member. Their findings return
+to the manager before implementation continues. Expert consultation remains
+advice, not independent review. The `review` action is the final candidate route.
+
+The manager records `remaining_work` in its existing decision. A final `review`
+or `deliver_artifacts` request with unfinished work returns through the existing
+review-refusal feedback phase. Repeating the same incomplete handoff without
+new evidence uses the existing no-progress observation. An empty list is the
+manager's completion judgment; independent final reviewers assess the complete
+original order and its explicit revisions, including missing implementation.
+Document-only orders retain their own completion boundary. Already admitted
+manager requests and review checkpoints retain their frozen contracts. Newly
+created final-review checkpoints use the whole-order review guidance, including
+review-only and amendment runs.
+
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and
 make reversible implementation decisions within that scope. Delegation serves

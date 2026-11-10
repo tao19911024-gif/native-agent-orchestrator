@@ -99,6 +99,19 @@ question. The coding checkpoint retains the completed work. Inspect the stated
 observation, resolve the project prerequisite or provide an explicit instruction;
 restarting the goal does not provide new evidence.
 
+For new manager goals, a final handoff that still lists `remaining_work` returns
+to the same manager through `review_refusal`. Delegate intermediate independent
+reviews and remaining implementation through the existing worker session.
+Completed design work and review evidence remain available across recovery;
+neither requires a new goal. Repeating the unchanged incomplete handoff publishes
+the existing awaiting-input question. Resolve the stated missing decision using
+the normal answer command. A manager's stage boundary does not revise the
+original order's final delivery boundary.
+Changing that boundary, such as replacing an implementation deliverable with a
+design-only deliverable, uses the existing authorized `--order-revision` flow
+below. An ordinary answer is not a substitute for recording the revised order
+that final reviewers must evaluate.
+
 A repeated expert question whose answer was already received against unchanged
 evidence also publishes an awaiting-input question. Specify the unresolved point
 or authorize a new attempt with the existing answer command. A new question or

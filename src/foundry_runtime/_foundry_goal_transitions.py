@@ -98,7 +98,7 @@ def manager(owner, folder, manifest, *, provider, migrate, answer, source_locked
         transition_request=request_key)
     for key in ('design_convergence', 'review_convergence', 'quota_recovery', 'context_reuse', 'live_coordination',
                 'quota_fallback_policy', 'task_deadline_at', 'time_budget', 'effective_coordination', 'claude_live_events',
-                'worker_environment'):
+                'worker_environment', 'goal_completion'):
         if key in state:
             next_state[key] = state[key]
     if state.get('execution_profiles'):

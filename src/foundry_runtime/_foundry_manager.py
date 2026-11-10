@@ -84,6 +84,7 @@ def configuration(profile, folder):
             'effort': 'high', 'native_dir': str(Path(folder).resolve()), 'last_call_id': None, 'artifact_delivery': True,
             'design_convergence': 1,
             'review_convergence': 1,
+            'goal_completion': 1,
             'quota_recovery': 1,
             'context_reuse': 1,
             'effective_coordination': 1,
@@ -183,6 +184,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
         request['time_budget'] = state['time_budget']
     if state.get('scope_question_policy') == 1:
         request['scope_question_policy'] = 1
+    if state.get('goal_completion') == 1:
+        request['goal_completion'] = 1
     request['review_precondition'] = ('Review requires a committed candidate and a clean worktree. '
         'Resolve project-specific pre-commit/handoff requirements before selecting review. '
         'A review_refusal is worker feedback to correct, not an operator instruction or a review verdict.')
@@ -308,6 +311,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
             decision['operator_answer'] = request['packet'].get('operator_answer')
         if request.get('scope_question_policy') == 1:
             decision['scope_question_policy'] = 1
+        if request.get('goal_completion') == 1:
+            decision['remaining_work'] = result['remaining_work']
         if 'artifacts' in result:
             decision['artifacts'] = result['artifacts']
         if 'member_tier_decisions' in result:
