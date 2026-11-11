@@ -132,9 +132,9 @@ def test_generated_command_closes_review_feedback_through_original_session(
     tree, scope, order, launches = external
     requests, decisions = manager_io
     decisions.extend([{'action': 'delegate', 'instruction': 'Apply the retained review findings',
-                       'expert_request': None, 'artifacts': []},
+                       'expert_request': None, 'artifacts': [], 'remaining_work': ['Correct the retained findings.']},
                       {'action': 'review', 'instruction': 'Review the corrected candidate',
-                       'expert_request': None, 'artifacts': []}])
+                       'expert_request': None, 'artifacts': [], 'remaining_work': []}])
     monkeypatch.setattr(goal, '_session_from_log', lambda _: WORKER)
     original_argv = dispatch.coding_argv
     received, check_results = [], []
