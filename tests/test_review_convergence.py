@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -85,8 +86,10 @@ def test_coding_recovery_keeps_prior_findings_for_manager(failed_goal, manager_i
 
 @pytest.mark.parametrize('same_question', [True, False])
 def test_unmanaged_continuation_reuses_answer_for_same_review(failed_goal, tmp_path, monkeypatch, same_question):
-    from foundry_runtime import foundry_goal as goal
+    from foundry_runtime import foundry_goal as goal, foundry_native_support, _codex_command
     from foundry_runtime._compute_selection import resolve_native_team
+    monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(_codex_command, 'resolve_codex', lambda: pytest.fail('offline test looked up a native client'))
     _, _, order, folder, worker_calls = failed_goal
     prior = reference(tmp_path/'review.json', {'reviews': [{
         'correction_guidance': {'model': 'expert', 'reason': 'ownership'}, 'findings': []}]})
