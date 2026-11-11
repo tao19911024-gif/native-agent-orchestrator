@@ -86,7 +86,6 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         base, candidate = _review_range(tree, *review_range)
     if project is not None and tree != project.workspace.resolve():
         raise ValueError("goal workspace differs from project descriptor")
-    previous_review = amendment or (continuation or {}).get('prior_review')
     if backend not in {"codex", "claude"} or coding_launcher not in {"exec", "app-server", "claude"}:
         raise ValueError("unknown Foundry backend or coding transport")
 
@@ -209,7 +208,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         if manifest.get('predispatch'):
             goal_usage._reference(manifest['predispatch'])
             receipt_path = Path(manifest['predispatch']['path'])
-    elif manager_state is None and ((native_team and native_team.get('expert_consultation')) or
+    # All recovery entries retain review lineage in the owning manifest;
+    # reading it does not replay its historical continuation instruction.
+    previous_review = manifest.get('amendment') or (manifest.get('continuation') or {}).get('prior_review')
+    if retained is None and manager_state is None and ((native_team and native_team.get('expert_consultation')) or
             (execution_decision or {}).get('tier_escalation', {}).get('action') == 'expert_consultation_required'):
         from ._compute_selection import member_roles
         manifest['expert_state'] = {'native_dir': str(evidence_dir / 'expert-owner'), 'context_reuse': 1,

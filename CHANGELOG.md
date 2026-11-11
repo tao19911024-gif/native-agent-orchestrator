@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Preserve the owning goal's prior review findings and candidate delta after
+  explicit worker recovery or a failed candidate-check retry. Read amendment
+  and continuation lineage from the retained manifest without replaying the
+  previous continuation instruction.
+
 ## 0.1.0a119 — 2026-11-10
 
 - Preserve prior review findings and the last two review results when an

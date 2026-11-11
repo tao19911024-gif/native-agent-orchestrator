@@ -172,7 +172,7 @@ def test_unknown_worker_producer_uses_admitted_contract_revision(interrupted, tm
     assert record['state'] == 'unknown' and not record.get('recovery_authorization')
 
 
-def native_manager(case, monkeypatch):
+def native_manager(case, monkeypatch, *, review=False):
     from foundry_runtime import _foundry_manager as manager, foundry_native as native, _code_index
     tree,scope,order,folder,cleanup,header,ruling,root,active=case
     monkeypatch.setattr(_code_index,'prepare',lambda *a,**kw:None)
@@ -184,6 +184,8 @@ def native_manager(case, monkeypatch):
         calls.append(envelope)
         result={'action':'delegate','instruction':'initial assignment','artifacts':[]} if len(calls)==1 else {
             'action':'deliver_artifacts','instruction':'worker recovered; acceptance pending','artifacts':['candidate.txt']}
+        if review and len(calls) > 1:
+            result = {'action': 'review', 'instruction': 'Review the recovered candidate', 'artifacts': []}
         rows=[{'type':'thread.started','thread_id':SID}, {'type':'turn.started'},
             {'type':'item.completed','item':{'id':'final','type':'agent_message','text':json.dumps(result)}},
             {'type':'turn.completed','usage':{'input_tokens':10,'cached_input_tokens':0,'output_tokens':5}}]

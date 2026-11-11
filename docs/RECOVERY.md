@@ -136,6 +136,13 @@ process exit, not successful work. A closed historical intent remains closed.
 
 ## Correct a reviewed candidate
 
+Explicit worker recovery and candidate-check retries preserve the owning goal's
+`amendment` or `continuation.prior_review` when building the final review context. Reviewers
+receive the retained findings and, when recorded, the previous candidate's
+diff range. Acceptance still covers the full goal base-to-candidate range.
+The earlier continuation answer is historical context; the worker executes
+the explicitly authorized recovery instruction.
+
 Goal status includes `feedback`: the original task, reviewed candidate,
 deduplicated findings, artifact references and a recorded-session amendment
 command. Use that command for completed review feedback, then retain the new
