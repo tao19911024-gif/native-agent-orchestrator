@@ -461,8 +461,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         execution_decision = {**(execution_decision or {}), 'operator_answer': manager_answer}
                     manifest['manager_phase'] = 'expert_pending'
                     _write(evidence_dir / 'manifest.json', manifest)
-                    answer = experts.consult(_foundry_manager._turn, manifest['expert_state'], tree,
-                                             question, manifest['expert_packet']['prior_review'])
+                    answer = (execution_decision or {}).get('expert_consultation')
+                    if not answer or answer.get('question') != question:
+                        answer = experts.consult(_foundry_manager._turn, manifest['expert_state'], tree,
+                                                 question, manifest['expert_packet']['prior_review'])
                     execution_decision = {**(execution_decision or {}), 'expert_consultation': answer}
                     manifest.update(execution_decision=execution_decision, manager_phase='delegation_ready')
                     _write(evidence_dir / 'manifest.json', manifest)

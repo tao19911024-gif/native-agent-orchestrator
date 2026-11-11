@@ -122,7 +122,10 @@ reference for manager, expert and final-review inputs. The last two review
 results follow those same links. An automatic goal summary resolves to its
 recorded final round and is not counted as another review. Missing historical
 references retain the existing context-gap behavior; they do not introduce a
-new task admission rule or a review-round limit.
+new task admission rule or a review-round limit. Without a manager, an unchanged
+review question reuses the expert answer retained in the execution decision;
+a changed question requests a new consultation. Existing trigger precedence
+remains recurring blocking findings, tier escalation, then reviewer guidance.
 
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and

@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -80,6 +81,37 @@ def test_coding_recovery_keeps_prior_findings_for_manager(failed_goal, manager_i
     assert [row['evidence'] for row in packet['review_history']] == [first, prior_outcome]
     assert goal.recover_goal(order, folder, answer='Continue the interrupted correction') == result
     assert len(requests) == 1  # Retained manager result, no second paid decision.
+
+
+@pytest.mark.parametrize('same_question', [True, False])
+def test_unmanaged_continuation_reuses_answer_for_same_review(failed_goal, tmp_path, monkeypatch, same_question):
+    from foundry_runtime import foundry_goal as goal
+    from foundry_runtime._compute_selection import resolve_native_team
+    _, _, order, folder, worker_calls = failed_goal
+    prior = reference(tmp_path/'review.json', {'reviews': [{
+        'correction_guidance': {'model': 'expert', 'reason': 'ownership'}, 'findings': []}]})
+    amendment = {'prior_manifest': reference(tmp_path/'review-manifest.json', {}), 'prior_outcome': prior}
+    question = experts.review_request({'prior_review': prior})
+    answer = {'question': question if same_question else {'trigger': 'reviewer', 'question': 'older issue'},
+              'answer': 'Preserve the existing ledger owner.', 'evidence': prior}
+    checkpoint = json.loads((folder/'coding-checkpoint.json').read_bytes())
+    checkpoint['options'].update(native_team=resolve_native_team('adaptive'),
+                                 execution_decision={'expert_consultation': answer})
+    reference(folder/'coding-checkpoint.json', checkpoint)
+    manifest = json.loads((folder/'manifest.json').read_bytes())
+    manifest.update(amendment=amendment, coding_checkpoint=goal._fact(folder/'coding-checkpoint.json'))
+    reference(folder/'manifest.json', manifest)
+    consultations = []
+    def consult(*args):
+        consultations.append(args[3])
+        return {**answer, 'question': args[3], 'answer': 'Updated ownership answer.'}
+    monkeypatch.setattr(experts, 'consult', consult)
+    outcome = goal.recover_goal(order, folder, answer='Continue correction with retained expert guidance')
+    assert outcome['status'] == 'project_handoff' and len(worker_calls) == 2
+    saved = json.loads((Path(outcome['continuation_evidence'])/'manifest.json').read_bytes())
+    assert len(consultations) == (0 if same_question else 1)
+    assert saved['execution_decision']['expert_consultation'] == (answer if same_question else
+        {**answer, 'question': question, 'answer': 'Updated ownership answer.'})
 
 
 def test_repeated_blocking_review_consults_before_manager_on_both_backends(consultation, tmp_path):

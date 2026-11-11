@@ -6,7 +6,8 @@
   interrupted correction resumes. Resolve continuation and automatic-round
   references through existing owners so manager and expert decisions receive
   the same feedback as final reviewers.
-
+- Reuse a retained expert answer when an unmanaged correction continues with
+  the same review question. A changed question requests a new consultation.
 - Preserve whole-goal handback through intermediate design reviews. New manager
   decisions record remaining work; incomplete final handoffs return through the
   existing feedback loop. Intermediate independent reviews use worker delegation,
