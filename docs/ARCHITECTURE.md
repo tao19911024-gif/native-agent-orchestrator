@@ -100,6 +100,33 @@ after the current native turn and its cleanup settle. The controller persists
 the coding checkpoint before publishing a question or advancing the next stage.
 Recovery consumes a saved readiness decision without repeating the manager call.
 
+New manager requests distinguish a stage handback from completion of the whole
+order. Intermediate independent design or slice reviews use ordinary delegation
+to the existing worker and a separate qualified member. Their findings return
+to the manager before implementation continues. Expert consultation remains
+advice, not independent review. The `review` action is the final candidate route.
+
+The manager records `remaining_work` in its existing decision. A final `review`
+or `deliver_artifacts` request with unfinished work returns through the existing
+review-refusal feedback phase. Repeating the same incomplete handoff without
+new evidence uses the existing no-progress observation. An empty list is the
+manager's completion judgment; independent final reviewers assess the complete
+original order and its explicit revisions, including missing implementation.
+Document-only orders retain their own completion boundary. Already admitted
+manager requests and review checkpoints retain their frozen contracts. Newly
+created final-review checkpoints use the whole-order review guidance, including
+review-only and amendment runs.
+
+Correction feedback uses the retained amendment or continuation's prior-review
+reference for manager, expert and final-review inputs. The last two review
+results follow those same links. An automatic goal summary resolves to its
+recorded final round and is not counted as another review. Missing historical
+references retain the existing context-gap behavior; they do not introduce a
+new task admission rule or a review-round limit. Without a manager, an unchanged
+review question reuses the expert answer retained in the execution decision;
+a changed question requests a new consultation. Existing trigger precedence
+remains recurring blocking findings, tier escalation, then reviewer guidance.
+
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and
 make reversible implementation decisions within that scope. Delegation serves
@@ -231,11 +258,13 @@ the shared candidate after both calls settle, including HEAD, index and
 untracked files. A temporary reproduction created by an active reviewer is not
 a completed-pair workspace observation. Both verdicts remain recorded when the
 final candidate check fails, together with the observed dirty workspace.
-The goal also owns one delayed retry per slot for a settled transport failure.
-It records that decision in the existing manifest and reopens the existing
-review panel, which preserves completed verdicts and binds the next native
-attempt to its predecessor receipts. No worker, closure or successful reviewer
-is dispatched again. Explicit recovery remains available after another failure.
+The goal owns a bounded connection-retry window per slot, recorded in the
+existing manifest. Native receipt-bound streams classify recorded connection
+failures, uncertain-delivery errors and prior work. The existing review panel
+first recovers complete verdicts and binds each admitted native attempt to its
+predecessor receipts. The existing review threads retry each slot
+independently, while the goal serializes manifest writes and journal completion.
+No worker, closure or successful reviewer is dispatched again. Explicit recovery remains available after another failure.
 The checkpoint also retains the native evidence-reading policy. Normal review,
 recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.

@@ -218,13 +218,16 @@ def message_recipients_for_request(request: dict) -> list[str]:
     return _recipient_values(["coordinator", *identities])
 
 
-def response_contract(kind: str, message_recipients=None, *, correction_routing=False, artifact_delivery=False, expert_consultation=False, operator_input=False, member_tier_decisions=(), review_field_reads=False) -> dict:
+def response_contract(kind: str, message_recipients=None, *, correction_routing=False, artifact_delivery=False, expert_consultation=False, operator_input=False, member_tier_decisions=(), review_field_reads=False, goal_completion=False) -> dict:
     """Return a fresh role contract, optionally bound to one graph recipient roster."""
     contracts = {"plan": _PLAN, "analyse": _ANALYSIS, "synthesize": _SYNTHESIS,
                  "solution": _SOLUTION, "review": _REVIEW, "coordinate": _COORDINATE}
     if kind not in contracts:
         raise CollaborationError("unknown model request kind")
     contract = copy.deepcopy(contracts[kind])
+    if kind == 'coordinate' and goal_completion:
+        contract['properties']['remaining_work'] = {'type': 'array', 'items': _STRING}
+        contract['required'].append('remaining_work')
     if kind == 'review' and review_field_reads:
         contract['properties']['read_fields'] = {'type': 'array', 'items': _contract({
             'pointer': _STRING, 'sha256': {'type': 'string', 'pattern': '^[0-9a-f]{64}$'}})}
@@ -275,6 +278,7 @@ def response_contract_for_request(request: dict) -> dict:
                              artifact_delivery=request.get("artifact_delivery") is True,
                              expert_consultation=request.get('expert_consultation') is True,
                              operator_input=request.get('operator_input') is True,
+                             goal_completion=request.get('goal_completion') == 1,
                              member_tier_decisions=request.get('member_tier_decisions', ()))
 
 
@@ -286,6 +290,7 @@ def allocation_contract(allocation):
         artifact_delivery=allocation.get("artifact_delivery") is True,
         expert_consultation=allocation.get('expert_consultation') is True,
         operator_input=allocation.get('operator_input') is True,
+        goal_completion=allocation.get('goal_completion') == 1,
         member_tier_decisions=allocation.get('member_tier_decisions', ()))
 
 

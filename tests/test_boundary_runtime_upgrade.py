@@ -241,9 +241,9 @@ def test_boundary_launch_reaches_native_and_survives_plain_resume(
     monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda *a: Path(sys.executable))
     monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda *a: Path(sys.executable))
     decisions.extend([{'action': 'delegate', 'instruction': 'new boundary work', 'artifacts': [],
-                       'expert_request': None},
+                       'expert_request': None, 'remaining_work': ['Complete the ordered artifact.']},
                       {'action': 'deliver_artifacts', 'instruction': 'inspect new work',
-                       'artifacts': ['candidate.txt'], 'expert_request': None}])
+                       'artifacts': ['candidate.txt'], 'expert_request': None, 'remaining_work': []}])
     prompt = tmp_path/'decision.md'; prompt.write_text('Continue with explicit launch policy.')
     args = ['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
             '--recover-goal', str(root), '--upgrade-runtime', sys.executable, '--prompt-file', str(prompt)]
@@ -442,7 +442,7 @@ def test_completed_worker_reaches_new_manager_without_reexecution(external, mana
     monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda *a: Path(sys.executable))
     monkeypatch.setattr(foundry_native_support, 'resolve_executable', lambda *a: Path(sys.executable))
     decisions.append({'action': 'deliver_artifacts', 'instruction': 'inspect retained work',
-                      'artifacts': ['candidate.txt'], 'expert_request': None})
+                      'artifacts': ['candidate.txt'], 'expert_request': None, 'remaining_work': []})
     prompt = tmp_path/'decision.md'; prompt.write_text('Review existing work without repeating it.')
     args = ['--project-config', str(scope.path), '--order', str(order), '--foundry-goal',
             '--recover-goal', str(root), '--upgrade-runtime', sys.executable, '--prompt-file', str(prompt)]

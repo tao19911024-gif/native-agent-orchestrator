@@ -1,5 +1,6 @@
 """Offline review attempts use synthetic native processes, never a model."""
 import json
+import hashlib
 from pathlib import Path
 import sys
 
@@ -18,8 +19,8 @@ def reviews(external, tmp_path, monkeypatch):
     git(tree, 'add', '.'); git(tree, 'commit', '-qm', 'candidate')
     head = git(tree, 'rev-parse', 'HEAD')
     monkeypatch.setattr(_code_index, 'prepare', lambda *a, **k: None)
-    monkeypatch.setattr(group, 'TRANSPORT_RETRY_DELAY_SECONDS', 0)
-    calls, failures = [], {1: ['Reconnecting... 5/5 (request timed out)']}
+    monkeypatch.setattr(group, 'TRANSPORT_RETRY_DELAYS', (0,))
+    calls, failures = [], {1: ['ENOTFOUND api.example.invalid']}
     spawn = native.OwnedProcess.spawn
     def child(argv, **kwargs):
         source = kwargs['stdin']
@@ -34,10 +35,16 @@ def reviews(external, tmp_path, monkeypatch):
                      {'severity': 'P1', 'file': 'candidate.txt', 'line': '1', 'summary': 'Fixture defect'}])}
         sid = '00000000-0000-0000-0000-%012d' % (slot + 1)
         rows = [{'type': 'thread.started', 'thread_id': sid}, {'type': 'turn.started'}]
+        if error:
+            rows += failures.get('progress', [])
         rows += ([{'type': 'turn.failed', 'error': {'message': error}}] if error else [
             {'type': 'item.completed', 'item': {'id': 'final', 'type': 'agent_message', 'text': json.dumps(value)}},
             {'type': 'turn.completed', 'usage': {'input_tokens': 10, 'cached_input_tokens': 0, 'output_tokens': 5}}])
         script = 'import sys;sys.stdin.buffer.read();sys.stdout.write(' + repr('\n'.join(map(json.dumps, rows))+'\n') + ')'
+        if slot == 1 and failures.get('exit_after_result'):
+            script += ';sys.exit(1)'
+        if failures.get('advance'):
+            failures['advance'](slot)
         return spawn([sys.executable, '-B', '-c', script], **kwargs)
     monkeypatch.setattr(native.OwnedProcess, 'spawn', child)
     folder = tmp_path / 'review'
@@ -69,12 +76,12 @@ def test_transport_retry_keeps_completed_slot_and_original_receipts(reviews):
 
 def test_second_transport_failure_stops_without_another_automatic_retry(reviews):
     run, folder, calls, failures = reviews
-    failures[1] = ['ECONNRESET'] * 3
-    with pytest.raises(native.NativeError, match='ECONNRESET'):
+    failures[1] = ['ENOTFOUND'] * 3
+    with pytest.raises(native.NativeError, match='ENOTFOUND'):
         run()
     assert [s for s, _ in calls].count(1) == 2
     checkpoint = json.loads((folder/'review-checkpoint.json').read_bytes())
-    with pytest.raises(native.NativeError, match='ECONNRESET'):
+    with pytest.raises(native.NativeError, match='ENOTFOUND'):
         goal._finish_review(checkpoint, folder, resume=True)
     assert [s for s, _ in calls].count(1) == 3  # explicit recovery only
     assert [s for s, _ in calls].count(0) == 1
@@ -85,7 +92,8 @@ def test_second_transport_failure_stops_without_another_automatic_retry(reviews)
     'model example does not exist: request timed out', 'credentials expired: ECONNRESET',
     'stream disconnected before completion: invalid_request_error',
     'stream disconnected before completion: content policy violation',
-    'connection closed: request body too large', 'Reconnecting... 5/5 (unknown error)'])
+    'Reconnecting... 5/5 (request timed out)', 'ECONNRESET', 'ETIMEDOUT',
+    'TLS handshake timeout', 'connection closed: request body too large', 'Reconnecting... 5/5 (unknown error)'])
 def test_non_transport_failure_is_not_retried(reviews, error):
     run, folder, calls, failures = reviews
     failures[1] = [error]
@@ -116,7 +124,7 @@ def test_mixed_failure_retries_only_the_transport_slot(reviews):
 
 def test_interrupted_retry_decision_does_not_reset_allowance(reviews, monkeypatch):
     run, folder, calls, failures = reviews
-    failures[1] = ['ECONNRESET'] * 3
+    failures[1] = ['ENOTFOUND'] * 3
     write = goal._write
     def interrupt(path, value):
         write(path, value)
@@ -128,18 +136,21 @@ def test_interrupted_retry_decision_does_not_reset_allowance(reviews, monkeypatc
     assert [s for s, _ in calls].count(1) == 1
     monkeypatch.setattr(goal, '_write', write)
     checkpoint = json.loads((folder/'review-checkpoint.json').read_bytes())
-    with pytest.raises(native.NativeError, match='ECONNRESET'):
+    with pytest.raises(native.NativeError, match='ENOTFOUND'):
         goal._finish_review(checkpoint, folder, resume=True)
     assert [s for s, _ in calls].count(1) == 2
     assert [s for s, _ in calls].count(0) == 1
 
 
-@pytest.mark.parametrize('message', ['ENOTFOUND api.example.invalid', 'EAI_AGAIN', 'ECONNRESET',
-    'ETIMEDOUT', 'request timeout', 'connection reset by peer', 'DNS resolution failed',
-    'tls handshake eof', 'stream disconnected before completion: request timed out'])
+@pytest.mark.parametrize('message', ['ENOTFOUND api.example.invalid', 'EAI_AGAIN',
+    'ECONNREFUSED', 'connection refused', 'DNS resolution failed'])
 def test_transport_receipt_classification(tmp_path, message):
     path = tmp_path/'receipt.json'
-    record = {'outcome': 'provider_failure', 'error': message, 'cleanup': {'cleanup_verified': True}}
+    raw = (json.dumps({'type': 'error', 'message': message})+'\n').encode()
+    (tmp_path/'stdout.jsonl').write_bytes(raw)
+    record = {'outcome': 'provider_failure', 'error': message, 'cleanup': {'cleanup_verified': True},
+              'backend': 'codex', 'truncated': False, 'stdout_bytes': len(raw),
+              'stdout_sha256': hashlib.sha256(raw).hexdigest()}
     path.write_text(json.dumps(record))
     error = native.NativeError(message, evidence=tmp_path)
     assert group.transport_failure_receipt(error) == path
@@ -152,9 +163,9 @@ def test_transport_receipt_classification(tmp_path, message):
 def test_retry_does_not_extend_task_deadline(monkeypatch):
     import time
     from foundry_runtime import _task_deadline
-    monkeypatch.setattr(group.time, 'sleep', lambda _: pytest.fail('deadline cannot fit retry delay'))
+    monkeypatch.setattr(group, 'sleep', lambda _: pytest.fail('deadline cannot fit retry delay'))
     with _task_deadline.scope(time.time() + 1):
-        assert group.wait_for_transport_retry() is False
+        assert group.wait_for_transport_retry(time.time() + 15, time.time() + 300) is False
 
 
 @pytest.mark.parametrize('raw', ['{', '[]', '{"outcome":"provider_failure","cleanup":true}',
@@ -164,27 +175,28 @@ def test_unreadable_receipt_keeps_original_failure(tmp_path, raw):
     assert group.transport_failure_receipt(native.NativeError('original', evidence=tmp_path)) is None
 
 
-def test_retry_uses_existing_deadline_after_five_second_delay(monkeypatch):
+def test_retry_uses_scheduled_delay(monkeypatch):
     from foundry_runtime import _task_deadline
     sleeps = []
-    monkeypatch.setattr(group.time, 'sleep', sleeps.append)
+    monkeypatch.setattr(group, 'sleep', sleeps.append)
+    monkeypatch.setattr(group, 'timestamp', lambda: 100)
     with _task_deadline.scope(None):
-        assert group.wait_for_transport_retry()
-    assert sleeps == [5]
+        assert group.wait_for_transport_retry(115, 400)
+    assert sleeps == [15]
 
 
 def test_expired_deadline_after_delay_does_not_admit_retry(reviews, monkeypatch):
     from foundry_runtime import _task_deadline
     run, folder, calls, _ = reviews
     wait = group.wait_for_transport_retry
-    def expire_during_wait():
+    def expire_during_wait(due, deadline, **_):
         readings = iter([100, 0])
         with monkeypatch.context() as context:
-            context.setattr(group.time, 'sleep', lambda _: None)
+            context.setattr(group, 'sleep', lambda _: None)
             context.setattr(_task_deadline, 'remaining', lambda: next(readings))
-            return wait()
+            return wait(due, deadline)
     monkeypatch.setattr(group, 'wait_for_transport_retry', expire_during_wait)
-    with pytest.raises(native.NativeError, match='request timed out'):
+    with pytest.raises(native.NativeError, match='ENOTFOUND'):
         run()
     assert sorted(s for s, _ in calls) == [0, 1]
-    assert not json.loads((folder/'manifest.json').read_bytes()).get('review_transport_retries')
+    assert len(json.loads((folder/'manifest.json').read_bytes())['review_transport_retries']) == 1

@@ -45,7 +45,14 @@ def review_history(amendment):
     rows = []
     try:
         prior_manifest = json.loads(_reference(amendment['prior_manifest']))
-        previous = (prior_manifest.get('amendment') or {}).get('prior_outcome')
+        # An automatic root repeats its final round's verdict; it is not a
+        # separate review. Reuse the existing checked final-round resolver.
+        _reference(amendment['prior_outcome'])
+        if prior_manifest.get('mode') == 'auto-amend':
+            from .foundry_goal import amendment_manifest
+            prior_manifest = amendment_manifest(amendment['prior_outcome']['path'])
+        previous_review = prior_manifest.get('amendment') or (prior_manifest.get('continuation') or {}).get('prior_review')
+        previous = (previous_review or {}).get('prior_outcome')
         for reference in [previous, amendment['prior_outcome']]:
             if reference:
                 outcome = json.loads(_reference(reference))

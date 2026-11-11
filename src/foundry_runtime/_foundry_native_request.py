@@ -156,6 +156,24 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 'an actionable continuation. Do not cap rounds, downgrade by token count, '
                 'repeat a resolved consultation, or treat reused evidence as independent review. '
                 'Preserve required independent review and project acceptance.')
+        if kind == 'coordinate' and request.get('goal_completion') == 1:
+            instruction += (
+                ' Distinguish a worker stage handback from the whole-goal handback in the original order. '
+                'A design commit or completed slice does not replace the ordered final deliverable. '
+                'For an intermediate independent review, use delegate: have the existing worker obtain '
+                'a separate qualified member review, retain its identity, findings and evidence, and '
+                'return to this manager for the next assignment. Consulted expert advice is not that '
+                'independent review. Continue implementation after the design review when the order requires it. '
+                'The review action starts FINAL candidate review and ends execution on acceptance; '
+                'deliver_artifacts also ends execution. Select either only at the original order\'s '
+                'whole-goal handback boundary, as revised by explicit operator instructions. '
+                'Return remaining_work listing the ordered work still unfinished after this stage. '
+                'For final review exclude the final candidate reviews themselves and later owner integration '
+                'that the order explicitly leaves outside this goal. Explain completion against the order '
+                'using retained evidence in instruction; an empty list is your judgment, not acceptance proof. '
+                'An incomplete final handoff returns through review_refusal to this conversation: delegate '
+                'the missing work or ask a concrete authority question rather than repeating the same handoff. '
+                'Document-only goals may finish when their own requested deliverables are complete.')
         if kind == 'coordinate' and request.get('review_convergence') == 1 and request.get('expert_consultation'):
             instruction += (
                 ' Review non-convergence trigger: compare the last two consecutive review rounds in '
@@ -203,6 +221,15 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         if kind == 'coordinate' and request.get('scope_question_policy') == 1:
             instruction += ' ' + SCOPE_QUESTION_GUIDANCE
         if kind == "review":
+            if request.get('packet', {}).get('goal_completion') == 1:
+                instruction += (
+                    ' This is final review of the complete original_order, not an intermediate design '
+                    'or slice review. Manager instructions and stage handoffs cannot narrow that scope. '
+                    'Check the ordered whole-goal handback boundary against the candidate and its evidence. '
+                    'A correct design document does not satisfy missing required implementation; report '
+                    'such a material delivery gap as P1 with BLOCK and the concrete missing requirement. '
+                    'Do not infer incompleteness from file extensions: a document-only order can be complete. '
+                    'Honor explicit operator scope revisions and integration or acceptance left to the owner.')
             # The packet is frozen before native allocation. Historical packets
             # must render byte-for-byte for recovery's stdin hash comparison.
             if request.get('review_read_policy') == 1:

@@ -86,6 +86,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         base, candidate = _review_range(tree, *review_range)
     if project is not None and tree != project.workspace.resolve():
         raise ValueError("goal workspace differs from project descriptor")
+    previous_review = amendment or (continuation or {}).get('prior_review')
     if backend not in {"codex", "claude"} or coding_launcher not in {"exec", "app-server", "claude"}:
         raise ValueError("unknown Foundry backend or coding transport")
 
@@ -217,7 +218,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             manifest['expert_state']['worker_environment'] = launch_context['worker_environment']
         if project_record:
             manifest['expert_state']['execution_profiles'] = project_record['context']['execution_profiles']
-        manifest['expert_packet'] = {'prior_review': amendment['prior_outcome'] if amendment else None,
+        from ._expert_consultation import review_history
+        manifest['expert_packet'] = {'prior_review': (previous_review or {}).get('prior_outcome'),
+            'review_history': review_history(previous_review),
             'tier_escalation': (execution_decision or {}).get('tier_escalation')}
         manifest['manager_start'] = {'executable': str(executable), 'coding_session': coding_session,
                                     'options': execution_options}
@@ -414,26 +417,35 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         manifest.pop('review_refusal_observation', None)
         manifest.pop('worker_progress_observation', None)
 
-    def review_or_feedback():
+    def review_or_feedback(*, artifact_handoff=False):
         nonlocal manager_packet
         try:
-            return candidate_for_review()
+            remaining = (execution_decision or {}).get('manager', {}).get('remaining_work')
+            if remaining:
+                raise GoalBlocked('whole-goal handback still has unfinished ordered work',
+                                  'coding_incomplete', workspace={'remaining_work': remaining})
+            return True if artifact_handoff else candidate_for_review()
         except GoalBlocked as exc:
-            if not manager_state or not (exc.workspace or {}).get('status_porcelain', '').strip():
+            workspace = exc.workspace or {}
+            unfinished = workspace.get('remaining_work')
+            if not manager_state or not (unfinished or workspace.get('status_porcelain', '').strip()):
                 raise
             source = progress_snapshot()
             observation = {'reason': str(exc), 'source': source,
+                **({'remaining_work': unfinished} if unfinished else {}),
                 'operator_answer': (execution_decision or {}).get('manager', {}).get('operator_answer')}
             previous = manifest.pop('review_refusal_observation', None)
             if source is not None:
                 manifest['review_refusal_observation'] = observation
                 if previous == observation:
                     repeated_work_question(
-                        'Review was requested again for the same dirty candidate without new evidence. Commander ruling required.',
+                        ('The same incomplete handoff was requested again without new evidence. Commander ruling required.' if unfinished else
+                         'Review was requested again for the same dirty candidate without new evidence. Commander ruling required.'),
                         'repeated_review_refusal')
             manager_packet = {**manager_packet, 'stage': 'worker_returned',
                 'review_refusal': {'reason': str(exc), 'workspace': exc.workspace,
-                    'instruction': 'Review requires a committed, clean candidate. Resolve the project handoff/commit prerequisites through the worker, or request an operator decision; then route again.'}}
+                    'instruction': ('Delegate the remaining ordered work, including intermediate independent review through the existing worker; retain its evidence and continue toward the whole-goal handback.' if unfinished else
+                        'Review requires a committed, clean candidate. Resolve the project handoff/commit prerequisites through the worker, or request an operator decision; then route again.')}}
             manifest.update(manager_packet=manager_packet, manager_phase='feedback_pending')
             _write(evidence_dir / 'manifest.json', manifest)
             return None
@@ -449,21 +461,23 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         execution_decision = {**(execution_decision or {}), 'operator_answer': manager_answer}
                     manifest['manager_phase'] = 'expert_pending'
                     _write(evidence_dir / 'manifest.json', manifest)
-                    answer = experts.consult(_foundry_manager._turn, manifest['expert_state'], tree,
-                                             question, manifest['expert_packet']['prior_review'])
+                    answer = (execution_decision or {}).get('expert_consultation')
+                    if not answer or answer.get('question') != question:
+                        answer = experts.consult(_foundry_manager._turn, manifest['expert_state'], tree,
+                                                 question, manifest['expert_packet']['prior_review'])
                     execution_decision = {**(execution_decision or {}), 'expert_consultation': answer}
                     manifest.update(execution_decision=execution_decision, manager_phase='delegation_ready')
                     _write(evidence_dir / 'manifest.json', manifest)
             manager_repeat = False
             manager_packet = {"stage": "assign", "run_id": run_id, "order": manifest["order"],
                 'tier_escalation': (execution_decision or {}).get('tier_escalation'),
-                "prior_review": amendment['prior_outcome'] if amendment else None,
+                "prior_review": (previous_review or {}).get('prior_outcome'),
                 "operator_answer": continuation["answer"] if continuation else (amendment or {}).get('operator_additions'),
                 **({'question_checkpoint': continuation['checkpoint']} if continuation else {}),
                 "coding_session": coding_session}
             if (manager_state or {}).get('review_convergence') == 1:
                 from ._expert_consultation import review_history
-                manager_packet['review_history'] = review_history(amendment)
+                manager_packet['review_history'] = review_history(previous_review)
             if manager_state is not None and not manager_state.get('last_call_id'):
                 manager_packet['original_order'] = project.prompt(order.read_text(encoding='utf-8-sig')) if project else order.read_text(encoding='utf-8-sig')
             if (continuation or {}).get('manager_input'):
@@ -490,8 +504,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 migrated_manager = True
             while True:
                 if manifest.get('manager_phase') == 'artifacts_pending' and not owner.order_revision.pending(manifest):
-                    phase = 'artifacts'
-                    break
+                    if review_or_feedback(artifact_handoff=True) is not None:
+                        phase = 'artifacts'
+                        break
                 if manager_state is not None and not ((recovery_file or migrate_recovered_manager) and not manager_repeat):
                     if manifest.get('manager_phase') == 'awaiting_input' and not owner.order_revision.pending(manifest):
                         raise GoalBlocked(manifest['execution_decision']['manager']['instruction'], 'awaiting_input')
@@ -588,8 +603,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         if guidance['action'] == 'await_input':
                             raise GoalBlocked(guidance['instruction'], 'awaiting_input')
                         if guidance['action'] == 'deliver_artifacts':
-                            phase = 'artifacts'
-                            break
+                            if review_or_feedback(artifact_handoff=True) is not None:
+                                phase = 'artifacts'
+                                break
+                            continue
                         if guidance['action'] == 'review':
                             phase = 'candidate'
                             candidate = review_or_feedback()
@@ -747,6 +764,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     manager_packet = {"stage": "worker_returned", "coding_session": coding_session,
                         "worker_evidence": turn_evidence, "returncode": rc,
                         "observed_head": _git(tree, 'rev-parse', 'HEAD').decode().strip(), "run_id": run_id}
+                    if manager_state.get('goal_completion') == 1:
+                        manager_packet['order'] = manifest['order']
                     last_turn = coding_turns[-1]
                     if last_turn.get('execution_intent_id') and last_turn.get('attempt_id'):
                         manager_packet['execution'] = {'intent_id': last_turn['execution_intent_id'],
@@ -843,6 +862,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         context = {"original_order": project.prompt(order.read_text(encoding="utf-8-sig")) if project else order.read_text(encoding="utf-8-sig"),
                    "base_commit": review_base, "candidate_commit": candidate, **({"project_record": project_record} if project else adapter.review_facts(tree, base, candidate)),
                    "changed_files": changed_files, "coding_evidence": coding_evidence, "review_evidence_policy": 1}
+        context['goal_completion'] = 1
         if integration_base:
             context['integration_base'] = integration_base
         if review_author_models:
@@ -865,7 +885,6 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             raise GoalBlocked('fresh candidate closure failed; inspect its retained receipt',
                               'coding_incomplete', workspace={'candidate_closure': closure})
 
-        previous_review = amendment or (continuation or {}).get("prior_review")
         if previous_review:
             # Historical continuation receipts may only retain findings and a
             # reference, without the candidate needed to calculate a delta.
