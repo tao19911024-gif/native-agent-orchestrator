@@ -11,6 +11,11 @@ environment's absolute interpreter path and `$ProjectConfig` for its descriptor.
 
 ## Project setup and observation
 
+Cancel the bound execution of an exact retained goal with
+`--cancel-goal <directory> --cancel-reason <text>`. This operation requires no
+order or recovery grant, preserves the work and evidence, and uses the existing
+execution closure mechanism. See [cancellation and recovery](RECOVERY.md#cancel-its-bound-execution).
+
 | Operation | Options |
 | --- | --- |
 | Inspect a Git workspace | `--foundry-project inspect --worktree $Workspace` |

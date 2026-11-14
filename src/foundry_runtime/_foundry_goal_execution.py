@@ -80,6 +80,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             base = amendment["base_commit"]
         else:
             authority.require_task(tag, tree)
+            from ._execution_intent import ExecutionIntent
+            ExecutionIntent.check_goal_occupancy(authority.common_dir, tag, tree,
+                source_verifier=adapter.recovery_source_verifier)
             base = _candidate(tree)
     else:
         tree = Path(target_worktree).resolve(strict=True)

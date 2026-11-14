@@ -26,6 +26,10 @@ from ._app_server_policy import normalize_policy
 class IntentConflict(RuntimeError):
     """An existing event or binding prevents a safe new execution."""
 
+    def __init__(self, message, *, blocker=None):
+        super().__init__(message)
+        self.blocker = blocker
+
 
 class IntentBusy(IntentConflict):
     """Another live controller holds this task's runtime serialization lock."""
@@ -283,7 +287,7 @@ class ExecutionIntent:
                     predecessor = path, record, sequence, last_hash
                 elif record["state"] in {"starting", "active", "unknown"}:
                     if not self._completed_recovery(path, record):
-                        raise IntentConflict("unresolved intent for this task blocks another worktree: " + path.name)
+                        raise self._predecessor_conflict("unresolved intent for this task: " + path.name, path, record)
                     if _same_invocation(record['frozen'], self._frozen):
                         raise IntentConflict('recovered invocation grants no replay; provide a new amendment')
                 elif record['state'] == 'closed':
@@ -682,27 +686,43 @@ class ExecutionIntent:
         try:
             return ExecutorLease.acquire(worktree, tag, launcher)
         except FileExistsError as exc:
-            try:
-                lock = json.loads((Path(worktree) / '.pdcl-executor.lock').read_bytes())
-                key = lock['tag']
-                if not re.fullmatch(r'[A-Z0-9][A-Z0-9_.-]{0,63}', key):
-                    raise ValueError('invalid holder LINE')
-                for path in (self._task_dir.parent / ('task-' + key) / 'intents').glob('*'):
-                    record, _, _ = self._read(path, task_key=key)
-                    if (record.get('attempt_id') == lock.get('attempt_id')
-                            and all(record.get(k) == lock.get(k) for k in
-                                    ('owner_pid', 'owner_creation_time', 'root_pid', 'root_creation_time'))):
-                        raise self._predecessor_conflict('executor worktree lock is occupied', path, record)
-            except IntentConflict:
-                raise
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                raise IntentConflict('executor worktree lock is occupied; holder evidence unreadable: ' + str(error)) from exc
-            raise IntentConflict('executor worktree lock is occupied; no matching retained intent; inspect ' + str(worktree)) from exc
+            raise self._occupied_conflict(self.common_dir, worktree) from exc
+
+    @classmethod
+    def _occupied_conflict(cls, common_dir, worktree):
+        try:
+            lock = json.loads((Path(worktree) / '.pdcl-executor.lock').read_bytes())
+            key = lock['tag']
+            if not re.fullmatch(r'[A-Z0-9][A-Z0-9_.-]{0,63}', key):
+                raise ValueError('invalid holder LINE')
+            for path in (Path(common_dir) / 'pdcl-dispatch' / ('task-' + key) / 'intents').glob('*'):
+                record, _, _ = cls.read_history(path, task_key=key)
+                if (record.get('attempt_id') == lock.get('attempt_id')
+                        and all(record.get(k) == lock.get(k) for k in
+                                ('owner_pid', 'owner_creation_time', 'root_pid', 'root_creation_time'))):
+                    return cls._predecessor_conflict('executor worktree lock is occupied', path, record)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            return IntentConflict('executor worktree lock is occupied; holder evidence unreadable: ' + str(error))
+        return IntentConflict('executor worktree lock is occupied; no matching retained intent; inspect ' + str(worktree))
+
+    @classmethod
+    def check_goal_occupancy(cls, common_dir, task_key, worktree, *, source_verifier=None):
+        """Observe existing blockers before coordination; start() still owns admission."""
+        if (Path(worktree) / '.pdcl-executor.lock').exists():
+            raise cls._occupied_conflict(common_dir, worktree)
+        for path in sorted((Path(common_dir) / 'pdcl-dispatch' / ('task-' + task_key) / 'intents').glob('*')):
+            record, _, _ = cls.read_history(path, task_key=task_key)
+            if record['state'] in {'starting', 'active', 'unknown'}:
+                owner = cls(common_dir, task_key, record['frozen'], intent_id=record['intent_id'],
+                            source_verifier=source_verifier)
+                if not owner._completed_recovery(path, record):
+                    raise cls._predecessor_conflict('unresolved intent for this task: ' + path.name, path, record)
 
     @staticmethod
     def _predecessor_conflict(reason, path, record):
         from .recovery import blocker_advice
-        return IntentConflict(reason + '\n' + json.dumps(blocker_advice(path, record), ensure_ascii=False))
+        blocker = blocker_advice(path, record)
+        return IntentConflict(reason + '\n' + json.dumps(blocker, ensure_ascii=False), blocker=blocker)
 
     def _require_resolved_worktree_history(self):
         # Called only after acquiring this worktree's existing exclusive lease.

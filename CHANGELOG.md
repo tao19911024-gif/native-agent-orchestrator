@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Cancel a goal's bound execution through the existing stop and reconciliation
+  owners, preserving source changes and historical evidence without a recovery grant.
+- Report the blocking predecessor without appending recovery commands for a
+  rejected goal. Observe existing executor occupancy before paid coordination.
+
 - Preserve the owning goal's prior review findings and candidate delta after
   explicit worker recovery or a failed candidate-check retry. Read amendment
   and continuation lineage from the retained manifest without replaying the
