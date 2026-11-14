@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0a120 — 2026-11-13
 
 - Cancel a goal's bound execution through the existing stop and reconciliation
   owners, preserving source changes and historical evidence without a recovery grant.
