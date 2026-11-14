@@ -61,7 +61,7 @@ def status(folder, *, plan=False, runtime_selection=None):
                            'status', '--status-goal', report['goal']], plan=plan)
 
 
-def _current_dispatch(folder, manifest):
+def _current_dispatch(folder, manifest, *, include_settled=False):
     """Join only this goal's open packages and the journal's current attempt."""
     from ._dispatch_package import read_intent
     folder = Path(folder).resolve()
@@ -75,7 +75,7 @@ def _current_dispatch(folder, manifest):
             if package.get('goal') != {'directory': str(folder), 'run_id': identity(folder, manifest)}:
                 continue
             _, record = read_intent(package)
-            if record.get('attempt_id') == package.get('attempt_id') and record['state'] in ('starting', 'active', 'unknown'):
+            if record.get('attempt_id') == package.get('attempt_id') and (include_settled or record['state'] in ('starting', 'active', 'unknown')):
                 matches.append(_dispatch_status(path))
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             errors.append({'path': str(path), 'error': str(exc)})

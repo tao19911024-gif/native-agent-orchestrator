@@ -13,8 +13,9 @@ from foundry_runtime._execution_intent import ExecutionIntent
 
 
 @pytest.mark.parametrize('backend', ['claude', 'app-server'])
-@pytest.mark.parametrize('keep_recoverable,residual_controller', [(False, False), (True, False), (True, True)])
-def test_stop_settles_executor_and_preserves_work(external, tmp_path, monkeypatch, backend, keep_recoverable, residual_controller):
+@pytest.mark.parametrize('keep_recoverable,residual_controller,stop_owner',
+                         [(False, False, False), (True, False, False), (True, True, False), (False, False, True)])
+def test_stop_settles_executor_and_preserves_work(external, tmp_path, monkeypatch, backend, keep_recoverable, residual_controller, stop_owner):
     tree, scope, order, _ = external
     marker = tree / 'unfinished.txt'
     marker.write_text('保留未提交的工作', encoding='utf-8')
@@ -77,6 +78,14 @@ def observed_append(self, *args, **kwargs):
     return result
 ExecutionIntent._append = observed_append
 ''' % (backend, str(ready)) + script
+    goal_folder = tmp_path / 'live-goal'
+    if stop_owner:
+        goal_folder.mkdir()
+        (goal_folder/'manifest.json').write_text(json.dumps({'run_id': 'live-goal',
+            'tag': 'TASK1', 'worktree': str(tree), 'project_record': scope.record(),
+            'dispatch_evidence_root': str(scope.evidence('TASK1'))}))
+        script = ('from pathlib import Path\nfrom foundry_runtime import foundry_goal as g\n'
+                  'with g._run_lock(Path(%r)):\n    exec(%r)\n' % (str(goal_folder), script))
     with (tmp_path / 'controller.log').open('wb') as log:
         controller_python = os.environ.get('FOUNDRY_TEST_STOP_PYTHON', sys.executable)
         isolation = ['-I'] if os.environ.get('FOUNDRY_TEST_STOP_PYTHON') else []
@@ -100,6 +109,12 @@ ExecutionIntent._append = observed_append
                 assert proc.poll() is None, (tmp_path/'controller.log').read_text(errors='replace')
                 time.sleep(.1)
             assert row and row['state'] == 'active'
+            if stop_owner:
+                package = scope.evidence('TASK1')/'dispatch.package.json'
+                deadline = time.monotonic() + 10
+                while not package.exists() and time.monotonic() < deadline:
+                    time.sleep(.05)
+                assert json.loads(package.read_bytes())['goal']['directory'] == str(goal_folder)
             args = ['--project-config', str(scope.path), '--task', 'TASK1', '--predecessor', folder.name,
                     '--stop-reason', '交接到另一个执行方', '--output', str(tmp_path/'stop.json')]
             if keep_recoverable:
@@ -127,7 +142,20 @@ ExecutionIntent._append = observed_append
                         raise
                 monkeypatch.setattr(ExecutionIntent, '_acquire', acquire_after_handoff)
                 args.append('--stop-controller-after-cleanup')
-            assert recovery.main(args) == 0
+            def invoke():
+                if stop_owner:
+                    from foundry_runtime.cli import main
+                    # A separate native process must survive targeted cancellation.
+                    peer = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(60)'],
+                                            creationflags=subprocess.CREATE_NO_WINDOW)
+                    try:
+                        assert main(['--cancel-goal', str(goal_folder), '--cancel-reason', 'Goal cancelled']) == 0
+                        assert peer.poll() is None
+                    finally:
+                        peer.terminate(); peer.wait(timeout=10)
+                    return
+                assert recovery.main(args) == 0
+            invoke()
             if residual_controller:
                 assert contended
             proc.wait(timeout=10)
@@ -137,7 +165,7 @@ ExecutionIntent._append = observed_append
             assert 'outcome' not in settled
             assert marker.read_text(encoding='utf-8') == '保留未提交的工作'
             saved = {p: p.read_bytes() for p in folder.iterdir()}
-            assert recovery.main(args) == 0
+            invoke()
             assert saved == {p: p.read_bytes() for p in folder.iterdir()}
         finally:
             if proc.poll() is None:

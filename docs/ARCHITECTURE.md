@@ -79,6 +79,16 @@ checkpoint for recovery.
 
 ## One lifecycle
 
+Goal cancellation resolves the existing goal-to-package-to-attempt binding and
+uses the execution stop owner. The recorded controller's existing Jobs own
+descendant cleanup; reconciliation measures exit and closes the same intent.
+No additional goal state or approval record is introduced. New ordinary goals
+observe existing executor occupancy and same-task unresolved history before
+paid coordination. This read-only check reuses dispatcher conflict reporting;
+the exclusive lease and final history checks remain authoritative at launch.
+Predecessor conflicts carry their own recovery advice and do not append commands
+for the rejected goal.
+
 An explicitly closed abandoned execution retains its terminal journal. A new
 goal can use the same task and order: its persisted run ID selects a distinct
 execution when the original frozen identity is closed. Retries of that goal

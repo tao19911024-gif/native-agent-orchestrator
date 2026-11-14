@@ -47,7 +47,20 @@ def main(argv=None, *, project_adapter=None) -> int:
     ap.add_argument('--hosted', default=os.environ.get('FOUNDRY_HOSTED_DIRECTORY'),
                     help='unique launch directory; Windows service custody (or per-call FOUNDRY_HOSTED_DIRECTORY)')
     ap.add_argument('--hosted-status', help='read the exact independently hosted launch, without starting work')
+    ap.add_argument('--cancel-goal', metavar='DIRECTORY', help='stop and close the exact goal-bound execution, retaining work and evidence')
+    ap.add_argument('--cancel-reason', help='reason for --cancel-goal; no recovery authorization is required')
     a = ap.parse_args(argv)
+    if a.cancel_goal or a.cancel_reason:
+        if not a.cancel_goal or not a.cancel_reason or any((a.order, a.resume, a.steer, a.recover_goal,
+                a.amend_from, a.foundry_goal, a.foundry_review, a.foundry_analyze, a.hosted_status)):
+            ap.error('use --cancel-goal DIRECTORY --cancel-reason TEXT separately from execution')
+        from ._execution_stop import cancel_goal
+        try:
+            print(json.dumps(cancel_goal(a.cancel_goal, a.cancel_reason), ensure_ascii=True, indent=2))
+            return 0
+        except (OSError, RuntimeError, ValueError, KeyError) as exc:
+            print('REFUSE Foundry cancellation: ' + str(exc), file=sys.stderr)
+            return 2
     if a.time_budget_minutes is not None and (
             a.time_budget_minutes <= 0 or not a.foundry_goal or a.recover_goal or a.amend_from):
         ap.error('--time-budget-minutes requires a positive integer and a new --foundry-goal')

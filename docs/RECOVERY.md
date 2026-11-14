@@ -48,6 +48,34 @@ a new example directory.
 
 ## Recover a goal
 
+### Cancel its bound execution
+
+Use the exact goal directory to stop its current bound execution and close the
+original intent:
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --cancel-goal $GoalDirectory `
+  --cancel-reason 'Requirements changed; end this execution before replacement'
+```
+
+The command resolves the goal's existing package and journal, stops its recorded
+controller by PID and creation time, and measures cleanup through the existing
+Job and reconciliation owners. It retains source changes, logs and journals;
+the original intent becomes `closed`. No recovery grant is required. Repeating
+the command after closure does not start work or rewrite the original result.
+An active controller without a bound executor remains subject to its native-call
+inspection; the command reports that condition instead of selecting another
+goal's process. Select the current continuation's exact goal when work has moved
+to a separate continuation.
+
+If a new goal is refused by an older execution, follow the predecessor named in
+the refusal. Its `reconcile_powershell` command closes a stopped predecessor
+after `$CloseReason` is supplied. Cancelling the refused goal does not cancel
+the predecessor. A remaining `.owner.lock` file alone does not establish live
+ownership; the byte lock is released when its controller exits.
+
+### Continue retained work
+
 An abandoned execution closed through reconciliation remains closed. To begin
 an explicitly new goal for the same order, use the normal project invocation
 with `--foundry-goal` and a new goal directory, without `--recover-goal` or an
@@ -135,6 +163,13 @@ uses its recorded interrupted-execution procedure; cleanup alone establishes
 process exit, not successful work. A closed historical intent remains closed.
 
 ## Correct a reviewed candidate
+
+Explicit worker recovery and candidate-check retries preserve the owning goal's
+`amendment` or `continuation.prior_review` when building the final review context. Reviewers
+receive the retained findings and, when recorded, the previous candidate's
+diff range. Acceptance still covers the full goal base-to-candidate range.
+The earlier continuation answer is historical context; the worker executes
+the explicitly authorized recovery instruction.
 
 Goal status includes `feedback`: the original task, reviewed candidate,
 deduplicated findings, artifact references and a recorded-session amendment

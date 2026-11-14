@@ -59,7 +59,7 @@ def _stop_cleaned_controller(owner, original):
 
 
 def stop(common, task, frozen, *, intent_id, output, reason, wait_seconds=20, keep_recoverable=False,
-         stop_controller_after_cleanup=False):
+         stop_controller_after_cleanup=False, stop_owner=False):
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError('stopping an executor needs an operator reason')
     owner = ExecutionIntent(common, task, frozen, intent_id=intent_id)
@@ -78,6 +78,8 @@ def stop(common, task, frozen, *, intent_id, output, reason, wait_seconds=20, ke
         binding['keep_recoverable'] = True
     if stop_controller_after_cleanup:
         binding['stop_controller_after_cleanup'] = True
+    if stop_owner:
+        binding['stop_owner'] = True
     output.parent.mkdir(parents=True, exist_ok=True)
     if request.exists():
         if json.loads(request.read_bytes()) != binding:
@@ -85,7 +87,11 @@ def stop(common, task, frozen, *, intent_id, output, reason, wait_seconds=20, ke
     else:
         with request.open('x', encoding='utf-8') as stream:
             json.dump(binding, stream, ensure_ascii=False, indent=2)
-    if not stop_controller_after_cleanup:
+    if stop_owner:
+        # Goal cancellation ends its bound controller. Its existing kill-on-close
+        # Jobs own descendant cleanup; settlement below measures the result.
+        _terminate({'root_pid': record['owner_pid'], 'root_creation_time': record['owner_creation_time']})
+    elif not stop_controller_after_cleanup:
         _terminate(record)
     deadline = time.monotonic() + wait_seconds
     while True:
@@ -110,3 +116,41 @@ def stop(common, task, frozen, *, intent_id, output, reason, wait_seconds=20, ke
             raise TimeoutError('stop requested; controller cleanup is still pending. '
                                'Repeat this same --stop-reason command; do not launch a replacement yet.')
         time.sleep(.1)
+
+
+def cancel_goal(folder, reason):
+    """Cancel the exact goal's bound execution through the existing stop owner."""
+    from ._foundry_goal_auto import active_round
+    from ._followup import _current_dispatch
+    from ._dispatch_package import read_intent
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError('goal cancellation requires a reason')
+    folder = Path(folder).resolve(strict=True)
+    active, manifest = active_round(folder, json.loads((folder / 'manifest.json').read_bytes()))
+    observation = _current_dispatch(active, manifest, include_settled=True)
+    if observation.get('errors'):
+        raise IntentConflict('goal execution binding could not be read: ' + json.dumps(observation['errors']))
+    rows = observation['executions']
+    unresolved = [row for row in rows if row['recorded_state'] in ('starting', 'active', 'unknown')]
+    if len(unresolved) > 1:
+        raise IntentConflict('goal has multiple unresolved executions; inspect its recorded attempts')
+    if not unresolved:
+        from ._executor_lifecycle import observe_locked_byte
+        observed = observe_locked_byte(active.with_name('.' + active.name + '.owner.lock'))
+        if observed['state'] == 'held':
+            raise IntentBusy('goal controller is running without a bound executor; inspect its native calls')
+        return {'goal': str(active), 'executions': rows, 'action': 'no_unresolved_execution'}
+    package = json.loads(Path(unresolved[0]['dispatch']).read_bytes())
+    journal, record = read_intent(package, project_record=manifest.get('project_record'))
+    if record.get('attempt_id') != package['attempt_id']:
+        raise IntentConflict('goal execution changed; inspect the current attempt')
+    common = journal.parent.parent.parent.parent
+    output = active / ('cancel-' + record['attempt_id'] + '.cleanup.json')
+    result = stop(common, record['task_key'], record['frozen'], intent_id=record['intent_id'],
+                  output=output, reason=reason, stop_owner=True)
+    from .app_server_transport import remove_attempt_handle
+    removed = result['state'] in ('unknown', 'closed') and remove_attempt_handle(
+        Path(unresolved[0]['dispatch']).parent / 'active_turn.json',
+        result['attempt_id'], result['root_pid'], result['root_creation_time'])
+    return {'goal': str(active), 'intent_id': result['intent_id'], 'attempt_id': result['attempt_id'],
+            'state': result['state'], 'cleanup': str(output), 'active_handle_removed': removed}

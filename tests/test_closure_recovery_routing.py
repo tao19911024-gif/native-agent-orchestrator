@@ -89,6 +89,38 @@ def test_plain_recovery_follows_consumed_answer_and_retries_only_closure(answere
     assert json.loads((root/'outcome.json').read_bytes())['status']=='awaiting_input'
 
 
+@pytest.mark.parametrize('lineage', ['amendment', 'continuation'])
+def test_closure_retry_preserves_owned_review_lineage(answered_closure, monkeypatch, tmp_path, lineage):
+    root, child, tree, scope, order, requests, workers, head = answered_closure
+    manifest = json.loads((child / 'manifest.json').read_bytes())
+    prior_path = tmp_path / 'prior-review.json'
+    goal._write(prior_path, {'status': 'review_blocked'})
+    prior = {'prior_outcome': goal._fact(prior_path), 'candidate_commit': manifest['base_commit'],
+             'findings': [{'summary': 'Preserve the previous review finding'}]}
+    if lineage == 'amendment':
+        manifest['amendment'] = prior
+    else:
+        manifest['continuation']['prior_review'] = prior
+    goal._write(child / 'manifest.json', manifest)
+    counts = len(requests), len(workers)
+    monkeypatch.setattr(closure, 'verify', lambda *a, **k: {'status': 'not_configured', 'candidate_commit': head})
+
+    def finish(checkpoint, folder):
+        context = checkpoint['context']
+        assert context.get('prior_review') == prior
+        assert context['base_commit'] == manifest['base_commit']
+        assert context['review_delta']['base_commit'] == prior['candidate_commit']
+        assert context['review_delta']['candidate_commit'] == head
+        result = {'status': 'candidate_verified', 'candidate_commit': head, 'reviews': []}
+        goal._write(folder / 'outcome.json', result)
+        return result
+
+    monkeypatch.setattr(goal, '_finish_review', finish)
+    assert goal.recover_goal(order, root)['status'] == 'candidate_verified'
+    assert (len(requests), len(workers)) == counts
+    assert json.loads((child / 'manifest.json').read_bytes())[lineage] == manifest[lineage]
+
+
 def test_status_follows_consumed_answer_without_locking_or_rewriting(answered_closure, monkeypatch):
     from foundry_runtime._followup import status
     root, child, _, _, _, requests, workers, _ = answered_closure

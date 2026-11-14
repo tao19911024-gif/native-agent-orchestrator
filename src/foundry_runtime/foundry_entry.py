@@ -269,6 +269,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 record_foundry_location(order, Path(result["continuation_evidence"]))
         except (OSError, RuntimeError, ValueError, ImportError, KeyError) as exc:
             print("REFUSE Foundry recovery: %s" % exc, file=sys.stderr)
+            if getattr(exc, 'blocker', None) is not None:
+                return 2  # The predecessor's advice owns this refusal.
             from ._foundry_cli_help import announce_recovery_failure, announce_runtime_upgrade
             announce_runtime_upgrade(order, recovery, exc, prompt_file=getattr(a, 'prompt_file', None))
             announce_recovery_failure(order, recovery, prompt_file=getattr(a, 'prompt_file', None))
@@ -514,6 +516,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             )
     except (OSError, RuntimeError, ValueError, ImportError) as exc:
         print("REFUSE Foundry: %s" % exc, file=sys.stderr)
+        if getattr(exc, 'blocker', None) is not None:
+            return 2  # Do not append recovery for the rejected, unstarted goal.
         if amend_from:
             from ._foundry_cli_help import announce_runtime_upgrade
             announce_runtime_upgrade(order, Path(amend_from).parent, exc, amend_from=amend_from,
