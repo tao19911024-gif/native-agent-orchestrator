@@ -33,6 +33,13 @@ Inspect the referenced message log for earlier messages and the manager receipt
 for the corresponding native decision. The observer can run from a separate
 terminal while the launch command is still waiting.
 
+`progress.last_manager_decision.remaining_work` exposes the unfinished work in
+that recorded decision, alongside its receipt. An empty array records the
+manager's judgment that no ordered work remains; candidate review and project
+acceptance retain their separate verdicts. A `null` value means that the selected
+decision did not record this field, including historical decisions. The observer
+does not infer completion from the instruction text or create a progress ledger.
+
 `time_budget` shows elapsed wall time and whether a progress report is due when
 the order was launched with `--time-budget-minutes`. `scratch` shows registered
 task storage and its latest reclamation record. `index_observation` shows the

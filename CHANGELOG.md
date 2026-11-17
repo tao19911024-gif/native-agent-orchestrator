@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0a121 — 2026-11-16
+
+- Expose the recorded manager's remaining work in goal status alongside its
+  decision receipt. Preserve historical absence and empty-list semantics while
+  keeping candidate review and project acceptance separate.
+- Clarify the distinction between standalone analysis work packages and managed
+  development records in the long-task architecture review.
+
 ## 0.1.0a120 — 2026-11-13
 
 - Cancel a goal's bound execution through the existing stop and reconciliation

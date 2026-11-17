@@ -87,6 +87,30 @@ def test_summary_reports_questions_decision_and_overrun_while_worker_continues(o
     assert error.value.code == 2
 
 
+@pytest.mark.parametrize('live', [False, True])
+@pytest.mark.parametrize('remaining', [None, [], ['Finish implementation', 'Run project acceptance']])
+def test_summary_preserves_recorded_remaining_work_without_inferring_acceptance(observed, live, remaining):
+    folder, manifest, add = observed
+    add()
+    decision = {'action': 'delegate', 'instruction': 'Continue the assigned work. ' * 100,
+                'evidence': {'path': 'manager-receipt.json'}}
+    if remaining is not None:
+        decision['remaining_work'] = remaining
+    manifest['execution_decision'] = {'manager': decision}
+    if live:
+        manifest['execution_decision']['manager'] = {**decision, 'remaining_work': ['Superseded assignment']}
+        manifest['live_manager_decision'] = decision
+    save(folder / 'manifest.json', manifest)
+    before = (folder / 'manifest.json').read_bytes()
+    summary = followup.status(folder)['summary']
+    projected = summary['progress']['last_manager_decision']
+    assert projected['remaining_work'] == remaining
+    assert projected['receipt'] == decision['evidence']
+    assert len(projected['instruction']) == 1000
+    assert summary['next_action'] == 'wait'
+    assert (folder / 'manifest.json').read_bytes() == before
+
+
 def test_claude_progress_reads_root_messages_for_the_current_session(observed):
     folder, _, add = observed
     path = add()

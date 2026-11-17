@@ -226,6 +226,7 @@ def _progress(report, active, worker):
         'last_manager_decision': {
             'backend': manager.get('backend'), 'model': manager.get('model'),
             'action': decision.get('action'), 'instruction': (decision.get('instruction') or '')[:1000] or None,
+            'remaining_work': decision.get('remaining_work'),
             'receipt': decision.get('evidence') or coordination.get('last_decision'),
         } if decision or coordination.get('last_decision') else None,
     }
