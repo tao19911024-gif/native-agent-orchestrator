@@ -43,10 +43,12 @@ second scheduler, task registry or billing ledger.
 
 ### Associate work-package completion with evidence
 
-The solution contract already expresses work packages, dependencies and
-acceptance. Goal coordination records instructions, worker evidence, candidate
-checks and review results. The normal coordination contract and worker-returned
-packet do not expose a durable completion map keyed by work-package identity.
+The standalone analysis route's solution contract expresses work packages,
+dependencies and acceptance. Managed development does not consume that result
+as an execution plan: its coordinator works from the original order and retained
+decisions. Those decisions, worker evidence, candidate checks and review results
+are already persisted. The normal coordination contract and worker-returned
+packet do not expose a completion map keyed by work-package identity.
 The relevant local surfaces are `_foundry_response_contract._SOLUTION`, the
 coordination contract, `_foundry_goal_execution` and `_foundry_manager` handoff.
 
@@ -55,10 +57,13 @@ which packages were accepted, which evidence changed and which work remains.
 The transferable idea is the checkpoint's record of what has already been
 consumed, rather than a new workflow engine.
 
-Proposed scope: select one real multi-stage task; associate existing package IDs
-with candidate/check/artifact references in the existing goal record; include the
-completed and remaining package summary in the existing manager handoff. Package
-completion remains subject to the project's own acceptance definition.
+Proposed scope: select a real multi-stage task whose project already identifies
+independently accepted deliverables. Establish those identifiers' project owner
+before associating them with candidate/check/artifact references. An execution
+attempt or analysis-generated package ID does not establish that acceptance
+identity. Reuse the existing goal records and manager handoff if an association
+is needed. Package completion remains subject to the project's acceptance
+definition.
 
 Verification would interrupt the task after an accepted intermediate package,
 resume it, and check that unchanged completed work is reused while changed
@@ -86,7 +91,45 @@ source change.
 
 ## Recommended next decision
 
-Start with one work-package evidence association on a real long task, then use
-the evaluation set to determine whether it improves accepted delivery and
-reduces repeated work. Avoid adding a management interface, another planner or
-new automatic retries before that result is measured.
+Select a real case where an unchanged, previously accepted deliverable is
+repeated or lost during recovery. Check its existing assignment, candidate,
+review and project acceptance references before adding a work-package contract.
+Use that case to measure whether the association improves accepted delivery and
+reduces repeated work. Avoid adding another planner or automatic retries before
+that result is measured.
+
+## Source and retained-record follow-up, 2026-11-16
+
+The a120 source keeps the standalone `--foundry-analyze` route separate from
+managed development. `_foundry_analysis.analyze_order` owns the former's
+`work_packages`; `_foundry_goal_execution` constructs manager packets from the
+order, execution and retained feedback. Adding a package completion map to every
+development task would introduce a new coordination contract, rather than finish
+an existing field mapping.
+
+The current delivery baseline already joins goal invocation, frozen assignment,
+execution attempt, candidate, checks, reviews and project acceptance. Read-only
+replay of four retained chains covered 20 invocations and 27 execution assignment
+observations representing 20 distinct attempts. The existing joins remained
+available. This establishes traceability;
+it does not assign separate acceptance verdicts to each intermediate deliverable.
+
+Two additional retained manager chains contained 31 decisions, 29 with nonempty
+`remaining_work`. Both final manager decisions had empty lists, and independent
+reviews subsequently blocked their candidates for concrete implementation
+defects. These records support keeping manager judgment separate from candidate
+verification. They do not establish that a package ledger would prevent those
+defects or reduce delivery cost.
+
+One observation gap was reproducible: status omitted the already recorded
+`remaining_work` while exposing a shortened instruction. Status now projects
+that field with the same decision receipt. Historical absence remains `null`;
+an empty list remains a manager judgment. No execution state, scheduler,
+acceptance rule or recovery contract changes.
+
+The evaluation gap remains: retained traces support failure classification and
+offline replay, but are not controlled comparisons of orchestration strategies.
+Use the same starting source, order, required checks and acceptance definition
+for future paired runs. Separate model/provider usage, cache categories, elapsed
+time, repeated work and operator intervention. Measure account cost using an
+explicit billing basis; aggregate token count alone is not the objective.
