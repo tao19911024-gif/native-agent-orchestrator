@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0a122 — 2026-11-19
+
+- New Claude executions use a 20-minute default for foreground Bash calls.
+  Long commands can request a larger budget up to the existing 24-hour limit.
+  Root and adaptive worker instructions cover explicit budgets for long suites
+  and short probes. Recovery retains the recorded execution environment.
+
 ## 0.1.0a121 — 2026-11-16
 
 - Expose the recorded manager's remaining work in goal status alongside its
