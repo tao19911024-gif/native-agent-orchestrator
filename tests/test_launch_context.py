@@ -104,7 +104,7 @@ def test_codex_context_uses_input_without_double_counting_cache():
 def test_team_brief_is_versioned(monkeypatch):
     monkeypatch.setenv("PDCL_MODEL_CATALOGUE", "snapshot")
     from foundry_runtime._compute_selection import resolve_native_team
-    for provider, version in (("claude",16),("codex",21)):
+    for provider, version in (("claude",17),("codex",21)):
         team = resolve_native_team("adaptive", backend=provider)
         assert team["version"] == version
         assert "Read discipline" in team["instructions"]
@@ -174,6 +174,21 @@ def test_recorded_member_guidance_is_never_replaced():
         args=argv("claude","session",resume=resume,native_team=recorded)
         assert args[args.index("--append-subagent-system-prompt")+1] == "saved old instructions"
         assert recorded["version"] == 6
+
+
+def test_claude_bash_timeout_for_new_and_recorded_executions(monkeypatch):
+    from foundry_runtime._execution_profile import profiles
+    from foundry_runtime.foundry_claude import environment
+
+    monkeypatch.setenv("BASH_DEFAULT_TIMEOUT_MS", "86400000")
+    current = profiles()["claude_environment"]
+    for selected in (None, current):
+        env = environment(execution_environment=selected)
+        assert env["BASH_DEFAULT_TIMEOUT_MS"] == "1200000"
+        assert env["BASH_MAX_TIMEOUT_MS"] == "86400000"
+        assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
+    frozen = {**current, "BASH_DEFAULT_TIMEOUT_MS": "86400000"}
+    assert environment(execution_environment=frozen)["BASH_DEFAULT_TIMEOUT_MS"] == "86400000"
 
 
 def test_launch_policy_identity_carries_context_controls(monkeypatch):

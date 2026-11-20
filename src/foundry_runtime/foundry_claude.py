@@ -16,11 +16,8 @@ def environment(effort=None, *, execution_environment=None, launch_context=None)
     env['PYTHONIOENCODING'] = 'utf-8'
     from ._launch_context import claude_settings
     env.update(claude_settings(launch_context)['env'])
-    # Print mode kills background tasks when the turn ends, and caps a foreground
-    # command at 10 minutes by default; a full-suite run takes about 50 (DECK2 lost
-    # two runs so, 2026-09-25, CLI 2.1.282). Background tasks are disabled and the
-    # foreground cap is the session wall budget, so long runs finish inside the
-    # turn: measured, a 700 s command then ran to completion with nothing killed.
+    # Print mode ends background work with the turn. Long suites run in the
+    # foreground with an explicit Bash timeout; short probes use the profile default.
     env.update(claude_environment() if execution_environment is None else execution_environment)
     # Foundry retains CLI bytes for session recovery; updates enter via resolution.
     env['DISABLE_AUTOUPDATER'] = '1'

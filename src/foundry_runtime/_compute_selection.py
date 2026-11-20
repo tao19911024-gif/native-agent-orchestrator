@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ._model_catalogue import BACKEND, model
 from ._execution_plan_prompt import WAIT_GUIDANCE, EVIDENCE_GUIDANCE
+from ._execution_profile import CLAUDE_BASH_GUIDANCE
 
 ROLE_BY_KIND = {"plan": "planning", "analyse": "investigation", "synthesize": "synthesis",
                 "solution": "solution", "review": "review"}
@@ -390,7 +391,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
     if backend == "claude":
         if profile not in {"none", "adaptive"}:
             raise ValueError("unknown Claude team profile")
-        team = {"profile": profile, "version": 16 if profile == "adaptive" else 1, "backend": "claude",
+        team = {"profile": profile, "version": 17 if profile == "adaptive" else 1, "backend": "claude",
             "worker_capacity": 10 if profile == "adaptive" else 0,
             "lead_role": "manager" if profile == "adaptive" and not managed else "executor",
             "config": {},
@@ -450,7 +451,8 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
                 "Return a concise conclusion, changed files, exact test scope/results, evidence references "
                 "and unresolved issues. Store long reports/logs in task evidence files and cite relevant "
                 "sections rather than copying them into messages. Keep necessary reasoning and contrary "
-                "evidence; brevity must not reduce correctness or required review coverage. " + _EXPERT_HANDOFF)
+                "evidence; brevity must not reduce correctness or required review coverage. "
+                + CLAUDE_BASH_GUIDANCE + " " + _EXPERT_HANDOFF)
         return team
     if profile == "none":
         return {"profile": "none", "version": 3, "worker_capacity": 0, "lead_role": "executor",
