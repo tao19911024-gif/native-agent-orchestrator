@@ -14,10 +14,17 @@ def claude_policy():
             'permission_mode': 'bypassPermissions'}
 
 
+CLAUDE_BASH_GUIDANCE = (
+    "Set the Bash tool's timeout in milliseconds before starting a long foreground command, "
+    "using its expected duration and a margin (e.g. 4500000 for a 50-minute suite). "
+    "Give short probes a short timeout; close database connections in finally and return a failure exit code on errors."
+)
+
+
 def claude_environment():
     return {'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS': '1',
             'BASH_MAX_TIMEOUT_MS': str(24 * 3600 * 1000),
-            'BASH_DEFAULT_TIMEOUT_MS': str(24 * 3600 * 1000)}
+            'BASH_DEFAULT_TIMEOUT_MS': str(20 * 60 * 1000)}
 
 
 def profiles():

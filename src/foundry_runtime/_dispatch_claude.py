@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .foundry_native_support import resolve_executable
 from .foundry_claude import environment
-from ._execution_profile import claude_policy
+from ._execution_profile import CLAUDE_BASH_GUIDANCE, claude_policy
 from ._compute_selection import compute_kwargs
 
 
@@ -25,9 +25,8 @@ from ._compute_selection import compute_kwargs
 UNAVAILABLE_TOOLS = ('ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor', 'RemoteTrigger')
 RUNTIME_NOTE = ('Runtime: this is a non-interactive run that ends when you end your turn. Nothing can wake you '
                 'later: background tasks, scheduled wake-ups and monitors are unavailable, and every process '
-                'you started, detached or not, is stopped when the run ends. Foreground commands may run for '
-                'up to 24 hours: run a long command, such as a full test suite, in the foreground with a '
-                'timeout that covers it, and end your turn only after every run whose result you rely on has '
+                'you started, detached or not, is stopped when the run ends. ' + CLAUDE_BASH_GUIDANCE +
+                ' End your turn only after every run whose result you rely on has '
                 'finished and you have read it.')
 
 LIVE_NOTE = (' Foundry live coordination: root FOUNDRY_MANAGER_QUESTION and FOUNDRY_DELIVERABLE_DONE '
