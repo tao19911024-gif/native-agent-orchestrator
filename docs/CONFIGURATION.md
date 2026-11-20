@@ -276,7 +276,10 @@ For new Claude executions, a foreground Bash call without an explicit timeout
 has a 20-minute budget. Set the tool's `timeout` in milliseconds for commands
 with a known duration. For example, allow 4,500,000 ms for a suite that normally
 takes 50 minutes. The per-call maximum is 24 hours and the task deadline still
-applies. A resumed execution uses its recorded environment.
+applies. Descriptor-backed goal recovery uses the environment in its saved
+project context. A standalone `--resume` uses the Bash budget supplied by the
+runtime and project used to launch it. Use the original runtime when a
+standalone session needs its original default.
 
 A new Codex-executed goal starts with a persistent Claude Opus manager. Install
 and authenticate both Codex CLI and Claude Code for the
