@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0a124 — 2026-11-21
+
+- Automatic corrections retain the assigned coding provider across blocked
+  reviews. New managers compare candidate progress and counterexamples when
+  deciding whether to keep the implementer, consult an expert or reassign work.
+- Coding dispatch and adaptive team selection reserve explicitly assigned
+  final reviewers. An explicit coding-provider transfer uses the target
+  provider's worker when its preferred model occupies a review slot.
+- Review recovery can replace one conflicted reviewer on the same provider
+  while retaining the peer's completed review and the original candidate.
+
 ## 0.1.0a123 — 2026-11-20
 
 - Goal and dispatch status expose the worker's pending tool and latest recorded

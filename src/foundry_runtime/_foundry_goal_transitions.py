@@ -202,7 +202,7 @@ def explicit_review_models(staffing, compute_assignment):
 
 
 def reserved_review_models(staffing, compute_assignment, reviewers, manager_state):
-    if staffing and not (manager_state or {}).get('quota_fallback') and explicit_review_models(staffing, compute_assignment):
+    if not (manager_state or {}).get('quota_fallback') and explicit_review_models(staffing or {}, compute_assignment):
         return [r['model'] for r in reviewers or []]
     return []
 

@@ -519,7 +519,17 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
         coding = ((options.get('role_compute') or {}).get('roles', {}).get('coding') or
                   {'backend': provider, 'model': options.get('coding_model'), 'effort': options.get('coding_effort')})
     else:
-        coding = {"backend": provider, "model": model("opus" if provider == "claude" else "sol"), "effort": "high"}
+        from ._compute_selection import MEMBER_TIERS, review_model_id
+        from ._foundry_goal_transitions import reserved_review_models
+        reserved = {review_model_id(m) for m in reserved_review_models(options.get('task_staffing'),
+                    options.get('compute_assignment'), options.get('reviewers'), options.get('manager_state'))}
+        selected = model("opus" if provider == "claude" else "sol")
+        if review_model_id(selected) in reserved:
+            selected = model(MEMBER_TIERS[provider]['worker'])
+            if review_model_id(selected) in reserved:
+                raise owner.GoalBlocked('Coding transfer would select a frozen reviewer on ' + provider +
+                                        '. Keep the current worker or choose another eligible provider.')
+        coding = {"backend": provider, "model": selected, "effort": "high"}
     options = dict(options)
     options.update(coding_launcher=options.get('coding_launcher', 'exec') if source == provider else
                    "claude" if provider == "claude" else "app-server",

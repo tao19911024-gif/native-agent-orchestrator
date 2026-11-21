@@ -297,7 +297,10 @@ is understood and the same error persists, or the evidence identifies a
 specific capability gap, the manager can delegate the bounded repair to an
 eligible team member. The decision accounts for context transfer, checks and
 independent review. A transfer of the frozen coding provider uses the explicit
-handoff route. Measured tier signals and explicit reviewer requests for expert
+handoff route. If its preferred model occupies a frozen review slot, the
+transfer selects the target provider's worker. If that worker also occupies
+a review slot, the transfer stops before opening a new session.
+Measured tier signals and explicit reviewer requests for expert
 advice retain their existing routes. Earlier goals retain their recorded policy.
 
 For a historical review with a confirmed author conflict, use

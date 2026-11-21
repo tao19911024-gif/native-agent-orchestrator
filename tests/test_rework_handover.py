@@ -54,3 +54,26 @@ def test_coding_tier_escalation_preserves_explicit_reviewer(monkeypatch):
     result = escalation(model('sol'), {}, prior_findings=findings, findings=findings, reserved_models=['astra'])
     assert result['action'] == 'expert_consultation_required'
     assert result['model'] == model('sol')
+
+
+def test_explicit_coding_transfer_reserves_frozen_reviewers(tmp_path, monkeypatch):
+    from foundry_runtime._foundry_goal_continuation import handoff_options
+    from foundry_runtime._model_catalogue import model
+    monkeypatch.setenv('PDCL_MODEL_CATALOGUE', 'snapshot')
+    monkeypatch.setattr(goal, '_git', lambda *args: b'')
+    cleanup = tmp_path / 'worker.cleanup.json'
+    goal._write(cleanup, {'root_exited': True, 'cleanup_verified': True, 'job_active_processes': 0})
+    checkpoint = {'worktree': str(tmp_path), 'evidence': [{'path': str(cleanup)}],
+                  'coding_session': 'fixture', 'base_commit': 'base', 'order': {}}
+    options = {'compute_assignment': {'selection': {'source': 'explicit'}},
+               'reviewers': [{'model': model('opus')}, {'model': model('astra')}]}
+    def transfer():
+        return handoff_options(goal, tmp_path, {'project_record': {'project_id': 'fixture'}},
+                               checkpoint, {'checkpoint': {}}, options, 'claude')
+    result = transfer()
+    assert result['coding_model'] == model('sonnet')
+    assert result['compute_assignment']['roles']['handover']['model'] == result['coding_model']
+    assert result['reviewers'] == options['reviewers']
+    options['reviewers'][1] = {'model': model('sonnet')}
+    with pytest.raises(goal.GoalBlocked, match='frozen reviewer'):
+        transfer()
