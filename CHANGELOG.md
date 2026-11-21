@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0a123 — 2026-11-20
+
+- Goal and dispatch status expose the worker's pending tool and latest recorded
+  progress when the native session can be bound to the execution attempt.
+  Member heartbeats identify long-running calls for inspection. A recorded
+  dispatch return or goal outcome takes precedence over earlier tool activity.
+
 ## 0.1.0a122 — 2026-11-19
 
 - New Claude executions use a 20-minute default for foreground Bash calls.
