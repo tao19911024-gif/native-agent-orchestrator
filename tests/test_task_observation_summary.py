@@ -275,6 +275,14 @@ def test_stopped_controller_with_unsettled_worker_requires_inspection(observed, 
     assert '--recover-goal' not in report['summary']['next_command_argv']
 
 
+def test_review_in_progress_does_not_report_old_outcome_as_returned(observed):
+    folder, _, _ = observed
+    save(folder / 'outcome.json', {'status': 'review_blocked', 'review_completion_required': True})
+    summary = followup.status(folder)['summary']
+    assert (summary['status'], summary['phase']) == ('pending', 'review')
+    assert summary['worker_wait']['observation'] == 'unconfirmed'
+
+
 def test_input_wait_exposes_existing_recorded_answer_invocation(observed):
     folder, manifest, _ = observed
     manifest['runtime_provenance']['python'] = 'recorded-python'

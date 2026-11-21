@@ -448,9 +448,6 @@ def _goal_status(folder):
     outcome = json.loads(raw)
     if not isinstance(outcome, dict) or not isinstance(outcome.get('status'), str):
         raise ValueError('goal outcome has no status')
-    report['worker_wait'] = {'observation': 'goal_outcome_available', 'active_tools': [],
-                             'source': str(outcome_path), 'external_wait': 'unobserved',
-                             'last_progress': {'kind': 'goal_outcome', 'status': outcome['status']}}
     from ._foundry_goal_usage import delivery
     report['delivery'] = delivery(outcome)
     from ._dispatch_package import read_intent, execution_binding
@@ -469,7 +466,6 @@ def _goal_status(folder):
             _, intent = read_intent(package)
             if (intent.get('evidence') or {}).get('log') == fact:
                 report['settled_execution'] = execution_binding(package, intent)
-                report['worker_wait'].update(dispatch=str(package_path), execution=report['settled_execution'])
                 break
         except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
             report['errors'].append('settled execution: ' + str(exc))
@@ -486,6 +482,11 @@ def _goal_status(folder):
         if controller['state'] == 'held':
             return {**report, 'coding_recovery': None, 'status': 'pending', 'event_id': None,
                     'controller_observation': controller, 'phase': 'review'}
+    report['worker_wait'] = {'observation': 'goal_outcome_available', 'active_tools': [],
+                             'source': str(outcome_path), 'external_wait': 'unobserved',
+                             'last_progress': {'kind': 'goal_outcome', 'status': outcome['status']}}
+    if report.get('settled_execution'):
+        report['worker_wait'].update(dispatch=str(package_path), execution=report['settled_execution'])
     from ._foundry_goal_delivery import review_feedback
     try:
         report['feedback'] = review_feedback(outcome_path)
