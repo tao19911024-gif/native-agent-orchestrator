@@ -481,7 +481,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 "operator_answer": continuation["answer"] if continuation else (amendment or {}).get('operator_additions'),
                 **({'question_checkpoint': continuation['checkpoint']} if continuation else {}),
                 "coding_session": coding_session}
-            if (manager_state or {}).get('review_convergence') == 1:
+            if (manager_state or {}).get('review_convergence') in (1, 2):
                 from ._expert_consultation import review_history
                 manager_packet['review_history'] = review_history(previous_review)
             if manager_state is not None and not manager_state.get('last_call_id'):

@@ -229,8 +229,11 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                 current = (child_manifest.get('requested_compute', {}).get('coding') or {}).get('model') or options.get('coding_model') or (options.get('role_compute') or {}).get('roles', {}).get('coding', {}).get('model')
                 findings = [f for r in result['reviews'] for f in r['findings']]
                 previous = [f for r in block_window[0]['result']['reviews'] for f in r['findings']] if len(block_window) == 2 else []
+                # The manager compares recurring findings in the retained candidate history.
+                manager_assesses_recurrence = (options.get('manager_state') or {}).get('review_convergence') == 2
                 decision = escalation(current, result.get('implementation_evidence', {}),
-                                      prior_findings=previous, findings=findings, reserved_models=reserved_review_models(
+                                      prior_findings=() if manager_assesses_recurrence else previous,
+                                      findings=findings, reserved_models=reserved_review_models(
                                           options.get('task_staffing'), options.get('compute_assignment'),
                                           options.get('reviewers'), options.get('manager_state')))
                 if decision:

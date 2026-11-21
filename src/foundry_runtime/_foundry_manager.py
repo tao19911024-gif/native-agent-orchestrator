@@ -83,7 +83,7 @@ def configuration(profile, folder):
     return {'profile': profile, 'backend': BACKEND[profile], 'model': model(profile),
             'effort': 'high', 'native_dir': str(Path(folder).resolve()), 'last_call_id': None, 'artifact_delivery': True,
             'design_convergence': 1,
-            'review_convergence': 1,
+            'review_convergence': 2,
             'goal_completion': 1,
             'quota_recovery': 1,
             'context_reuse': 1,
@@ -199,8 +199,8 @@ def _native_turn(state, workspace, packet, *, operator_update=False, pending_onl
         request['context_reuse'] = 1
     if state.get('live_coordination') == 1:
         request['live_coordination'] = 1
-    if state.get('review_convergence') == 1:
-        request['review_convergence'] = 1
+    if state.get('review_convergence') in (1, 2):
+        request['review_convergence'] = state['review_convergence']
     if state.get('quota_recovery') == 1:
         request['quota_recovery'] = 1
     if deadline.current() is not None:

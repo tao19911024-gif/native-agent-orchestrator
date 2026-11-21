@@ -134,8 +134,8 @@ recorded final round and is not counted as another review. Missing historical
 references retain the existing context-gap behavior; they do not introduce a
 new task admission rule or a review-round limit. Without a manager, an unchanged
 review question reuses the expert answer retained in the execution decision;
-a changed question requests a new consultation. Existing trigger precedence
-remains recurring blocking findings, tier escalation, then reviewer guidance.
+a changed question requests a new consultation. Unmanaged correction checks
+recurring blocking findings, tier escalation and reviewer guidance in that order.
 
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and
@@ -288,6 +288,17 @@ not transfer coding to the manager. Explicitly assigned final reviewers are
 reserved at worker dispatch and native team admission. If an escalation would
 select a reserved model, the current worker keeps the task and the decision
 records the need for expert consultation.
+
+For new managed goals, the manager compares the candidate changes,
+counterexamples and reviewer guidance from the retained review history.
+Resolved or narrowed findings favor continuing with the original implementer.
+A recurring design question goes to the configured expert. When the repair
+is understood and the same error persists, or the evidence identifies a
+specific capability gap, the manager can delegate the bounded repair to an
+eligible team member. The decision accounts for context transfer, checks and
+independent review. A transfer of the frozen coding provider uses the explicit
+handoff route. Measured tier signals and explicit reviewer requests for expert
+advice retain their existing routes. Earlier goals retain their recorded policy.
 
 For a historical review with a confirmed author conflict, use
 `--recover-goal <goal> --handoff-role review-0 --handoff-provider claude`

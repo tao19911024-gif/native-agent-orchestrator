@@ -10,7 +10,8 @@ def test_two_blocks_keep_the_assigned_correction_role_across_manager_changes(tmp
     monkeypatch.setattr(goal, '_git', lambda *args: b'head')
     order = tmp_path/'order.md'
     order.write_text('Finish the task')
-    state = {'backend':'codex' if quota_unavailable else 'claude', 'model':'fixture', 'live_coordination':1}
+    state = {'backend':'codex' if quota_unavailable else 'claude', 'model':'fixture', 'live_coordination':1,
+             'review_convergence':2}
     if quota_unavailable:
         state.update(quota_fallback={'path':'measured-receipt'}, quota_return_at=123)
     calls = []
@@ -25,7 +26,7 @@ def test_two_blocks_keep_the_assigned_correction_role_across_manager_changes(tmp
         result = {'status':'review_blocked' if len(calls)<(4 if returns else 3) else 'candidate_verified',
             'coding_session':'session', 'candidate_commit':str(len(calls)),
             'reviews':[{'verdict':'BLOCK', 'findings':[{'file':'a.py','line':1,'severity':'P1',
-                'summary':'different finding '+str(len(calls))}]}]}
+                'summary':'Different finding '+str(len(calls)) if returns else 'Same receipt error'}]}]}
         goal._write(folder/'outcome.json', result)
         return result
     monkeypatch.setattr(goal, '_run', run)
@@ -42,6 +43,7 @@ def test_two_blocks_keep_the_assigned_correction_role_across_manager_changes(tmp
     assert calls[-1]['compute_assignment']['coding_role'] == 'correction'
     assert calls[-1]['execution_decision']['correction']['model_action'] == 'retain'
     assert 'handover' not in manifest
+    assert not manifest.get('tier_escalations')
 
 
 def test_coding_tier_escalation_preserves_explicit_reviewer(monkeypatch):

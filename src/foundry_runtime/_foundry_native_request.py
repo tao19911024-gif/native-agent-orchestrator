@@ -189,6 +189,19 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 'not a reason to stop: inspect available evidence and continue useful work. '
                 'Distinct findings, mechanical edits, quota and index failures alone are not '
                 'reasoning non-convergence.')
+        if (kind == 'coordinate' and request.get('review_convergence') == 2
+                and request.get('packet', {}).get('review_history')):
+            instruction += (
+                ' Compare the candidates, counterexamples and correction guidance in review_history. '
+                'Keep the current implementer when a counterexample is resolved, the failure narrows, '
+                'or the next finding has a clear fix. When the same underlying failure persists, identify '
+                'what was tried. Consult the configured expert for an unresolved design question and '
+                'return the answer to the implementer. If the fix is understood but the implementer '
+                'repeats it incorrectly, or the work demonstrably needs different expertise, delegate '
+                'the bounded repair to a qualified available member now. Cite the evidence and expected '
+                'benefit through independent acceptance, including context transfer, checks and review. '
+                'Reserve both independent review slots. A change of the frozen coding provider uses '
+                'the explicit handoff route; delegation alone does not transfer that session.')
         if kind == 'coordinate' and request.get('instruction_provenance') == 1:
             instruction += (
                 " Your instruction is authored by the manager. Label your own diagnosis and decisions as "
