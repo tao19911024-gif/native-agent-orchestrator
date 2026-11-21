@@ -280,3 +280,19 @@ recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.
 Declared review-author models remain in that checkpoint context and participate
 in the same reviewer-independence check after recovery or provider handoff.
+
+After a blocked review, the automatic controller resumes the coding session
+with its recorded correction assignment. Repeated findings can trigger the
+existing tier or expert decision. The number of blocked rounds alone does
+not transfer coding to the manager. Explicitly assigned final reviewers are
+reserved at worker dispatch and native team admission. If an escalation would
+select a reserved model, the current worker keeps the task and the decision
+records the need for expert consultation.
+
+For a historical review with a confirmed author conflict, use
+`--recover-goal <goal> --handoff-role review-0 --handoff-provider claude`
+with the original project and order. Use `review-1` for the second slot.
+The selected provider may match the slot's original provider. Foundry selects
+an eligible model on that provider, records the slot transfer and reuses
+completed reviews for the checkpoint. The original candidate and checkpoint
+remain the authority for both verdicts.

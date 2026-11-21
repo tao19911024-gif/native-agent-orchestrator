@@ -102,3 +102,15 @@ def test_installed_hook_receives_utf8_without_rewriting_chinese(provider):
         assert value['hookSpecificOutput']['updatedInput']['command'] == 'exec </dev/null\n' + event['tool_input']['command']
     else:
         assert value == {}
+
+@pytest.mark.parametrize('tool', ['Agent', 'spawn_agent'])
+def test_frozen_final_reviewer_excluded_at_member_spawn(tool, monkeypatch):
+    from foundry_runtime._model_catalogue import model
+    monkeypatch.setenv('PDCL_MODEL_CATALOGUE', 'snapshot')
+    policy = {'version': 7, 'reserved_review_models': ['opus', 'astra', model('opus'), model('astra')]}
+    event = {'tool_name': tool, 'tool_input': {'model': 'opus[1m]', 'prompt': '[activity: execute] Fix code'}}
+    decision = rules.check(event, policy)['hookSpecificOutput']
+    assert decision['permissionDecision'] == 'deny'
+    assert 'final review' in decision['permissionDecisionReason']
+    event['tool_input']['model'] = 'sonnet'
+    assert rules.check(event, policy).get('hookSpecificOutput', {}).get('permissionDecision') != 'deny'

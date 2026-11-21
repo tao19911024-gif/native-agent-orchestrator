@@ -544,7 +544,7 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
 
 
 def dispatch_handoff(owner, order, handover, message, decision, policy, coding):
-    """One dispatch consumer for automatic BLOCK handover and explicit recovery."""
+    """Dispatch a recorded provider handoff with its admission and evidence."""
     from . import _foundry_dispatch as dispatch
     receipt = handover.get("predispatch")
     if policy.get("project") is None and (not isinstance(receipt, dict) or not receipt.get("path")):

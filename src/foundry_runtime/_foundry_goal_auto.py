@@ -11,8 +11,6 @@ import subprocess
 import uuid
 from pathlib import Path
 
-from ._compute_selection import resolve_native_team, is_managed
-from ._model_catalogue import model
 from ._foundry_response_contract import _BLOCKING_SEVERITIES
 from . import _foundry_goal_usage as goal_usage
 
@@ -91,6 +89,10 @@ def correction_options(options, correction):
             and any(isinstance(g, dict) and g.get('model') == 'expert' for g in guidance)):
         choice, reason = 'retain', 'Recorded expert consultation precedes correction by the original worker.'
     decision = {"model_action": choice, "reason": reason, "review_guidance": guidance}
+    if assignment.get('correction_policy') == 'fixed':
+        current = (options.get('role_compute') or {}).get('roles', {}).get('coding') or {}
+        if (current.get('model') or options.get('coding_model')) == correction['model']:
+            decision['model_action'] = 'retain'
     options["execution_decision"] = {**(options.get("execution_decision") or {}), "correction": decision}
     if choice == "retain":
         return options
@@ -223,11 +225,14 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
             promoted = False
             if (options.get('compute_assignment') or {}).get('profile_version', 0) >= 5:
                 from ._compute_selection import escalation, tier_state
+                from ._foundry_goal_transitions import reserved_review_models
                 current = (child_manifest.get('requested_compute', {}).get('coding') or {}).get('model') or options.get('coding_model') or (options.get('role_compute') or {}).get('roles', {}).get('coding', {}).get('model')
                 findings = [f for r in result['reviews'] for f in r['findings']]
                 previous = [f for r in block_window[0]['result']['reviews'] for f in r['findings']] if len(block_window) == 2 else []
                 decision = escalation(current, result.get('implementation_evidence', {}),
-                                      prior_findings=previous, findings=findings)
+                                      prior_findings=previous, findings=findings, reserved_models=reserved_review_models(
+                                          options.get('task_staffing'), options.get('compute_assignment'),
+                                          options.get('reviewers'), options.get('manager_state')))
                 if decision:
                     baseline = {'model': current,
                         'effort': (child_manifest.get('requested_compute', {}).get('coding') or {}).get('effort') or options.get('coding_effort') or 'high'}
@@ -277,49 +282,6 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                         states[name] = saved
                     options['reviewers'] = reviewers
                     options['execution_decision'] = {**(options.get('execution_decision') or {}), 'review_tiers': states}
-            if len(block_window) == 2 and (options.get('manager_state') or {}).get('quota_fallback'):
-                manifest['handover_deferred'] = {
-                    'reason': 'measured Claude quota unavailable; retain Codex execution until manager recovery',
-                    'quota_evidence': options['manager_state']['quota_fallback'],
-                    'quota_return_at': options['manager_state'].get('quota_return_at')}
-                owner._write(root / 'manifest.json', manifest)
-            if (options.get("task_staffing") and options.get("coding_launcher") != "claude"
-                    and not (options.get('manager_state') or {}).get('quota_fallback')
-                    and (result.get("coding_session") or options.get("coding_session"))
-                    and len(block_window) == 2):
-                session = result.get("coding_session") or options.get("coding_session")
-                transition = {"after_rounds": [row["round"] for row in block_window],
-                    "verdicts": [row["result"]["reviews"] for row in block_window],
-                    "prior_coding_session": session, "worktree": manifest["worktree"],
-                    "base_commit": manifest["base_commit"],
-                    "candidate_commit": result.get("candidate_commit"),
-                    "current_head": owner._git(manifest["worktree"], "rev-parse", "HEAD").decode().strip(),
-                    "original_order": owner._fact(order),
-                    "predispatch": json.loads((root / "round-0" / "manifest.json").read_bytes()).get("predispatch"),
-                    "round_results": [row["result"] for row in block_window],
-                    "outcomes": [row["outcome"] for row in block_window],
-                    "staffing": options["task_staffing"]}
-                if options.get("project_record") is not None:
-                    transition["project_record"] = options["project_record"]
-                manifest["handover"] = transition
-                manifest.pop('handover_deferred', None)
-                correction = {"model": model("opus"), "effort": "high"}
-                options = {**options, "amend_from": folder / "outcome.json", "coding_session": session,
-                    "coding_launcher": "claude", "coding_model": model("opus"),
-                    "coding_effort": "high", "native_team": resolve_native_team("adaptive", backend="claude",
-                        managed=is_managed(state=options.get('manager_state'))),
-                    "manager_state": (options.get('manager_state') if
-                        (options.get('manager_state') or {}).get('backend') == 'claude' else None), "manager_profile": None,
-                    "handover": transition, "predispatch_receipt": None,
-                    "execution_decision": {key: value for key, value in (options.get("execution_decision") or {}).items()
-                                           if key not in ("correction", "tier_escalation", "tier_reset")}}
-                options.pop("role_compute", None)
-                options.pop("recovery_file", None)
-                options["compute_assignment"] = {**options["compute_assignment"], "coding_role": "handover",
-                    "roles": {**options["compute_assignment"]["roles"],
-                        "correction": {"backend": "claude", **correction, "source": "handover"}, "handover": {
-                        "backend": "claude", "model": model("opus"), "effort": "high", "source": "handover"}}}
-                continue
             identity = block_identity(owner, result, manifest['worktree'])
             if options.get("amend_from"):
                 prior = json.loads(Path(options["amend_from"]).read_bytes())
@@ -335,8 +297,7 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                 break
             options = {**options, "amend_from": folder / "outcome.json", "coding_session": session,
                        "predispatch_receipt": None}
-            # Only the first Claude round crosses providers. Later BLOCK rounds
-            # resume the Claude session returned by that handover.
+            # A recorded explicit handoff starts one session. Amendments resume it.
             options.pop("handover", None)
             options = correction_options(options, correction)
         return finish(owner, root, manifest, result)
