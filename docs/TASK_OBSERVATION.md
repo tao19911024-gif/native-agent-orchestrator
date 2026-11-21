@@ -53,6 +53,29 @@ that file instead of predicting numbered continuation names. The field is `null`
 when no unique current execution is recorded. The full dispatch observation
 exposes the same path as `live_event_log`.
 
+The exact dispatch status and the goal summary expose `worker_wait`. For a
+bound execution, `dispatch`, `execution`, `session_id` and `source` identify
+the package, attempt, provider session and log. `last_progress` records a
+tool result (including errors) or supported Codex output with its timestamp.
+Claude call and result offsets locate the original events without displaying
+command arguments. `progress_recorded` means a recent event was observed;
+successful delivery is determined separately.
+
+`tool_result_pending` identifies observed tool calls awaiting a result.
+`inspect_pending_tool` identifies an open call whose own member continued
+to send heartbeats spanning at least five minutes. The span starts at the
+first heartbeat observed during that call. It is a reason to inspect the
+referenced command; a legitimate long test can produce the same observation.
+Heartbeat traffic alone supplies neither a tool identity nor effective progress.
+Missing bindings, unsupported logs or stale progress leave the wait unconfirmed.
+
+A returned dispatch or recorded goal outcome takes precedence over earlier
+tool activity. External shell monitors have no Foundry execution binding.
+If a monitor continues polling after a result, use the receipt to establish
+that Foundry has returned and the monitor's own log to identify its wait.
+These observations do not change the existing status, next action or recovery
+commands.
+
 The summary's `execution` identifies the observed intent, attempt and frozen
 manager assignment when recorded. `operator_inputs` shows the queued input and
 its native manager request and receipt once admitted. A live request carries

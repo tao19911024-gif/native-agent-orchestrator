@@ -108,8 +108,19 @@ def native_call_status(folder, backend, *, now=None, threshold=300, max_bytes=10
     return result
 
 
+def agent_heartbeat(row):
+    if row.get('type') == 'tool_progress' and row.get('heartbeat') and row.get('tool_name') == 'Agent':
+        key = row.get('parent_tool_use_id') or row.get('tool_use_id')
+        if isinstance(key, str):
+            return key.split('-heartbeat-')[0]
+    return None
+
+
+MEMBER_IDLE_SECONDS = 300
+
+
 class MemberActivity:
-    def __init__(self, threshold=300):
+    def __init__(self, threshold=MEMBER_IDLE_SECONDS):
         self.threshold = threshold
         self.members = {}
         self.offset = 0
@@ -118,10 +129,9 @@ class MemberActivity:
 
     def observe(self, row, now):
         member = row.get('parent_tool_use_id')
-        if row.get('type') == 'tool_progress' and row.get('heartbeat') and row.get('tool_name') == 'Agent':
-            member = member or (row.get('tool_use_id') or '').split('-heartbeat-')[0]
-            if not member:
-                return None
+        heartbeat = agent_heartbeat(row)
+        if heartbeat:
+            member = heartbeat
             state = self.members.setdefault(member, {'last': now, 'reported': False})
             return self._warning(member, state, now)
         if member and row.get('type') in ('assistant', 'user'):
