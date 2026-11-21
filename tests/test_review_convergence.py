@@ -139,3 +139,18 @@ def test_semantic_trigger_uses_existing_expert_contract_and_is_opt_in(backend):
     assert b'Review non-convergence trigger' not in old
     assert b'not identical wording' in new and b'recurring_reasoning' in new
     assert json.loads(old.rsplit(b'\n\n', 1)[-1])['response_contract'] == json.loads(new.rsplit(b'\n\n', 1)[-1])['response_contract']
+
+
+@pytest.mark.parametrize('advice,first_stage', [('retain', 'assign'), ('expert', 'expert_consultation')])
+def test_current_manager_assesses_repetition_and_honors_explicit_advice(consultation, tmp_path, advice, first_stage):
+    state, calls, _ = consultation
+    state['review_convergence'] = manager.configuration('opus', tmp_path)['review_convergence']
+    review = {'findings': [{'severity': 'P1', 'file': 'ledger.py', 'summary': 'Wrong receipt'}],
+              'correction_guidance': {'model': advice}}
+    history = [{'reviews': [review], 'evidence': reference(tmp_path/f'{n}.json', {'reviews': [review]})}
+               for n in (1, 2)]
+    manager.turn(state, tmp_path, {'stage': 'assign', 'review_history': history, 'prior_review': history[-1]['evidence']})
+    assert calls[0]['packet']['stage'] == first_stage
+    request = next(row for row in calls if row['packet']['stage'] == 'assign')
+    assert request['packet']['review_history'] == history
+    assert b'Reserve both independent review slots' in build_prompt(request, state['backend'], ValueError)

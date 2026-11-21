@@ -42,6 +42,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
     )
     from . import _foundry_dispatch as dispatch
     from ._project_execution import from_record, AdmissionRefused
+    from ._foundry_goal_transitions import reserved_review_models
     project = from_record(project_record) if project_record is not None else None
     adapter = dispatch._project_adapter(project)
     plan_prompt = adapter.execution_plan_prompt
@@ -480,7 +481,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 "operator_answer": continuation["answer"] if continuation else (amendment or {}).get('operator_additions'),
                 **({'question_checkpoint': continuation['checkpoint']} if continuation else {}),
                 "coding_session": coding_session}
-            if (manager_state or {}).get('review_convergence') == 1:
+            if (manager_state or {}).get('review_convergence') in (1, 2):
                 from ._expert_consultation import review_history
                 manager_packet['review_history'] = review_history(previous_review)
             if manager_state is not None and not manager_state.get('last_call_id'):
@@ -524,7 +525,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     from . import _foundry_manager
                     if (compute_assignment or {}).get('profile_version', 0) >= 5 and manifest.get('manager_phase') != 'delegation_ready':
                         from ._compute_selection import execution_evidence, escalation
-                        tier = escalation((coding_compute or {}).get('model'), execution_evidence(coding))
+                        tier = escalation((coding_compute or {}).get('model'), execution_evidence(coding),
+                            reserved_models=reserved_review_models(task_staffing, compute_assignment, reviewers, manager_state))
                         if tier and tier['action'] == 'expert_consultation_required' and manager_state.get('expert'):
                             key = [tier['from_model'], tier['signals']]
                             if key not in manager_state.get('tier_consultations', []):
@@ -627,10 +629,11 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     # a launch uncertain. If the owner must update that status,
                     # the exact completed manager decision remains resumable.
                     authority.require_task(tag, tree, mode='resume')
+                reserved = reserved_review_models(task_staffing, compute_assignment, reviewers, manager_state)
                 if manager_state is not None and (compute_assignment or {}).get('profile_version', 0) >= 5:
                     from ._compute_selection import execution_evidence, escalation, tier_state
                     observed = execution_evidence(coding)
-                    decision = escalation((coding_compute or {}).get('model'), observed)
+                    decision = escalation((coding_compute or {}).get('model'), observed, reserved_models=reserved)
                     execution_decision = tier_state(execution_decision, coding_compute or {}, decision, evidence=observed)
                     manifest['execution_decision'] = execution_decision
                     decision = decision or execution_decision.get('tier_reset')
@@ -650,6 +653,26 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 assignment = (execution_decision or {}).get('manager')
                 if worker_recovery and not manager_repeat:
                     assignment = (retained or {}).get('worker_assignment', assignment)
+                if reserved:
+                    from ._compute_selection import review_model_id
+                    from ._launch_context import capture
+                    selected = (coding_compute or {}).get('model')
+                    if selected and review_model_id(selected) in {review_model_id(m) for m in reserved}:
+                        raise GoalBlocked('Coding assignment matches a frozen reviewer: ' + selected +
+                                          '. Select an independent coding assignment before dispatch.')
+                    if (native_team or {}).get('profile') == 'adaptive':
+                        if launch_context is None:
+                            launch_context = capture(tree, root_role=native_team['lead_role'],
+                                                     backend=coding_backend, coding_model=selected)
+                        hooks = launch_context.get('tool_discipline')
+                        if hooks:
+                            from ._model_catalogue import tier_for_model
+                            names = {review_model_id(m) for m in reserved}
+                            aliases = {tier for m in names if (tier := tier_for_model(m))}
+                            policy['launch_context'] = {**launch_context, 'tool_discipline': {
+                                **hooks, 'reserved_review_models': sorted(names | aliases)}}
+                elif launch_context is not None:
+                    policy['launch_context'] = launch_context
                 resume_policy = {**policy, **({'execution_decision': {'manager': assignment}} if assignment else {})}
                 if manager_state is not None or manifest.get('expert_state'):
                     manifest['manager_phase'] = 'dispatch_pending'
@@ -782,9 +805,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         observed = execution_evidence(coding)
                         models = sorted({f['model'] for f in observed['test_failures'] if f.get('model')})
                         manager_packet['execution_observation'] = observed
+                        reserved = reserved_review_models(task_staffing, compute_assignment, reviewers, manager_state)
                         member_decisions = [decision for m in models
                             if m != (coding_compute or {}).get('model')
-                            if (decision := escalation(m, observed)) is not None]
+                            if (decision := escalation(m, observed, reserved_models=reserved)) is not None]
                         if member_decisions:
                             import hashlib
                             manager_packet['member_tier_decisions'] = [{**decision,

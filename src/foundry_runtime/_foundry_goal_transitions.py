@@ -159,8 +159,9 @@ def restore_opus(owner, folder, manifest, *, live=False):
     return manifest
 
 
-def reviewers(checkpoint, saved, *, role, provider, migrate, completed=()):
+def reviewers(checkpoint, saved, *, role, provider, migrate, completed=(), excluded=()):
     """Freeze only explicitly selected targets; completed slots remain reusable."""
+    from ._compute_selection import independent_reviewers, review_model_id
     base = checkpoint.get('reviewers') or [checkpoint['analyst']]*2
     transfers = {name: list(rows) for name, rows in saved.items()}
     names = ['review-0', 'review-1'] if role is None else [role]
@@ -169,12 +170,23 @@ def reviewers(checkpoint, saved, *, role, provider, migrate, completed=()):
             continue
         current = transfers.get(name, [base[int(name[-1])]])[-1]
         backend = provider or current.get('backend', 'codex')
-        if provider == current.get('backend', 'codex') and not migrate:
+        if (role == name and provider and current.get('model') and review_model_id(current['model']) in
+                {review_model_id(m) for m in excluded}):
+            peer_index = 1 - int(name[-1])
+            peer = transfers.get('review-' + str(peer_index), [base[peer_index]])[-1]
+            # The operator requested one replacement. Reserve the unchanged peer.
+            slot = {k: current[k] for k in ('backend', 'model', 'effort') if k in current}
+            reserved = [peer['model']] if peer.get('model') else []
+            choice, = independent_reviewers([slot, slot], [*excluded, *reserved],
+                                            available_backends={provider}, count=1)
+            chosen = assignment(backend, previous=choice)
+        elif provider == current.get('backend', 'codex') and not migrate:
             # Retrying an already accepted transfer keeps its resolved model.
             if name in transfers:
                 continue
             raise ValueError('reviewer already uses that provider; use ordinary recovery')
-        chosen = assignment(backend, previous=current if backend == current.get('backend', 'codex') else None)
+        else:
+            chosen = assignment(backend, previous=current if backend == current.get('backend', 'codex') else None)
         if migrate:
             chosen['runtime_transition'] = identity({'python': sys.executable, 'implementation': _native_adapter_sha256()})
         if chosen != current:
@@ -182,16 +194,26 @@ def reviewers(checkpoint, saved, *, role, provider, migrate, completed=()):
     return transfers
 
 
+def explicit_review_models(staffing, compute_assignment):
+    source = staffing.get('review_source_detail') or {}
+    return (source.get('model') == 'explicit' if source else
+            ((staffing.get('sources') or {}).get('reviewers') or
+             (compute_assignment or {}).get('selection', {}).get('source')) == 'explicit')
+
+
+def reserved_review_models(staffing, compute_assignment, reviewers, manager_state):
+    if not (manager_state or {}).get('quota_fallback') and explicit_review_models(staffing or {}, compute_assignment):
+        return [r['model'] for r in reviewers or []]
+    return []
+
+
 def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolve, pending=None):
     """Launch and recovery share the recorded model/provider selection policy."""
-    from ._compute_selection import independent_reviewers
+    from ._compute_selection import independent_reviewers, review_model_id
     quota_fallback = bool((manifest.get('manager_state') or {}).get('quota_fallback'))
     staffing = manifest.get('task_staffing') or {}
     source = staffing.get('review_source_detail') or {}
-    explicit = (source.get('model') == 'explicit' if source else
-                ((staffing.get('sources') or {}).get('reviewers') or
-                 (compute_assignment or {}).get('selection', {}).get('source')) == 'explicit') and not quota_fallback
-    if explicit:
+    if explicit_review_models(staffing, compute_assignment) and not quota_fallback:
         return settings  # The shared final admission reports an explicit conflict.
     try:
         independent_reviewers(settings, excluded, explicit=True)
@@ -209,12 +231,8 @@ def select_reviewers(settings, excluded, manifest, compute_assignment, *, resolv
             except (OSError, ValueError, RuntimeError):
                 pass
     pending = list(range(len(settings))) if pending is None else list(pending)
-    from ._model_catalogue import BACKEND
-    def canonical(value):
-        value = value.removesuffix('[1m]')
-        return model(value) if value in BACKEND else value
-    blocked = {canonical(value) for value in excluded}
-    pending = [index for index in pending if canonical(settings[index]['model']) in blocked
+    blocked = {review_model_id(value) for value in excluded}
+    pending = [index for index in pending if review_model_id(settings[index]['model']) in blocked
                or settings[index]['backend'] not in permitted]
     if not pending:
         return settings

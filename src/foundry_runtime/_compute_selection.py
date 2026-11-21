@@ -77,7 +77,7 @@ def execution_evidence(coding):
             'basis': 'observed editing participants; coordinator model is not substituted for missing authorship'}
 
 
-def escalation(current, evidence, *, prior_findings=(), findings=(), provider_limit=False):
+def escalation(current, evidence, *, prior_findings=(), findings=(), provider_limit=False, reserved_models=()):
     """One-tier decision for the existing next-attempt owner, never a retry loop."""
     from ._model_catalogue import tier_for_model
     counts = {}
@@ -107,23 +107,30 @@ def escalation(current, evidence, *, prior_findings=(), findings=(), provider_li
     if not signals or tier not in ladder:
         return None
     target = ladder[min(ladder.index(tier) + 1, len(ladder) - 1)]
-    return {'from_model': current, 'model': model(target), 'effort': 'high', 'signals': signals,
+    selected = model(target)
+    if target != tier and any(review_model_id(m) == selected for m in reserved_models):
+        return {'from_model': current, 'model': current, 'effort': 'high', 'signals': signals,
+                'contradiction_matches': contradictions, 'action': 'expert_consultation_required',
+                'reason': 'The next coding tier is assigned to final review. Retain the worker and consult the expert.'}
+    return {'from_model': current, 'model': selected, 'effort': 'high', 'signals': signals,
             'contradiction_matches': contradictions,
             'action': 'escalate' if target != tier else 'expert_consultation_required',
             'reason': ('Measured provider limit on the selected model.' if provider_limit else
                        'Repeated named assertion, blocking finding, or reviewer-identified evidence contradiction; infrastructure failures are excluded.')}
 
 
+def review_model_id(value):
+    value = value.removesuffix('[1m]')
+    return model(value) if value in BACKEND else value
+
+
 def independent_reviewers(assignments, implementation_models, *, explicit=False, available_backends=None, count=2):
     """Select through existing catalogue only; explicit conflicting slots are refused."""
-    def canonical(value):
-        value = value.removesuffix('[1m]')
-        return model(value) if value in BACKEND else value
-    excluded = {canonical(m) for m in implementation_models}
+    excluded = {review_model_id(m) for m in implementation_models}
     rows = review_assignments(assignments)
     if not excluded:
         return rows[:count]  # Missing observation is not evidence of a prohibited reviewer.
-    if not any(canonical(row['model']) in excluded for row in rows):
+    if not any(review_model_id(row['model']) in excluded for row in rows):
         return rows[:count]
     if explicit:
         raise ValueError('Reviewer model matches an observed coding participant; select another model, preferably another provider.')
@@ -135,7 +142,7 @@ def independent_reviewers(assignments, implementation_models, *, explicit=False,
         if available_backends is not None and BACKEND[tier] not in available_backends:
             continue
         chosen = model(tier)
-        if canonical(chosen) not in excluded and chosen not in {r['model'] for r in result}:
+        if review_model_id(chosen) not in excluded and chosen not in {r['model'] for r in result}:
             result.append({'backend': BACKEND[tier], 'model': chosen, 'effort': 'high'})
         if len(result) == count:
             return result

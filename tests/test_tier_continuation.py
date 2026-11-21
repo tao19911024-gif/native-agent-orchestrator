@@ -277,6 +277,11 @@ def test_goal_review_conflict_retains_checkpoint_and_worker_is_not_replayed(exte
                      compute_assignment={'profile_version': 5, 'selection': {'source': 'explicit'}})
     if known_author == 'recorded_assignment':
         arguments.update(coding_model='gpt-6.1-sol', coding_effort='high')
+        with pytest.raises(goal.GoalBlocked, match='matches a frozen reviewer'):
+            execution.run_owned(order, folder, Path(sys.executable), **arguments)
+        assert workers == []
+        assert not (folder / 'review-checkpoint.json').exists()
+        return
     if known_author:
         with pytest.raises(goal.GoalBlocked, match='matches'):
             execution.run_owned(order, folder, Path(sys.executable), **arguments)
@@ -291,3 +296,30 @@ def test_goal_review_conflict_retains_checkpoint_and_worker_is_not_replayed(exte
         assert result['model_independence'] == 'unverified_missing_participant_evidence'
     assert result['status'] == 'candidate_verified'
     assert len(workers) == 1
+
+
+@pytest.mark.parametrize('coding_tier', ['sol', 'astra'])
+def test_explicit_final_panel_is_reserved_at_the_worker_boundary(external, tmp_path, monkeypatch, coding_tier):
+    import sys
+    from pathlib import Path
+    from foundry_runtime import foundry_goal as goal, _foundry_dispatch as dispatch
+    from foundry_runtime import _foundry_goal_execution as execution
+    from foundry_runtime._model_catalogue import model
+    tree, scope, order, _ = external
+    observed = []
+    def capture(*args, **kwargs):
+        observed.append(kwargs['launch_context']['tool_discipline']['reserved_review_models'])
+        raise RuntimeError('offline dispatch boundary')
+    monkeypatch.setattr(dispatch, 'dispatch_order', capture)
+    panel = [{'backend': provider, 'model': model(tier), 'effort': 'high', 'executable': sys.executable}
+             for provider, tier in [('claude', 'opus'), ('codex', 'astra')]]
+    error = goal.GoalBlocked if coding_tier == 'astra' else RuntimeError
+    message = 'matches a frozen reviewer' if coding_tier == 'astra' else 'offline dispatch boundary'
+    with pytest.raises(error, match=message):
+        execution.run_owned(order, tmp_path/'goal', Path(sys.executable), target_worktree=tree,
+            coding_launcher='exec', coding_model=model(coding_tier), coding_effort='high',
+            project_record=scope.record(), reviewers=panel,
+            task_staffing={'review_source_detail': {'model':'explicit'}},
+            native_team={'profile':'adaptive','lead_role':'executor','instructions':'Work independently.'},
+            launch_context={'tool_discipline': {'version':7}})
+    assert observed == ([] if coding_tier == 'astra' else [sorted(['opus', 'astra', model('opus'), model('astra')])])

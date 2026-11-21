@@ -12,7 +12,7 @@ from foundry_runtime import foundry_goal as goal, _foundry_goal_transitions as t
 @pytest.mark.parametrize('explicit,completed,prior', [
     (False, False, None), (False, False, {}), (False, False, 'partial'),
     (False, False, 'new-transfer'),
-    (False, True, None), (False, True, 'completed-luna'), (True, False, None)])
+    (False, True, None), (False, True, 'completed-luna'), (True, False, None), (True, True, None)])
 def test_frozen_review_defaults_reselect_through_existing_transfer(external, tmp_path, monkeypatch, explicit, completed, prior):
     from foundry_runtime._model_catalogue import model
     tree, scope, order, _ = external
@@ -73,6 +73,12 @@ def test_frozen_review_defaults_reselect_through_existing_transfer(external, tmp
         with pytest.raises(goal.GoalBlocked, match='Reviewer model matches'):
             goal.recover_goal(order, folder)
         assert not calls
+        if completed:
+            assert goal.recover_goal(order, folder, handoff_role='review-1', target_provider='claude')['status'] == 'candidate_verified'
+            assert calls == [model('opus')]
+            changes = json.loads((folder / 'manifest.json').read_bytes())['review_transfers']
+            assert set(changes) == {'review-1'}
+            assert changes['review-1'][-1]['model'] == model('opus')
     else:
         transfer = {'handoff_role': 'review-0', 'target_provider': 'claude'} if prior == 'new-transfer' else {}
         assert goal.recover_goal(order, folder, **transfer)['status'] == 'candidate_verified'

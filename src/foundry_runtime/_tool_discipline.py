@@ -363,7 +363,9 @@ def check(event, policy):
         chosen = str(value.get('model') or '')
         if value.get('resume'):
             return {}  # Existing member retains its recorded model and assignment.
-        if not chosen or chosen.lower() in ('inherit', 'default'):
+        if chosen.removesuffix('[1m]') in policy.get('reserved_review_models', []):
+            reason = 'This model is assigned to final review. Select another model for the coding team.'
+        elif not chosen or chosen.lower() in ('inherit', 'default'):
             reason = 'Select the member model explicitly; routine work must not inherit an expensive parent model.'
         else:
             reason = spawn_reason(chosen, text, policy)

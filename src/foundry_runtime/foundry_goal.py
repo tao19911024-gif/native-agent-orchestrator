@@ -903,28 +903,30 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     current.results.setdefault(name, {**saved, 'session': previous.native_session(requests[name])})
             return current
         analyst = panel(resume)
+        declared_authors = (context.get('review_authorship') or {}).get('models', [])
+        check_authorship = 'implementation_evidence' in checkpoint or bool(declared_authors)
+        if check_authorship and not retained_only:
+            participation = goal_usage.review_participation(checkpoint.get('coding_usage') or {}, participation)
+        excluded = [*participation.get('review_exclusion_models', participation.get('implementation_models', [])),
+                    *declared_authors]
         if transfer_provider or migrate_runtime:
             from ._foundry_goal_transitions import reviewers as transfer_reviewers
             transfers = transfer_reviewers(checkpoint, transfers, role=transfer_role,
-                provider=transfer_provider, migrate=migrate_runtime, completed=analyst.results)
+                provider=transfer_provider, migrate=migrate_runtime, completed=analyst.results, excluded=excluded)
             if transfers != manifest.get('review_transfers', {}):
                 analyst = panel(resume)
         if transfers != manifest.get('review_transfers', {}):
             manifest['review_transfers'] = {name: list(rows) for name, rows in transfers.items()}
             _write(folder/'manifest.json', manifest)
-        declared_authors = (context.get('review_authorship') or {}).get('models', [])
-        if 'implementation_evidence' in checkpoint or declared_authors:
+        if check_authorship:
             from ._compute_selection import independent_reviewers
             selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
             selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
             try:
-                if not retained_only:
-                    participation = goal_usage.review_participation(checkpoint.get('coding_usage') or {}, participation)
-                excluded = participation.get('review_exclusion_models', participation.get('implementation_models', []))
                 default_pending = [name for name in names if name not in analyst.results and not transfers.get(name)]
                 if not retained_only and default_pending:
                     from ._foundry_goal_transitions import select_reviewers
-                    choices = select_reviewers(selected, [*excluded, *declared_authors], manifest,
+                    choices = select_reviewers(selected, excluded, manifest,
                                                checkpoint.get('compute_assignment'), resolve=resolve_executable,
                                                pending=[names.index(name) for name in default_pending])
                     for name, current, chosen in zip(names, selected, choices):
@@ -934,7 +936,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                         analyst = panel(resume)
                         selected = [(transfers.get(name) or [row])[-1] for name, row in zip(names, reviewers)]
                         selected = [{k: v for k, v in row.items() if k in ('backend', 'model', 'effort', 'executable')} for row in selected]
-                independent_reviewers(selected, [*excluded, *declared_authors], explicit=True)
+                independent_reviewers(selected, excluded, explicit=True)
             except ValueError as exc:
                 raise GoalBlocked(str(exc), 'review_blocked') from exc
         if transfers != manifest.get('review_transfers', {}):

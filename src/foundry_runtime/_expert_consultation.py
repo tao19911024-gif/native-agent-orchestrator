@@ -12,9 +12,9 @@ def native_root(state):
     return Path(state.get('expert_native_dir', manager.with_name(manager.name + '-experts')))
 
 
-def review_request(packet):
+def review_request(packet, *, manager_assesses_recurrence=False):
     history = packet.get('review_history') or []
-    if len(history) == 2:
+    if len(history) == 2 and not manager_assesses_recurrence:
         def blocking(row):
             return {(f['file'], f['summary'].strip()) for r in row.get('reviews', [])
                     for f in r.get('findings', []) if f.get('severity') in ('P0', 'P1')}
@@ -101,7 +101,8 @@ def coordinate(turn, state, workspace, packet, *, operator_update=False, pending
     operator_retry = operator_update
     try:
         pending = state.get('expert_pending_request')
-        question = pending['question'] if pending else review_request(packet)
+        question = pending['question'] if pending else review_request(
+            packet, manager_assesses_recurrence=state.get('review_convergence') == 2)
         if question:
             consulting = True
             answer = consult(turn, state, workspace, question, pending['source'] if pending else

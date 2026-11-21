@@ -134,8 +134,8 @@ recorded final round and is not counted as another review. Missing historical
 references retain the existing context-gap behavior; they do not introduce a
 new task admission rule or a review-round limit. Without a manager, an unchanged
 review question reuses the expert answer retained in the execution decision;
-a changed question requests a new consultation. Existing trigger precedence
-remains recurring blocking findings, tier escalation, then reviewer guidance.
+a changed question requests a new consultation. Unmanaged correction checks
+recurring blocking findings, tier escalation and reviewer guidance in that order.
 
 Within a manager-assigned slice, the execution root owns implementation,
 focused checks and the committed candidate handoff. It can work directly and
@@ -280,3 +280,33 @@ recovery and upgrade-history readers reconstruct the same request from that
 policy; historical checkpoints preserve their original rendering.
 Declared review-author models remain in that checkpoint context and participate
 in the same reviewer-independence check after recovery or provider handoff.
+
+After a blocked review, the automatic controller resumes the coding session
+with its recorded correction assignment. Repeated findings can trigger the
+existing tier or expert decision. The number of blocked rounds alone does
+not transfer coding to the manager. Explicitly assigned final reviewers are
+reserved at worker dispatch and native team admission. If an escalation would
+select a reserved model, the current worker keeps the task and the decision
+records the need for expert consultation.
+
+For new managed goals, the manager compares the candidate changes,
+counterexamples and reviewer guidance from the retained review history.
+Resolved or narrowed findings favor continuing with the original implementer.
+A recurring design question goes to the configured expert. When the repair
+is understood and the same error persists, or the evidence identifies a
+specific capability gap, the manager can delegate the bounded repair to an
+eligible team member. The decision accounts for context transfer, checks and
+independent review. A transfer of the frozen coding provider uses the explicit
+handoff route. If its preferred model occupies a frozen review slot, the
+transfer selects the target provider's worker. If that worker also occupies
+a review slot, the transfer stops before opening a new session.
+Measured tier signals and explicit reviewer requests for expert
+advice retain their existing routes. Earlier goals retain their recorded policy.
+
+For a historical review with a confirmed author conflict, use
+`--recover-goal <goal> --handoff-role review-0 --handoff-provider claude`
+with the original project and order. Use `review-1` for the second slot.
+The selected provider may match the slot's original provider. Foundry selects
+an eligible model on that provider, records the slot transfer and reuses
+completed reviews for the checkpoint. The original candidate and checkpoint
+remain the authority for both verdicts.
