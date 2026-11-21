@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0a125 — 2026-11-21
+
+- A missing or incorrect checkpoint field digest reopens the affected review
+  slot once. Goal status exposes `review_completion_required` when the
+  review needs recovery. A completed peer verdict remains available.
+- During live coordination, a queued operator message wakes the manager
+  while the worker is running. Goal status reports the age of each queued
+  message and flags waits longer than the five-second polling interval.
+
 ## 0.1.0a124 — 2026-11-21
 
 - Automatic corrections retain the assigned coding provider across blocked

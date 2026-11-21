@@ -37,6 +37,13 @@ acceptance criteria apply to that scope.
 
 ## Evidence reading policy
 
+If a reviewer omits a required field pointer or returns a different digest,
+Foundry repeats that slot once against the same candidate and checkpoint.
+The peer retains its own verdict. A second invalid acknowledgement sets
+`review_completion_required` in the outcome and goal status. Recover the
+unfinished review with the command supplied by status. A valid blocking
+finding follows the regular correction workflow.
+
 New review checkpoints record `review_read_policy: 1`. The native request uses
 that policy to plan evidence reads before tool execution:
 

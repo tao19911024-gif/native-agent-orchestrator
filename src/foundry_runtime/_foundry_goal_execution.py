@@ -684,7 +684,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     with live_scope(live_decision if (manager_state or {}).get('live_coordination') == 1 else None,
                                     capture=capture_live_events, undelivered=retain_live_decision,
                                     claude=(manager_state or {}).get('claude_live_events') == 1,
-                                    observe_source=progress_snapshot):
+                                    observe_source=progress_snapshot,
+                                    input_root=(manifest.get('intervention') or {}).get('root')):
                         if worker_recovery and not manager_repeat:
                             result = dispatch.resume_order(coding_session, tree, tag, manager_answer,
                                 recovery_file=recovery_file, **resume_policy, **(coding_compute or {}))

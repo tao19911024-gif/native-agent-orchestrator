@@ -110,6 +110,46 @@ def test_quota_retry_retains_old_and_new_manager_inputs(external, conversation):
     assert [r['status'] for r in intervention.observe(root)] == ['responded', 'responded']
 
 
+def test_operator_input_wakes_quiet_worker_once(external, conversation):
+    from datetime import datetime, timedelta, timezone
+    from threading import Event
+    state, requests, failures = conversation
+    failures.clear()
+    root, _ = goal_fixture(external, state)
+    def decide(events):
+        nonlocal state
+        assert events == [{'kind': 'operator_input', 'message_ids': [message_id]}]
+        decision, state, _, _ = manager_turn(state, external[0], {'stage': 'worker_running'},
+                                              intervention_root=root)
+        return decision['instruction']
+    steers = []
+    app = SimpleNamespace(turn_id='owned', outcome_ready=Event(), steer=lambda *args: steers.append(args))
+    with intervention.live_scope(decide, input_root=root):
+        live = intervention.LiveEvents()
+    try:
+        live.drain(app)
+        assert not requests
+        row = intervention.submit(root, 'TASK1', 'Narrow the current review.', external[1])
+        message_id = row['message_id']
+        path = root / 'operator-inputs' / (message_id + '.json')
+        saved = json.loads(path.read_bytes())
+        saved['created_utc'] = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        path.write_text(json.dumps(saved))
+        assert intervention.observe(root)[0]['exceeds_poll_interval'] is True
+        live.next_input_check = 0
+        live.drain(app)
+        live.pending.result(timeout=20)
+        live.drain(app)
+        assert len(steers) == 1 and steers[0][1] == 'owned'
+        assert intervention.observe(root)[0]['status'] == 'responded'
+        with intervention.live_scope(decide, input_root=root):
+            restored = intervention.LiveEvents()
+        restored.drain(app)
+        assert restored.pending is None and len(requests) == 1
+    finally:
+        live.close(app)
+
+
 def test_rejected_native_admission_leaves_message_queued(external, conversation, monkeypatch):
     state, requests, failures = conversation
     root, _ = goal_fixture(external, state)
