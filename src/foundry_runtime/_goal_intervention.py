@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from datetime import datetime, timezone
 from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +20,7 @@ from threading import Lock
 
 _live = ContextVar('foundry_live_manager', default=None)
 live_execution = ContextVar('foundry_live_execution', default=None)
+OPERATOR_INPUT_POLL_SECONDS = 5
 
 
 def tool_observation(item):
@@ -62,8 +64,8 @@ def protocol_markers(text):
 
 
 @contextmanager
-def live_scope(decide, *, capture=None, claude=False, undelivered=None, observe_source=None):
-    token = _live.set((decide, capture, claude, undelivered, observe_source))
+def live_scope(decide, *, capture=None, claude=False, undelivered=None, observe_source=None, input_root=None):
+    token = _live.set((decide, capture, claude, undelivered, observe_source, input_root))
     try:
         yield
     finally:
@@ -77,7 +79,10 @@ class LiveEvents:
     """
     def __init__(self, decide=None, threshold=None, *, log=None):
         from ._context_signals import CompactionResidual
-        inherited, self.capture, self.claude_enabled, self.undelivered, self.observe_source = _live.get() or (None, None, False, None, None)
+        (inherited, self.capture, self.claude_enabled, self.undelivered,
+         self.observe_source, self.input_root) = _live.get() or (None, None, False, None, None, None)
+        self.next_input_check = 0
+        self.observed_input_ids = set()
         self.decide = decide if decide is not None else inherited
         self.package_path = Path(log).with_suffix('.package.json') if isinstance(log, (str, Path)) else None
         self.execution = None
@@ -184,7 +189,25 @@ class LiveEvents:
             if not self.pending.done():
                 return
             self._settle(app)
-        if self.finished or app.outcome_ready.is_set():
+        if app.outcome_ready.is_set():
+            return
+        now = time.monotonic()
+        if self.decide and self.input_root and now >= self.next_input_check:
+            self.next_input_check = now + OPERATOR_INPUT_POLL_SECONDS
+            root = Path(self.input_root)
+            fresh = {path.stem for path in (root / 'operator-inputs').glob('*.json')} - self.observed_input_ids
+            if fresh:
+                try:
+                    pending = sorted(fresh - deliveries(root).keys())
+                except (OSError, ValueError, KeyError) as exc:
+                    app._log('operator input observation unresolved: ' + str(exc))
+                else:
+                    self.observed_input_ids.update(fresh)
+                    if pending:
+                        # The manager incorporates the immutable texts and records delivery.
+                        self.events.put({'kind': 'operator_input', 'message_ids': pending})
+                        self.finished = False
+        if self.finished:
             return
         with self.event_lock:
             rows = []
@@ -382,7 +405,6 @@ def submit(folder, tag, text, adapter):
         from ._foundry_goal_auto import outcome_path
         if outcome_path(root, manifest).exists():
             raise ValueError('goal has an outcome; use its explicit recovery/continuation with new instructions')
-        from datetime import datetime, timezone
         payload = {**row, 'text': text, 'created_utc': datetime.now(timezone.utc).isoformat()}
         path.parent.mkdir(parents=True, exist_ok=True)
         # Publish complete bytes once. Concurrent identical submissions share an ID.
@@ -482,8 +504,16 @@ def observe(root):
     admitted = deliveries(root)
     from ._foundry_goal_auto import outcome_path
     ended = outcome_path(root, _read(Path(root) / 'manifest.json')).exists()
-    return [{key: row[key] for key in ('message_id', 'created_utc', 'text_sha256')} |
-            admitted.get(row['message_id'], {'status': 'undelivered' if ended else 'queued'}) for row in rows]
+    result = []
+    now = datetime.now(timezone.utc)
+    for row in rows:
+        item = {key: row[key] for key in ('message_id', 'created_utc', 'text_sha256')}
+        item.update(admitted.get(row['message_id'], {'status': 'undelivered' if ended else 'queued'}))
+        if item['status'] == 'queued':
+            age = max(0, (now - datetime.fromisoformat(row['created_utc'])).total_seconds())
+            item.update(queued_seconds=int(age), exceeds_poll_interval=age > OPERATOR_INPUT_POLL_SECONDS)
+        result.append(item)
+    return result
 
 
 def incorporate(root, packet):

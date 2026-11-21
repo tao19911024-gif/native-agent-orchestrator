@@ -43,6 +43,10 @@ class InvalidReview(GoalBlocked):
     """The response needs replacement; the candidate itself remains usable."""
 
 
+class InvalidFieldRead(InvalidReview):
+    """A required checkpoint value lacks a matching read acknowledgement."""
+
+
 def _sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -245,7 +249,7 @@ def _validate_review(value, context):
         for field, pointer in _referenced_fields(context).items():
             expected = {'pointer': pointer, 'sha256': _sha(_json_bytes(context[field]))}
             if expected not in reads:
-                raise InvalidReview('review required field unread or digest differs: ' + pointer, 'review_blocked')
+                raise InvalidFieldRead('review required field unread or digest differs: ' + pointer, 'review_blocked')
     if (value["candidate_commit"] != context["candidate_commit"]
             or value["packet_sha256"] != _sha(_json_bytes(context))):
         raise InvalidReview("review candidate/context identity differs", "review_blocked")
@@ -949,9 +953,15 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                 raise GoalBlocked('retained review is incomplete; no model calls were made', 'review_blocked')
             retry_lock = threading.Lock()
             def review_slot(name, request):
+                repeated_field_read = False
                 while True:
                     try:
                         return analyst(request)
+                    except InvalidFieldRead:
+                        if repeated_field_read or retained_only:
+                            raise
+                        repeated_field_read = True
+                        analyst.reopen_slot(name)
                     except NativeError as error:
                         if retained_only:
                             raise
@@ -1012,7 +1022,7 @@ def _finish_review_owned(checkpoint, folder, *, resume=False, transfer_role=None
                     manifest['review_transfers'] = transfers
                     _write(folder / 'manifest.json', manifest)
                     analyst = panel(True, analyst)
-                    outcomes.update(review_group.prewarm(retry, requests, analyst))
+                    outcomes.update(review_group.prewarm(retry, requests, analyst, invoke=review_slot))
             completed_reviews = [outcomes[name][0] for name in names if outcomes[name][1] is None]
             reviews, sessions = [], []
             for name in names:

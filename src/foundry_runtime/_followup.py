@@ -129,6 +129,7 @@ def _summary(report, *, runtime_selection=None):
         command = invocation.get('argv') or command
     phase = report.get('outcome_status') if report.get('status') == 'outcome_available' else report.get('phase')
     return {'status': report['status'], 'phase': phase,
+            **({'review_completion_required': True} if report.get('review_completion_required') else {}),
             'worker_wait': report.get('worker_wait', {'observation': 'unconfirmed'}),
             'waiting_for': waiting, 'pending_operator_inputs': queued,
             'progress': report.get('progress'),
@@ -497,7 +498,8 @@ def _goal_status(folder):
     return {**report, 'status': 'outcome_available', 'outcome_status': outcome['status'],
             'event_id': hashlib.sha256((run_id + '\0').encode() + raw).hexdigest(),
             'outcome_path': str(outcome_path),
-            **{key: outcome[key] for key in ('reason', 'next_action', 'project_action', 'input_request') if key in outcome}}
+            **{key: outcome[key] for key in ('reason', 'next_action', 'project_action', 'input_request',
+                                             'review_completion_required') if key in outcome}}
 
 
 def announce_dispatch(path, receipt):

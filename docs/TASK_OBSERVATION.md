@@ -162,3 +162,14 @@ under each invocation's delivery:
 `project_acceptance.status=not_evaluated` remains visible until the project records
 its acceptance. Artifact delivery retains its artifact references and project
 acceptance status. These views use the existing outcome; they add no new gate.
+
+## Queued manager instructions
+
+During live Codex app-server or Claude worker execution, the controller checks
+the operator inbox every five seconds while the manager is available. A new
+message starts a manager decision even during a quiet worker turn. An active
+manager decision incorporates later input through the same serialized conversation.
+Status reports `queued_seconds` and `exceeds_poll_interval` for queued messages.
+The native request records admission, and the receipt records the response.
+Worker application follows the provider's steering boundary. Claude applies
+the manager's reply after the current worker result.

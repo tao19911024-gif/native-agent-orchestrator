@@ -135,8 +135,9 @@ def test_short_context_and_legacy_requests_keep_inline_rendering(tmp_path, backe
     assert old['packet'] == context and 'context_reference' not in old
 
 
+@pytest.mark.parametrize('field_errors', [0, 1, 2])
 def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
-        external, tmp_path, monkeypatch, capsys):
+        external, tmp_path, monkeypatch, capsys, field_errors):
     from foundry_runtime import foundry_native as native, _code_index
     tree, scope, order, workers = external
     order.write_text('Implement the complete contract.\n' * 400 + 'FINAL_REQUIREMENT', encoding='utf-8')
@@ -162,7 +163,9 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
                                  for field, pointer in request['context_fields'].items()]
         sid = f'00000000-0000-4000-8000-{slot + 1:012d}'
         rows = [{'type': 'thread.started', 'thread_id': sid}, {'type': 'turn.started'}]
-        if slot == 1 and not recovering:
+        if slot == 1 and sum(s == 1 for s, _ in calls) <= field_errors:
+            result['read_fields'][0]['sha256'] = '0' * 64
+        if slot == 1 and not recovering and not field_errors:
             rows.append({'type': 'turn.failed', 'error': {'message': 'fixture interrupted review'}})
         else:
             rows.extend([{'type': 'item.completed', 'item': {'id': 'final',
@@ -185,18 +188,26 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
             return native_session(member, request)
     monkeypatch.setattr(native.NativeAnalyst, 'native_session', session_after_configuration_change)
     folder = tmp_path / 'goal'
-    with pytest.raises(native.NativeError) as interrupted:
-        goal.run_review(order, folder, Path(sys.executable), target_worktree=tree,
+    def run():
+        return goal.run_review(order, folder, Path(sys.executable), target_worktree=tree,
             base_commit=base, candidate_commit=head, project_record=scope.record())
+    if field_errors == 1:
+        assert run()['status'] == 'candidate_verified'
+        assert sorted(s for s, _ in calls) == [0, 1, 1]
+        return
+    before_recovery = [0, 1, 1] if field_errors else [0, 1]
+    with pytest.raises(goal.InvalidFieldRead if field_errors else native.NativeError) as interrupted:
+        run()
     checkpoint = folder / 'review-checkpoint.json'
     before = checkpoint.read_bytes()
     assert json.loads(before)['context_delivery'] == 'reference-v1'
     assert json.loads(before)['review_read_policy'] == 1
     completed = {p: p.read_bytes() for p in (folder / 'reviews/review-0').rglob('*') if p.is_file()}
-    assert sorted(slot for slot, _ in calls) == [0, 1], str(interrupted.value)
+    assert sorted(slot for slot, _ in calls) == before_recovery, str(interrupted.value)
     from foundry_runtime import _followup, cli
     observed = _followup.status(folder)
     assert observed['summary']['phase'] == 'review_blocked'
+    assert observed['review_completion_required'] is observed['summary']['review_completion_required'] is True
     feedback = observed['feedback']
     assert feedback['candidate_commit'] == head and feedback['outcome_status'] == 'review_blocked'
     assert feedback['artifacts']['outcome'] == goal._fact(folder / 'outcome.json')
@@ -218,11 +229,11 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
     result = json.loads((folder / 'outcome.json').read_bytes())
     assert result['status'] == 'candidate_verified'
     assert [slot for slot, _ in calls].count(0) == 1 and calls[-1][0] == 1
-    assert len(calls) == 3 and not workers
+    assert len(calls) == len(before_recovery) + 1 and not workers
     assert all(request['context_reference'] == goal._fact(checkpoint) for _, request in calls)
     assert all(p.read_bytes() == raw for p, raw in completed.items())
     assert checkpoint.read_bytes() == before
-    assert goal.recover_goal(order, folder) == result and len(calls) == 3
+    assert goal.recover_goal(order, folder) == result and len(calls) == len(before_recovery) + 1
     # A settled manager boundary reads the same native review history during an
     # upgrade. The empty manager directory represents no completed manager call.
     from foundry_runtime import _foundry_goal_upgrade as upgrade
@@ -233,4 +244,4 @@ def test_goal_recovery_reuses_completed_review_with_the_same_context_reference(
         {'order': str(order), 'answer': 'Continue from the completed reviews.'})
     history = prepared['manager_packet']['runtime_upgrade']['previous_review_history']
     assert set(history) == {'review-0', 'review-1'}
-    assert len(calls) == 3 and checkpoint.read_bytes() == before
+    assert len(calls) == len(before_recovery) + 1 and checkpoint.read_bytes() == before
