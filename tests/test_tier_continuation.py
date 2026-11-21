@@ -277,6 +277,11 @@ def test_goal_review_conflict_retains_checkpoint_and_worker_is_not_replayed(exte
                      compute_assignment={'profile_version': 5, 'selection': {'source': 'explicit'}})
     if known_author == 'recorded_assignment':
         arguments.update(coding_model='gpt-6.1-sol', coding_effort='high')
+        with pytest.raises(goal.GoalBlocked, match='matches a frozen reviewer'):
+            execution.run_owned(order, folder, Path(sys.executable), **arguments)
+        assert workers == []
+        assert not (folder / 'review-checkpoint.json').exists()
+        return
     if known_author:
         with pytest.raises(goal.GoalBlocked, match='matches'):
             execution.run_owned(order, folder, Path(sys.executable), **arguments)
