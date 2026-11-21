@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from foundry_runtime import _dispatch_package as package, _followup as followup
+from foundry_runtime._provider_activity import observe as observe_capacity
 from test_unfinished_task_usage import save
 
 
@@ -54,6 +55,27 @@ def test_current_worker_visible_during_dispatch_pending_and_status_is_read_only(
     assert summary['evidence']['dispatch'] == str(path)
     assert report['coding_recovery'] is None
     assert {p: p.read_bytes() for p in folder.parent.rglob('*') if p.is_file()} == before
+
+
+def test_goal_and_dispatch_share_bound_member_wait(observed, monkeypatch):
+    from foundry_runtime import _provider_activity
+    folder, _, add = observed
+    path = add()
+    _, record = package.read_intent(json.loads(path.read_bytes()))
+    record.update(session_id='same', frozen={'launcher':'claude'})
+    monkeypatch.setattr(_provider_activity, 'observe', observe_capacity)
+    rows = [{'type':'assistant', 'message':{'content':[{'type':'tool_use','name':'Bash','id':'call'}]}},
+            *[{'type':'tool_progress', 'tool_name':'Agent', 'heartbeat':True, 'elapsed_time_seconds':n}
+              for n in (100, 450)]]
+    path.with_name('dispatch.claude.jsonl').write_text(''.join(
+        json.dumps(dict(r, parent_tool_use_id='member', session_id='same'))+'\n' for r in rows))
+    wait = followup.dispatch_status(path)['worker_wait']
+    assert followup.status(folder)['summary']['worker_wait'] == wait
+    assert wait['observation'] == 'inspect_pending_tool'
+    assert wait['last_progress'] is None and wait['active_tools'][0]['tool_id'] == 'call'
+    record.update(state='completed')
+    terminal = followup.dispatch_status(path)['worker_wait']
+    assert terminal['observation'] == 'dispatch_returned' and not terminal['active_tools']
 
 
 def test_summary_reports_questions_decision_and_overrun_while_worker_continues(observed, monkeypatch):
@@ -251,6 +273,14 @@ def test_stopped_controller_with_unsettled_worker_requires_inspection(observed, 
     assert report['status'] == 'execution_stopped'
     assert report['summary']['next_action'] == 'inspect_retained_execution'
     assert '--recover-goal' not in report['summary']['next_command_argv']
+
+
+def test_review_in_progress_does_not_report_old_outcome_as_returned(observed):
+    folder, _, _ = observed
+    save(folder / 'outcome.json', {'status': 'review_blocked', 'review_completion_required': True})
+    summary = followup.status(folder)['summary']
+    assert (summary['status'], summary['phase']) == ('pending', 'review')
+    assert summary['worker_wait']['observation'] == 'unconfirmed'
 
 
 def test_input_wait_exposes_existing_recorded_answer_invocation(observed):

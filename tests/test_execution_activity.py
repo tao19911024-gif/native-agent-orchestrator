@@ -3,6 +3,43 @@ import json
 from foundry_runtime._provider_activity import execution_activity
 
 
+def test_member_heartbeats_bind_only_to_their_open_tool():
+    from foundry_runtime._provider_activity import ClaudeToolActivity
+    activity = ClaudeToolActivity('session')
+    def feed(kind, offset, **fields):
+        activity.observe({'type': kind, 'session_id': 'session', **fields}, offset)
+    def beat(member, elapsed, offset):
+        feed('tool_progress', offset, parent_tool_use_id=member, tool_name='Agent',
+             heartbeat=True, elapsed_time_seconds=elapsed)
+    beat('worker', 900, 0)
+    assert not activity.pending and activity.last_progress is None
+    feed('assistant', 10, parent_tool_use_id='worker', timestamp='start',
+         message={'content':[{'type':'tool_use','id':'one','name':'Bash','input':{'command':'private'}}]})
+    beat('worker', 5000, 20)
+    beat('peer', 5600, 30)
+    assert not activity.pending['one']['inspect_pending_tool']
+    beat('worker', 5360, 40)
+    assert activity.pending['one']['inspect_pending_tool'] and activity.last_progress is None
+    end = {'content':[{'type':'tool_result','tool_use_id':'one','content':'private'}]}
+    feed('user', 50, session_id='other', message=end)
+    assert 'one' in activity.pending
+    feed('user', 60, timestamp='end', message=end)
+    beat('worker', 6000, 70)
+    assert not activity.pending
+    assert activity.last_progress['result_offset'] == 60
+    assert 'private' not in json.dumps(activity.last_progress)
+
+
+def test_bound_codex_tool_wait_expires_on_return_without_timestamp(tmp_path):
+    log = tmp_path / 'dispatch.log'
+    item = {'type':'commandExecution','id':'cmd'}
+    log.write_text(event('item/started', 1000, item) + event('item/completed', 2000, item, thread='peer'))
+    assert execution_activity(log, 'app-server', session='root')['active_tools'][0]['tool_id'] == 'cmd'
+    with log.open('a') as stream:
+        stream.write(event('item/completed', None, item))
+    assert execution_activity(log, 'app-server', session='root')['active_tools'] == []
+
+
 def event(method, at, item=None, thread='root', **extra):
     return 'stdout: ' + json.dumps({'method': method, 'emittedAtMs': at,
         'params': {'threadId': thread, **({'item': item} if item else {}), **extra}}) + '\n'

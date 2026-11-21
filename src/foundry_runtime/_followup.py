@@ -129,6 +129,7 @@ def _summary(report, *, runtime_selection=None):
         command = invocation.get('argv') or command
     phase = report.get('outcome_status') if report.get('status') == 'outcome_available' else report.get('phase')
     return {'status': report['status'], 'phase': phase,
+            'worker_wait': report.get('worker_wait', {'observation': 'unconfirmed'}),
             'waiting_for': waiting, 'pending_operator_inputs': queued,
             'progress': report.get('progress'),
             'time_budget': report.get('time_budget'),
@@ -299,6 +300,8 @@ def _goal_status(folder):
         report['dispatch_observation'] = _current_dispatch(active_folder, active)
         executions = report['dispatch_observation']['executions']
         worker = executions[0] if len(executions) == 1 else {}
+        if worker.get('worker_wait'):
+            report['worker_wait'] = worker['worker_wait']
         if len(executions) == 1:
             report['activity_observation'] = executions[0].get('activity_observation')
         from ._launch_context import compaction_observation
@@ -479,6 +482,11 @@ def _goal_status(folder):
         if controller['state'] == 'held':
             return {**report, 'coding_recovery': None, 'status': 'pending', 'event_id': None,
                     'controller_observation': controller, 'phase': 'review'}
+    report['worker_wait'] = {'observation': 'goal_outcome_available', 'active_tools': [],
+                             'source': str(outcome_path), 'external_wait': 'unobserved',
+                             'last_progress': {'kind': 'goal_outcome', 'status': outcome['status']}}
+    if report.get('settled_execution'):
+        report['worker_wait'].update(dispatch=str(package_path), execution=report['settled_execution'])
     from ._foundry_goal_delivery import review_feedback
     try:
         report['feedback'] = review_feedback(outcome_path)
@@ -537,13 +545,35 @@ def _dispatch_status(path):
     report['live_event_log'] = str(live_log.resolve()) if launcher in ('claude', 'app-server', 'exec') else None
     report['message_projection'] = str(Path(log).with_suffix('.messages.jsonl'))
     report['activity_observation'] = execution_activity(log, launcher, session=session)
-    from ._provider_activity import observe
-    report['provider_observation'] = observe(log, record.get('frozen', {}).get('launcher'))
+    from ._provider_activity import ClaudeToolActivity, observe, recent_progress
+    tools = ClaudeToolActivity(session) if launcher == 'claude' else None
+    report['provider_observation'] = observe(log, launcher, tools)
     report['runtime_observation'] = package.get('runtime_provenance')
     state = record['state']
     result = ('result_available' if state == 'completed' else
               'execution_stopped' if state in ('not_started', 'closed') or live['owner'] == 'exited' else
               'reconciliation_required' if state == 'unknown' else 'pending')
+    if tools is not None:
+        progress = tools.last_progress
+        pending = list(tools.pending.values()) if result == 'pending' else []
+        if report['provider_observation'].get('error'):
+            progress, pending = None, []
+    else:
+        activity = report['activity_observation']
+        events = [activity.get(k) for k in ('last_output', 'last_tool_completion')] if session else []
+        progress = max((e for e in events if e), key=lambda e: e['timestamp'], default=None)
+        pending = activity.get('active_tools', []) if session and result == 'pending' else []
+    observation = ('dispatch_returned' if result == 'result_available' else
+                   'unconfirmed' if result != 'pending' else
+                   'native_turn_returned' if tools and tools.turn_returned else
+                   'inspect_pending_tool' if any(t.get('inspect_pending_tool') for t in pending) else
+                   'tool_result_pending' if any(t['tool'] != 'Agent' for t in pending) else
+                   'progress_recorded' if recent_progress(progress, time.time()) else
+                   'tool_result_pending' if pending else 'unconfirmed')
+    report['worker_wait'] = {'observation': observation, 'active_tools': pending, 'last_progress': progress,
+                             'source': report['live_event_log'], 'dispatch': str(path),
+                             'execution': report['execution_binding'], 'session_id': session,
+                             'external_wait': 'unobserved'}
     if result != 'pending' and state in ('active', 'unknown'):
         from .recovery import command_plan
         try:

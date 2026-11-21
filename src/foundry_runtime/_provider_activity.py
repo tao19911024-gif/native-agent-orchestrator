@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from ._member_activity import agent_heartbeat, MEMBER_IDLE_SECONDS
 
 
 def execution_activity(log, launcher, *, session=None, limit=1024 * 1024):
@@ -24,7 +25,7 @@ def execution_activity(log, launcher, *, session=None, limit=1024 * 1024):
         result.update(status='observed', source=str(path), observed_bytes=size,
                       tail_truncated=bool(start), read_limit_bytes=limit,
                       observed_utc=datetime.now(timezone.utc).isoformat())
-        compactions = {}
+        compactions, pending = {}, {}
         for line in raw.splitlines(keepends=True):
             if not line.endswith(b'\n'):
                 continue
@@ -47,13 +48,21 @@ def execution_activity(log, launcher, *, session=None, limit=1024 * 1024):
                 item = params.get('item') or {}
                 if not isinstance(item, dict):
                     continue
+                key = item.get('id')
+                if method == 'turn/completed':
+                    pending.clear()
+                elif method == 'item/completed' and isinstance(key, str):
+                    pending.pop(key, None)
                 at = params.get('completedAtMs') or params.get('startedAtMs') or event.get('emittedAtMs')
                 if type(at) not in (int, float):
                     continue
                 stamp = datetime.fromtimestamp(at / 1000, timezone.utc).isoformat()
                 result['last_native_event'] = {'timestamp': stamp, 'method': method,
                                                'item_type': item.get('type')}
-                if method == 'thread/tokenUsage/updated':
+                if (session and method == 'item/started' and isinstance(key, str)
+                        and item.get('type') in ('commandExecution', 'mcpToolCall')):
+                    pending[key] = dict(tool_id=key, tool=item['type'], started_at=stamp)
+                elif method == 'thread/tokenUsage/updated':
                     usage = params.get('tokenUsage') or {}
                     if isinstance(usage, dict):
                         result['last_usage'] = {'timestamp': stamp, 'usage': usage.get('last')}
@@ -75,12 +84,74 @@ def execution_activity(log, launcher, *, session=None, limit=1024 * 1024):
                                                          'duration_ms': item.get('durationMs')}
             except (ValueError, TypeError, AttributeError, OverflowError, OSError):
                 continue
+        result['active_tools'] = list(pending.values())
         return result
     except OSError as exc:
         return {**result, 'status': 'unobserved', 'error': str(exc), 'source': str(path)}
 
 
-def observe(log, launcher):
+class ClaudeToolActivity:
+    """Pair calls in a single attempt's existing stream. Keep identifiers, never tool arguments."""
+
+    def __init__(self, session):
+        self.session = session
+        self.pending = {}
+        self.last_progress = None
+        self.turn_returned = False
+
+    def observe(self, event, offset):
+        if not self.session or event.get('session_id') != self.session:
+            return
+        kind = event.get('type')
+        member = event.get('parent_tool_use_id')
+        if kind == 'result':
+            self.pending.clear()
+            self.turn_returned = True
+            return
+        if kind in ('assistant', 'user') or (kind == 'system' and event.get('subtype') == 'init'):
+            self.turn_returned = False
+        heartbeat = agent_heartbeat(event)
+        if heartbeat:
+            for tool in self.pending.values():
+                if tool['member_id'] == heartbeat:
+                    tool['member_heartbeat_offset'] = offset
+                    elapsed = event.get('elapsed_time_seconds')
+                    if type(elapsed) in (int, float) and elapsed >= 0:
+                        first = tool.setdefault('first_heartbeat_elapsed_seconds', elapsed)
+                        tool['heartbeat_span_seconds'] = max(0, elapsed - first)
+                        tool['inspect_pending_tool'] = tool['heartbeat_span_seconds'] >= MEMBER_IDLE_SECONDS
+            return
+        message = event.get('message')
+        blocks = message.get('content') if isinstance(message, dict) else None
+        if not isinstance(blocks, list):
+            return
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            if kind == 'assistant' and block.get('type') == 'tool_use' and isinstance(block.get('id'), str):
+                key = block['id']
+                self.pending[key] = dict(tool_id=key, tool=block.get('name'), member_id=member,
+                                         started_at=event.get('timestamp'), byte_offset=offset)
+            elif kind == 'user' and block.get('type') == 'tool_result' and isinstance(block.get('tool_use_id'), str):
+                tool = self.pending.pop(block['tool_use_id'], None)
+                if tool:
+                    self.last_progress = dict(tool, timestamp=event.get('timestamp'), result_offset=offset,
+                                              kind='tool_error' if block.get('is_error') else 'tool_returned')
+                    if tool['tool'] == 'Agent':
+                        self.pending = {k: v for k, v in self.pending.items() if v['member_id'] != tool['tool_id']}
+
+
+def recent_progress(event, now):
+    if not event or not isinstance(event.get('timestamp'), str):
+        return False
+    try:
+        stamp = datetime.fromisoformat(event['timestamp'])
+        return stamp.tzinfo is not None and 0 <= now - stamp.timestamp() < MEMBER_IDLE_SECONDS
+    except (OverflowError, ValueError, OSError):
+        return False
+
+
+def observe(log, launcher, tool_activity=None):
     unknown = {'status': 'unobserved'}
     if not log or launcher != 'claude':
         return unknown
@@ -98,7 +169,11 @@ def observe(log, launcher):
                     event = json.loads(line)
                 except (ValueError, UnicodeError):
                     continue
-                if not isinstance(event, dict) or event.get('type') != 'rate_limit_event':
+                if not isinstance(event, dict):
+                    continue
+                if tool_activity is not None:
+                    tool_activity.observe(event, offset)
+                if event.get('type') != 'rate_limit_event':
                     continue
                 info = event.get('rate_limit_info') or {}
                 if not isinstance(info, dict):
