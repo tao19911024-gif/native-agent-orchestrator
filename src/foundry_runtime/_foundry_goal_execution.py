@@ -1,5 +1,6 @@
 """One goal coding lifecycle; Foundry goal owns shared contracts and review."""
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
 from pathlib import Path
 from ._runtime_provenance import observe
 from ._task_deadline import goal_scope
@@ -90,10 +91,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         base, candidate = _review_range(tree, *review_range)
     if project is not None and tree != project.workspace.resolve():
         raise ValueError("goal workspace differs from project descriptor")
-    if backend not in {"codex", "claude"} or coding_launcher not in {"exec", "app-server", "claude"}:
+    if backend not in {"codex", "claude"} or coding_launcher not in {"exec", "app-server", "claude", "agy"}:
         raise ValueError("unknown Foundry backend or coding transport")
 
-    coding_backend = "claude" if coding_launcher == "claude" else "codex"
+    coding_backend = backend_for_launcher(coding_launcher)
     analyst_compute, coding_compute, role_policy = resolve_goal_compute(
         role_compute, coding_backend=coding_backend, backend=backend, analyst_model=analyst_model,
         analyst_effort=analyst_effort, coding_model=coding_model,
@@ -104,7 +105,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     if amendment is not None and predispatch_receipt else None)
     if project is None and review_range is None and amendment is None and continuation is None and retained is None:
         receipt_path, admitted = adapter.ensure_goal_admission(
-            order, tree, evidence_dir, predispatch_receipt, coding_backend)
+            order, tree, evidence_dir, predispatch_receipt,
+            ((task_staffing or {}).get("admission") or {}).get("provider", "claude") if coding_backend == "agy" else coding_backend)
         if not admitted:
             result = {"status": "admission_blocked", "predispatch": _fact(receipt_path)}
             _write(evidence_dir / "outcome.json", result)

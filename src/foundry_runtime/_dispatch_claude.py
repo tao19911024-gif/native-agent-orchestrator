@@ -120,19 +120,6 @@ def verify_terminal(proof, *, session, returncode, attempt_id):
     return result
 
 
-def session_worktree(common_dir, tag, session):
-    """Reuse retained dispatch identities, not a second session registry."""
-    from ._execution_intent import ExecutionIntent
-    trees = set()
-    for directory in (Path(common_dir) / 'pdcl-dispatch' / ('task-' + tag) / 'intents').glob('*'):
-        record, _, _ = ExecutionIntent.read_history(directory, task_key=tag)
-        if record.get('launcher') == 'claude' and record.get('session_id') == session:
-            trees.add(Path(record['frozen']['worktree']).resolve())
-    if len(trees) != 1:
-        raise ValueError('Claude session has no unique recorded task workspace')
-    return trees.pop()
-
-
 def coding_report(path, last_result):
     """Project the latest deliverable-marked message; terminal/usage keep the last result."""
     from ._goal_intervention import protocol_markers

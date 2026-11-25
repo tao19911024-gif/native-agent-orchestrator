@@ -272,6 +272,43 @@ For a goal, it selects admission and coding; independent review has its own
 profile or explicit assignment. Native clients own their
 authentication and account configuration.
 
+Use `--launcher agy` to assign coding to the signed-in Antigravity CLI. A new
+goal uses a single Gemini executor and defaults to `gemini-4-neon-high`.
+Select another ID from `agy models` with `--coding-model`. Admission, manager
+and independent reviewer assignments follow their existing project and goal
+settings. Add `--print-staffing` to inspect the assignments before execution.
+
+Use `--review-model gemini-4-carbon-high opus` to assign Gemini Carbon and
+Claude Opus to the two independent review seats. Gemini model IDs select AGY.
+Each seat starts its own native conversation. When Gemini writes the candidate,
+select a distinct model for review. Different effort levels of the same Gemini
+model share its review identity.
+
+For unattended coding, list the project's approved commands under
+`launch.FOUNDRY_AGY_COMMANDS` in the project descriptor. For example,
+`["python -m pytest -q tests/test_project_launch.py"]` permits that command
+for the execution session. The dispatch package retains the selection across
+continuations. Review sessions use their own read permissions.
+
+When Codex capacity is exhausted and the prior coding attempt has settled,
+transfer the coding seat from the retained goal. The prompt file records the
+reason and the remaining work. The replacement receives the existing worktree
+and evidence, starts its own conversation and resumes that ID on later turns.
+
+```powershell
+& $RuntimePython -I -m foundry_runtime --project-config $ProjectConfig `
+  --order $TaskOrder --foundry-goal --recover-goal $GoalDirectory `
+  --handoff-role coding --handoff-provider agy --prompt-file $ContinuationFile
+```
+
+The active dispatch package records the launcher, requested model, native
+conversation ID and UTC timestamp. The AGY terminal receipt binds the executable,
+native exit code and result stream to the attempt. The stream contains the
+native result and any conversation usage counters returned by the CLI. Command
+execution follows the AGY account's local permission settings. When the CLI
+reports denied actions, Foundry includes them in the worker report, including
+when the native result reports success with an empty response.
+
 For new Claude executions, a foreground Bash call without an explicit timeout
 has a 20-minute budget. Set the tool's `timeout` in milliseconds for commands
 with a known duration. For example, allow 4,500,000 ms for a suite that normally

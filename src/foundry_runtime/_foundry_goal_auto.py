@@ -4,6 +4,7 @@ The goal runner owns one native round; this controller sequences those rounds.
 The owner parameter supplies the runner's persistence and dispatch seams.
 """
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
 
 import json
 import re
@@ -101,7 +102,7 @@ def correction_options(options, correction):
     if options.get("role_compute") is not None:
         policy = options["role_compute"]
         options["role_compute"] = {**policy, "roles": {**policy["roles"],
-            "coding": {"backend": "claude" if options.get("coding_launcher") == "claude" else "codex",
+            "coding": {"backend": backend_for_launcher(options.get("coding_launcher")),
                        "effort": correction.get("effort"), **correction}}}
     else:
         options.update(coding_model=correction["model"], coding_effort=correction.get("effort"))

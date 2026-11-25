@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 from ._app_server_policy import add_policy_arguments, policy_from_arguments
+from ._compute_selection import backend_for_launcher
 from ._task_deadline import normalize as task_deadline
 from ._task_identity import normalized_line
 
@@ -33,7 +34,7 @@ def main(argv=None, *, project_adapter=None) -> int:
     ap.add_argument("--answer-from", help="refused resume admission.json to answer in its original judgement thread")
     ap.add_argument("--answer-file", help="explanation of the resume objection; --prompt-file still holds executor instructions")
     ap.add_argument(
-        "--launcher", choices=("exec", "app-server", "claude"), default=None,
+        "--launcher", choices=("exec", "app-server", "claude", "agy"), default=None,
         help="coding transport; Foundry goal defaults to app-server, direct order/resume to exec. An app-server resume with no "
              "trusted terminal stays unknown; measured cleanup and explicit recovery authorization allow continuation in the original thread",
     )
@@ -164,7 +165,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
     profile_provider = 'claude' if a.compute_profile == 'claude' else 'codex' if a.compute_profile else None
     if model_provider and (a.provider or profile_provider) not in (None, model_provider):
         ap.error('--coding-model must match the selected coding provider')
-    if model_provider and a.launcher and model_provider != ('claude' if a.launcher == 'claude' else 'codex'):
+    if model_provider and a.launcher and model_provider != (backend_for_launcher(a.launcher)):
         ap.error('--coding-model must match the selected coding launcher')
     default_profile = a.project_default_staffing.get('compute_profile')
     default_provider = defaults.get('provider') or (
@@ -174,6 +175,8 @@ def _selected_main(owner, a, ap, project, project_adapter):
     if a.disposable_scratch is None:
         a.disposable_scratch = defaults.get('disposable_scratch', False)
     a.disposable_scratch_root = defaults.get('disposable_scratch_root')
+    if a.launcher == "agy" and a.provider is not None:
+        ap.error("--launcher agy selects the coding executor; omit --provider")
     if a.provider == "codex" and a.launcher == "claude":
         ap.error("--provider codex cannot use --launcher claude")
     if a.launcher == "claude" and a.provider is None:
@@ -245,7 +248,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
                                        **({'app_server_policy': policy} if policy is not None else {}),
                                        task_deadline_at=a.task_deadline,
                                        **owner.compute_kwargs(a.coding_model, a.coding_effort,
-                                                        backend="claude" if a.launcher == "claude" else "codex"))
+                                                        backend=backend_for_launcher(a.launcher)))
             if receipt is not None:
                 receipt.append(result)
     else:
@@ -267,7 +270,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
                                   **({'app_server_policy': policy} if policy is not None else {}),
                                   task_deadline_at=a.task_deadline,
                                        **owner.compute_kwargs(a.coding_model, a.coding_effort,
-                                                        backend="claude" if a.launcher == "claude" else "codex"))
+                                                        backend=backend_for_launcher(a.launcher)))
             if receipt is not None:
                 receipt.append(result)
 
@@ -290,7 +293,10 @@ def _selected_main(owner, a, ap, project, project_adapter):
         else:
             print('\napp-server result rc=%d; terminal evidence unavailable; native exit code unobserved' % rc)
     elif not getattr(result, "replayed", False):
-        print("\ncodex exited rc=%d" % rc)
+        if a.launcher == "agy":
+            print("\nAGY result rc=%d" % rc)
+        else:
+            print("\n%s exited rc=%d" % (backend_for_launcher(a.launcher), rc))
     print("log    : %s" % log)
     if getattr(result, 'outcome', None) == 'provider_capacity_exhausted':
         import subprocess
@@ -300,7 +306,7 @@ def _selected_main(owner, a, ap, project, project_adapter):
     print(("retained output (may be partial): %s" if app_server else "report : %s") % out)
     if not app_server and not getattr(result, 'replayed', False):
         owner.report(log, **({"project": project, "tag": normalized_line(Path(a.order)) if a.order else a.tag,
-                       "launcher": a.launcher} if project is not None else {}))
+                       "launcher": a.launcher} if project is not None else ({"launcher": "agy"} if a.launcher == "agy" else {})))
         owner.explain_nonzero_exit(rc, log, out)
     return 0 if rc == 0 else 1
 

@@ -2,6 +2,7 @@
 from contextvars import ContextVar
 from datetime import datetime, timezone
 import hashlib
+from ._compute_selection import backend_for_launcher
 import json
 import os
 from pathlib import Path
@@ -321,7 +322,7 @@ def _goal_status(folder):
                 report['compaction_observation_error'] = str(exc)
         report['index_observation'] = worker.get('index_observation') or (launch or {}).get('index_observation')
         report['compaction'] = compaction_observation(launch,
-            'claude' if active.get('coding_launcher') == 'claude' else 'codex')
+            backend_for_launcher(active.get('coding_launcher')))
         from ._foundry_goal_delivery import coding_recovery
         report['coding_recovery'] = coding_recovery(active_folder, active)
         report['expert_consultations'] = observe_experts(active.get('manager_state') or active.get('expert_state'))
@@ -543,8 +544,8 @@ def _dispatch_status(path):
     report['worker'] = {'launcher': launcher, 'session_id': session,
                         'model': record['frozen'].get('requested_compute', {}).get('model')}
     report['index_observation'] = (package.get('launch_context') or {}).get('index_observation')
-    live_log = Path(log).with_suffix('.claude.jsonl') if launcher == 'claude' else Path(log)
-    report['live_event_log'] = str(live_log.resolve()) if launcher in ('claude', 'app-server', 'exec') else None
+    live_log = Path(log).with_suffix(f'.{launcher}.jsonl') if launcher in ('agy', 'claude') else Path(log)
+    report['live_event_log'] = str(live_log.resolve()) if launcher in ('agy', 'claude', 'app-server', 'exec') else None
     report['message_projection'] = str(Path(log).with_suffix('.messages.jsonl'))
     report['activity_observation'] = execution_activity(log, launcher, session=session)
     from ._provider_activity import ClaudeToolActivity, observe, recent_progress

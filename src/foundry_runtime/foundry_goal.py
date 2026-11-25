@@ -4,6 +4,8 @@ The task is the order text. Foundry records execution and review evidence, but
 does not choose sources, a plan, or test commands for any agent.
 """
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
+from ._native_session import session_from_log as _session_from_log
 
 import hashlib
 import json
@@ -590,8 +592,8 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             if admission:
                 kwargs["predispatch_receipt"] = Path(admission["path"])
         recorded_launcher = amendment_launcher(prior)
-        if recorded_launcher and ((kwargs.get("coding_launcher", recorded_launcher) == "claude")
-                                  != (recorded_launcher == "claude")):
+        if recorded_launcher and (backend_for_launcher(kwargs.get("coding_launcher", recorded_launcher))
+                                  != backend_for_launcher(recorded_launcher)):
             raise ValueError("amendment must retain the recorded coding provider")
         if recorded_launcher:
             kwargs.setdefault("coding_launcher", recorded_launcher)
@@ -621,7 +623,7 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
         from . import _foundry_dispatch as dispatch
         plan = dispatch._project_adapter(None).goal_execution_plan(
             order, kwargs.get("target_worktree"), kwargs["predispatch_receipt"])
-    coding_backend = "claude" if kwargs.get("coding_launcher") == "claude" else "codex"
+    coding_backend = backend_for_launcher(kwargs.get("coding_launcher"))
     decision = dict(prior.get("execution_decision", {}))
     if team_profile is None and not kwargs.get("amend_from") and "native_team" not in kwargs and plan:
         team_profile = plan["team"]["profile"]
@@ -790,23 +792,6 @@ def run_prepared(order, evidence_dir, prepared):
 
 def run_goal(order: Path, evidence_dir: Path, executable: Path, **kwargs):
     return run_prepared(order, evidence_dir, prepare_goal(order, evidence_dir, executable, **kwargs))
-
-
-def _session_from_log(log):
-    """Reuse retained native identity; token accounting is not needed to resume."""
-    try:
-        terminal = Path(log).with_suffix(".terminal.json")
-        if terminal.exists():
-            proof = json.loads(terminal.read_bytes())
-            if not isinstance(proof, dict):
-                return None
-            session = proof["session_id"] if proof.get("schema_version") == "pdcl-claude-terminal-1" else proof["binding"]["thread_id"]
-        else:
-            from ._native_session import read_retained_session_header
-            session = read_retained_session_header(log)
-        return session if isinstance(session, str) and session.strip() else None
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
 
 
 def _run(order, evidence_dir, executable, **options):
@@ -1167,9 +1152,10 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
         raise ValueError('unknown handoff role')
     if handoff_role and not (target_provider or migrate_runtime):
         raise ValueError('handoff role requires a provider or explicit runtime migration')
-    if target_provider is not None and (target_provider not in {"codex", "claude"} or
+    if target_provider is not None and (target_provider not in {"codex", "claude", "agy"} or
+            (target_provider == "agy" and handoff_role == "manager") or
             (handoff_role in (None, 'coding', 'manager') and answer is None)):
-        raise ValueError("provider handoff needs codex/claude and a coding continuation answer")
+        raise ValueError("select a supported provider for the target role and supply the required continuation answer")
     if team_profile is not None and answer is None:
         raise ValueError("an explicit team choice on recovery requires a coding answer")
     if restore_manager and answer is None:

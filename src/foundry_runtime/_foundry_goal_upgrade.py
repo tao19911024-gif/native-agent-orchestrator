@@ -4,6 +4,7 @@ The parent goal manifest owns publication. Retained inputs are evidence, not a
 second scheduler. Ordinary recovery continues to use its frozen configuration.
 """
 import copy
+from ._compute_selection import backend_for_launcher
 import json
 from pathlib import Path
 import subprocess
@@ -201,7 +202,7 @@ def prepare_invocation(owner, a, ap, root, target, prior, prepared, *, project, 
     options['launch_context'] = capture(
         prepared['worktree'],
         root_role=(options.get('native_team') or {}).get('lead_role', 'executor'),
-        backend='claude' if options.get('coding_launcher') == 'claude' else 'codex')
+        backend=backend_for_launcher(options.get('coding_launcher')))
     retained_launch = prepared.get('launch_context') or {}
     if retained_launch.get('worker_environment'):
         # The new round registers its own directory through run_owned. Retain

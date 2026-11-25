@@ -10,6 +10,7 @@ original sessions across entry and package changes.
 """
 
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
 
 import hashlib
 import json
@@ -173,23 +174,38 @@ def run_app_server(codex: str, stdin_text: str, worktree: Path,
 
 
 def report(log: Path, *, project=None, tag=None, launcher="exec") -> None:
-    try:
-        txt = log.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return
-    m = re.search(r"(?:session id:|^Claude session:)\s*([0-9a-f-]{8,})", txt, re.M)
+    if launcher == "agy":
+        from ._native_session import session_from_log
+        session = session_from_log(log)
+    else:
+        try:
+            txt = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+        match = re.search(r"(?:session id:|^Claude session:)\s*([0-9a-f-]{8,})", txt, re.M)
+        session = match.group(1) if match else None
     print()
-    if m:
-        print("SESSION ID: %s" % m.group(1))
+    if session:
+        print("SESSION ID: %s" % session)
         print("  Resume it, never re-dispatch:")
         if project is not None:
             from ._command_display import command
             from ._project_status import resume_argv
-            print("    " + command(resume_argv(project.path, tag, m.group(1), {"launcher": launcher}, sys.executable)))
+            frozen = {"launcher": launcher}
+            if launcher == "agy":
+                try:
+                    package = json.loads(log.with_suffix(".package.json").read_bytes())
+                    executor = package.get("executor") or {}
+                    if executor.get("session_id") == session and executor.get("requested_model"):
+                        frozen["requested_compute"] = {"model": executor["requested_model"]}
+                except (OSError, ValueError):
+                    pass  # Older dispatch packages can omit the requested model.
+            print("    " + command(resume_argv(project.path, tag, session, frozen, sys.executable)))
         else:
-            print("    " + _project_adapter(None).resume_hint(m.group(1)))
+            hint = _project_adapter(None).resume_hint(session)
+            print("    " + hint + (" --launcher agy" if launcher == "agy" else ""))
     else:
-        print("NO SESSION ID FOUND in %s — the run may not have started." % log)
+        print("NO SESSION ID FOUND in %s \u2014 the run may not have started." % log)
 
 
 _UPSTREAM_ERROR_LINE = re.compile(r"(?m)^ERROR: .*$")
@@ -412,14 +428,14 @@ def _intent_bindings(authority, wt, source, head, *, operation, launcher,
             "task_sha256": sha(source),
             "base_commit": head, "worktree": str(wt.resolve(strict=True)),
             "authorization_sha256": sha(source + b"\0" + authority.sha256.encode()),
-            "session_id": session, "launcher": launcher, "execution_policy": (
-                authority.execution_profile("claude" if launcher == "claude" else "codex")
+            "session_id": session, "launcher": launcher, "execution_policy": ({"mode": "accept-edits"} if launcher == "agy" else
+                authority.execution_profile(backend_for_launcher(launcher))
                 if hasattr(authority, "execution_profile") else claude_policy() if launcher == "claude" else coding_policy()),
             **({"execution_decision": execution_decision} if execution_decision is not None else {}),
             **({"continuation_sha256": continuation_sha256} if continuation_sha256 is not None else {}),
             **({'app_server_policy': app_server_policy} if app_server_policy is not None else {}),
             **({'task_deadline_at': deadline.current()} if deadline.current() is not None else {}),
-            **({"requested_compute": {**compute_kwargs(model, effort, backend="claude" if launcher == "claude" else "codex"), **team_kwargs(native_team)}}
+            **({"requested_compute": {**compute_kwargs(model, effort, backend=backend_for_launcher(launcher)), **team_kwargs(native_team)}}
                if model is not None or effort is not None or native_team is not None else {})}
 
 
@@ -465,7 +481,7 @@ def _finish_intent(intent, log, out, rc):
             os.fsync(stream.fileno())
         result = reference(retained)
     evidence = {"log": reference(log), "result": result, "cleanup": reference(receipt_path)}
-    if intent.record.get('launcher') in {'app-server', 'claude'}:
+    if intent.record.get('launcher') in {'app-server', 'claude', 'agy'}:
         evidence['terminal'] = reference(log.with_suffix('.terminal.json'))
     intent.finish(cleanup, returncode=rc, evidence=evidence)
     # WorkOrder v2, Phase 3. One call, and the module holds every rule: it declares only
@@ -509,8 +525,8 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
                    app_server_policy=None, predispatch_receipt=None, native_team=None, execution_decision=None,
                    continuation_prompt=None, project=None, launch_context=None, goal_run_id=None):
     """Serialize canonical LINE, gate frozen authority, then own one native root."""
-    selection = {**compute_kwargs(model, effort, backend="claude" if launcher == "claude" else "codex"), **team_kwargs(native_team)}
-    if launcher not in {"exec", "app-server", "claude"}:
+    selection = {**compute_kwargs(model, effort, backend=backend_for_launcher(launcher)), **team_kwargs(native_team)}
+    if launcher not in {"exec", "app-server", "claude", "agy"}:
         raise ValueError("invalid dispatch launcher")
     if app_server_policy is not None and launcher != 'app-server':
         raise ValueError('app-server policy applies only to app-server order dispatch')
@@ -588,9 +604,9 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
             launch_context = intent.frozen.get('launch_context')
             if launch_context is None:
                 launch_context = capture(wt, root_role=(selection.get('native_team') or {}).get('lead_role', 'executor'),
-                                         backend='claude' if launcher == 'claude' else 'codex', coding_model=selection.get('model'))
+                                         backend=backend_for_launcher(launcher), coding_model=selection.get('model'))
             bind_coding_model(launch_context, selection.get('model'))
-            if launcher != "claude":
+            if launcher in {"exec", "app-server"}:
                 codex = _codex()
             if launcher == "exec":
                 argv = coding_argv(codex, "exec", "-C", str(wt), "-o", str(out), "-", **selection, execution_policy=intent.frozen["execution_policy"], launch_context=launch_context)
@@ -601,7 +617,12 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
             print("    order  : %d bytes -- %s"
                   % (len(body.encode("utf-8")), log.with_suffix(".package.json").name))
             handed_off = True
-            if launcher == "claude":
+            if launcher == "agy":
+                from . import _dispatch_agy
+                rc = _dispatch_agy.run(sys.modules[__name__], body, wt, log, out, tag, lease=lease,
+                    on_started=lambda sid: package_launch.active(lease, sid), model=model,
+                    launch_context=launch_context)
+            elif launcher == "claude":
                 from . import _dispatch_claude
                 rc = _dispatch_claude.run(sys.modules[__name__], body, wt, log, out, tag, lease=lease,
                     on_started=lambda session: package_launch.active(lease, session), **selection,

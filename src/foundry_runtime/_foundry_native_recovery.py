@@ -202,7 +202,10 @@ def inspect_call(cls, evidence_dir, request, workspace, settings):
     allocation = _json((call / 'reservation.json').read_bytes())
     # The immutable stdin hash is checked below. Compare its task envelope,
     # not today's prompt wording, when reading a pre-upgrade invocation.
-    captured_request = _json((call / 'stdin.txt').read_bytes().rsplit(b'\n\n', 1)[-1])
+    raw = (call / 'stdin.txt').read_bytes()
+    if reader.backend == 'agy':
+        raw = _json(raw)['message']['content'].encode('utf-8')
+    captured_request = _json(raw.rsplit(b'\n\n', 1)[-1])
     expected_request = {k: v for k, v in request.items() if k != 'call_id'}
     expected_request['response_contract'] = _allocation_contract(allocation)
     if (allocation.get('kind') != request['kind'] or allocation.get('call_id') != request['call_id']
@@ -252,7 +255,7 @@ def inspect_call(cls, evidence_dir, request, workspace, settings):
     reader._call_lock, reader._cancelled = threading.RLock(), threading.Event()
     reader._cancel_reason = reader._cancel_persistence_error = None
     return {'value': value, 'session': session, 'schema_error': shape_error,
-            'persistent': reader.backend == 'claude' or allocation.get('persistent_session') is True,
+            'persistent': reader.backend in ('claude', 'agy') or allocation.get('persistent_session') is True,
             'snapshot': reader.evidence_snapshot(),
             'receipt': {'path': str(call / 'receipt.json'),
                         'sha256': hashlib.sha256((call / 'receipt.json').read_bytes()).hexdigest()}}

@@ -107,3 +107,32 @@ def read_session_header(log: str | Path, worktree: str | Path, session_root=None
     if bound.resolve() != Path(worktree).resolve():
         raise ValueError("dispatch session worktree differs")
     return session
+
+
+def session_worktree(common_dir, tag, session, *, launcher="claude"):
+    """Reuse retained dispatch identities, not a second session registry."""
+    from ._execution_intent import ExecutionIntent
+    trees = set()
+    for directory in (Path(common_dir) / 'pdcl-dispatch' / ('task-' + tag) / 'intents').glob('*'):
+        record, _, _ = ExecutionIntent.read_history(directory, task_key=tag)
+        if record.get('launcher') == launcher and record.get('session_id') == session:
+            trees.add(Path(record['frozen']['worktree']).resolve())
+    if len(trees) != 1:
+        raise ValueError(f'{launcher} session has no unique recorded task workspace')
+    return trees.pop()
+
+
+def session_from_log(log):
+    """Reuse retained native identity; token accounting is not needed to resume."""
+    try:
+        terminal = Path(log).with_suffix(".terminal.json")
+        if terminal.exists():
+            proof = json.loads(terminal.read_bytes())
+            if not isinstance(proof, dict):
+                return None
+            session = proof["session_id"] if proof.get("schema_version") in ("pdcl-claude-terminal-1", "foundry-agy-terminal-1") else proof["binding"]["thread_id"]
+        else:
+            session = read_retained_session_header(log)
+        return session if isinstance(session, str) and session.strip() else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None

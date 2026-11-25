@@ -19,7 +19,7 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         if "response_contract" in request and request["response_contract"] != contract:
             raise native_error("request changed the authoritative response contract")
         kind = request.get("kind")
-        if backend not in {"codex", "claude"}:
+        if backend not in {"codex", "claude"} and not (backend == "agy" and kind == "review"):
             raise native_error("unknown analyst backend")
         roles = {
             "coordinate": (
@@ -309,7 +309,7 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         envelope["response_contract"] = contract
         serialized = json.dumps(envelope, ensure_ascii=False, allow_nan=False,
                                 sort_keys=True, separators=(",", ":"))
-        return (
+        text = (
             "You are a repository-aware Foundry agent. The target repository is your current working "
             "directory. Choose what to read and how to investigate. "
             "Use existing result summaries and referenced evidence when their source, candidate and "
@@ -319,6 +319,16 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
             "the changes and remaining questions instead of repeating the full task history. " + WAIT_GUIDANCE + " " + instruction +
             " Return exactly one final JSON object matching response_contract, with no extra fields.\n\n" +
             serialized
-        ).encode("utf-8")
+        )
+        if backend == "agy":
+            from ._dispatch_agy import user_frame
+            from ._agy_review import diff_command
+            command = diff_command(request)
+            if command:
+                text = ("For shell access, execute the following exact command on its own. "
+                        "Headless approval matches the complete command line. Use native file tools for "
+                        "other reads and return the requested structured verdict.\n" + command + "\n" + text)
+            return user_frame(text)
+        return text.encode("utf-8")
     except (CollaborationError, ValueError, UnicodeError, TypeError) as exc:
         raise native_error(f"invalid native request: {exc}") from exc

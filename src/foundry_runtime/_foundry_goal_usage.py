@@ -70,7 +70,7 @@ def _observations(parent):
             gaps.extend(missing)
         return rows, gaps
     rows = [("coding", parent)]
-    if parent.get("backend") == "claude":
+    if parent.get("backend") in ("claude", "agy"):
         return rows, []
     children = parent.get("child_agents")
     gaps = []
@@ -154,7 +154,9 @@ def _coding_observations(observations, child_gaps):
     """Normalize one or several receipt views through the same native identities."""
     try:
         claude = [row for _, row in observations if row.get("coverage") == "claude_session_snapshot"]
-        observations = [(phase, row) for phase, row in observations if row.get("coverage") != "claude_session_snapshot"]
+        agy = [row for _, row in observations if row.get("coverage") == "agy_session_snapshot"]
+        observations = [(phase, row) for phase, row in observations
+                        if row.get("coverage") not in ("claude_session_snapshot", "agy_session_snapshot")]
         observed, missing, duplicates, conflicts = {}, list(child_gaps), [], set()
         for phase, observation in observations:
             try:
@@ -217,6 +219,8 @@ def _coding_observations(observations, child_gaps):
             claude_view = aggregate_sessions(claude)
             calls.extend({"call_id": row["session_id"] + "/" + row["attempt_id"], "phase": "coding",
                 "backend": "claude", "usage": None, "observation": row} for row in claude)
+        calls.extend({"call_id": row["session_id"] + "/" + row["attempt_id"], "phase": "coding",
+                      "backend": "agy", "usage": None, "observation": row} for row in agy)
         complete = bool(calls) and not missing and all(
             r["observation"]["coverage"] == "observed_native_turn" for r in calls)
         return {"coverage": "native-receipts" if complete else "partial" if calls else "uncovered",
@@ -234,8 +238,8 @@ def _model_usage(coding):
     from ._model_catalogue import tier_for_model
     groups = {}
     for call in coding.get("observations", []):
-        if call.get("backend") == "claude":
-            continue  # Cumulative Claude sessions are separately reported, never treated as Codex turns.
+        if call.get("backend") in ("agy", "claude"):
+            continue  # Session snapshots cannot be attributed to individual Codex turns.
         declarations = call["observation"].get("model_observation", {}).get("declarations", [])
         pair = declarations[0] if len(declarations) == 1 else {}
         position = "leader" if call["phase"] == "coding" else "member"
@@ -648,7 +652,7 @@ def task_report(paths, *, since=None):
             if terminal_ref:
                 terminal = read(terminal_ref)
                 binding = ({"attempt_id": terminal.get("attempt_id"), "thread_id": terminal.get("session_id"), "turn_id": None}
-                           if terminal.get("schema_version") == "pdcl-claude-terminal-1" else terminal.get("binding", {}))
+                           if terminal.get("schema_version") in ("pdcl-claude-terminal-1", "foundry-agy-terminal-1") else terminal.get("binding", {}))
                 if (binding.get("attempt_id"), binding.get("thread_id"), binding.get("turn_id")) != (
                         observation.get("attempt_id"), observation.get("session_id"), observation.get("turn_id")):
                     raise ValueError("terminal identity differs from coding observation")

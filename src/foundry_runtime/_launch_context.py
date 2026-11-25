@@ -51,7 +51,7 @@ def validate_project_launch(values):
     for key, value in values.items():
         if key in integers:
             valid = type(value) is int
-        elif key == "FOUNDRY_CODEGRAPH_ARGV":
+        elif key in ("FOUNDRY_AGY_COMMANDS", "FOUNDRY_CODEGRAPH_ARGV"):
             valid = isinstance(value, list) and all(isinstance(v, str) for v in value)
         elif key == "FOUNDRY_CODEGRAPH_STATE_DIR":
             valid = isinstance(value, str)
@@ -87,6 +87,10 @@ def claude_settings(launch=None):
 
 def capture(workspace=None, *, enable_index=True, root_role='executor', backend='codex', coding_model=None):
     """One launch decision, retained by native calls for side-effect-free replay."""
+    if backend == "agy":
+        commands = json.loads(os.environ.get("FOUNDRY_AGY_COMMANDS", "[]"))
+        validate_project_launch({"FOUNDRY_AGY_COMMANDS": commands})
+        return {"settings": {"allowed_commands": commands}, "server": None, "index_policy": "native"}
     from ._code_index import prepare
     observation = {'status': 'disabled', 'fallback': 'scoped-direct-reads', 'reason': 'review-direct-reads'}
     server = prepare(workspace, observation=observation) if enable_index else None

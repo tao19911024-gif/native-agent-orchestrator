@@ -331,6 +331,9 @@ class _StreamProtocol:
 
 
 def _protocol(schema, backend):
+    if backend == "agy":
+        from ._agy_review import ReviewProtocol
+        return ReviewProtocol(schema)
     if backend == "codex":
         from .foundry_codex import CodexStreamProtocol
         return CodexStreamProtocol(schema)
@@ -420,7 +423,7 @@ class NativeAnalyst:
                   shadow_identity=None, role_compute=None, workspace=None, execution_profiles=None, launch_context=None,
                   worker_environment=None,
                   recorded_coding_model=None):
-        if backend not in ("codex", "claude"):
+        if backend not in ("codex", "claude", "agy"):
             raise NativeError("unknown analyst backend")
         self.backend = backend
         self.launch_context = json.loads(json.dumps(launch_context)) if launch_context is not None else None
@@ -1008,6 +1011,8 @@ class NativeAnalyst:
             raise NativeError("native backend configuration identity changed")
 
     def _metadata(self):
+        if self.backend == "agy":
+            return {"protocol_profile": "agy-structured-review-v1", "requested_compute": self._compute or None}
         if self.backend == "codex":
             from .foundry_codex import codex_metadata
             return {**codex_metadata(), "requested_compute": self._compute or None}
@@ -1019,6 +1024,10 @@ class NativeAnalyst:
                 "effective_effort": None, "requested_compute": self._compute or None}
 
     def _backend_identity(self):
+        if self.backend == "agy":
+            from . import _agy_review
+            return {"metadata": self._metadata(), "adapter_sha256": hashlib.sha256(
+                Path(_agy_review.__file__).read_bytes()).hexdigest()}
         if self.backend == "codex":
             from .foundry_codex import backend_identity
             identity = backend_identity(self.executable, scope_root=self.workspace or self.evidence_dir)

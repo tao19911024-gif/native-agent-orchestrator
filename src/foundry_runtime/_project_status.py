@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from ._execution_intent import ExecutionIntent
+from ._compute_selection import backend_for_launcher
 from ._executor_lifecycle import process_identity_exited
 from ._foundry_project import identity, load
 from ._task_identity import normalized_line
@@ -105,7 +106,7 @@ def status(config=None, tag=None, *, workspace=None, evidence_root=None):
                           'retry_original_command' if state == 'not_started' else 'inspect_evidence')
                 from ._launch_context import compaction_observation
                 row = {'compaction': compaction_observation(package.get('launch_context'),
-                           'claude' if frozen.get('launcher') == 'claude' else 'codex'), 'tag': task, 'intent_id': path.name, 'recorded_state': state,
+                           backend_for_launcher(frozen.get('launcher'))), 'tag': task, 'intent_id': path.name, 'recorded_state': state,
                        'updated_utc': last['created_utc'], 'operation': frozen['operation'],
                        'launcher': frozen.get('launcher'), 'session_id': session,
                        'journal': str(path), 'evidence_root': project['evidence_root'],
