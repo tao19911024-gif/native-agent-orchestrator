@@ -72,7 +72,7 @@ def add_arguments(ap) -> None:
     ap.add_argument("--review-profile", choices=tuple(REVIEW_PROFILES),
                     help="two separately configured independent reviewers for goal or review")
     ap.add_argument('--review-model', nargs=2, metavar=('MODEL_1', 'MODEL_2'),
-                    help='explicit independent review pair; accepts catalogue tiers or model IDs, with high effort')
+                    help='two independent reviewers at high effort; choose catalogue tiers or model IDs distinct from the coding model')
     ap.add_argument("--auto-amend-model", help="opt in to automatic BLOCK corrections using this coding model")
     ap.add_argument("--auto-amend-effort", help="reasoning effort for --auto-amend-model")
     ap.add_argument("--coding-model")
@@ -422,6 +422,18 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                 selected.update(coding={"backend": coding_backend, **compute_kwargs(a.coding_model, a.coding_effort, backend=coding_backend)},
                                 correction=({"backend": coding_backend, **compute_kwargs(auto_model, auto_effort, backend=coding_backend)}
                                            if auto_model or auto_effort else None))
+        agy_guidance = None
+        if a.foundry_goal and not amend_from:
+            if a.review_profile and (a.coding_model or a.compute_profile):
+                from ._compute_selection import coding_review_conflict
+                reviewers = review_assignments(a.review_profile)
+                conflict = coding_review_conflict(selected["coding"]["model"], [r["model"] for r in reviewers])
+                if conflict:
+                    raise ValueError(conflict)
+            if coding_backend == "agy":
+                from ._dispatch_agy import command_guidance
+                from ._launch_context import capture
+                agy_guidance = command_guidance(capture(backend="agy")["settings"])
         if review_profile:
             selected.pop("review", None)
         printed_team = resolve_native_team(team_profile, backend=coding_backend,
@@ -435,6 +447,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                    'requested_manager_profile': getattr(a, 'manager_profile', None)}
                   if a.foundry_goal and not amend_from and coding_backend == 'codex' else {}),
                **({"reviewers": review_assignments(review_profile)} if review_profile else {}),
+               **({"agy_command_guidance": agy_guidance} if agy_guidance else {}),
                "team_profile": team_profile, "manager_profile": manager_profile,
                "manager": {"model": model(manager_profile),
                            "effort": "high"} if manager_profile else (

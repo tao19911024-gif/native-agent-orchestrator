@@ -126,6 +126,13 @@ def review_model_id(value):
     return model(value) if value in BACKEND else value
 
 
+def coding_review_conflict(selected, reserved):
+    if selected and review_model_id(selected) in {review_model_id(m) for m in reserved}:
+        pair = "sol astra" if review_model_id(selected) in {model("opus"), model("sonnet")} else "opus sonnet"
+        return (f"Coding assignment matches a frozen reviewer: {selected}. "
+                f"Select an independent review pair, for example --review-model {pair}.")
+
+
 def independent_reviewers(assignments, implementation_models, *, explicit=False, available_backends=None, count=2):
     """Select through existing catalogue only; explicit conflicting slots are refused."""
     excluded = {review_model_id(m) for m in implementation_models}

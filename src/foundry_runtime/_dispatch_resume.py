@@ -353,11 +353,16 @@ def _resume_attempt(
         # Explicit boundary upgrades freeze their new launch policy in this
         # intent. Ordinary resumes keep using the session's retained package.
         launch_context = intent.frozen.get('launch_context')
-        if launch_context is None:
-            launch_context = retained_launch(ev, authority.common_dir, tag, session)
+        if launcher == "agy" or launch_context is None:
+            recorded = retained_launch(ev, authority.common_dir, tag, session)
+            if launcher == "agy" and recorded is not None:
+                # The conversation retains its original permissions across runtime upgrades.
+                launch_context = {**(launch_context or recorded), "settings": recorded.get("settings", {})}
+            elif launch_context is None:
+                launch_context = recorded
         if launch_context is None:
             launch_context = capture(wt, root_role=(native_team or {}).get('lead_role', 'executor'),
-                                     backend=backend_for_launcher(launcher))
+                                     backend=backend_for_launcher(launcher), resume_session=session)
             launch_context.pop('tool_discipline', None)
             launch_context['policy_observation'] = 'legacy launch policy unavailable; no new hook enforcement added on resume'
         bind_coding_model(launch_context, model)
