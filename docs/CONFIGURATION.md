@@ -283,12 +283,19 @@ Claude Opus to the two independent review seats. Gemini model IDs select AGY.
 Each seat starts its own native conversation. When Gemini writes the candidate,
 select a distinct model for review. Different effort levels of the same Gemini
 model share its review identity.
+New goals check an explicitly selected coding model against the requested review
+pair before starting the manager. With Gemini Neon coding, `--review-model opus sonnet`
+is another independent pair.
 
 For unattended coding, list the project's approved commands under
 `launch.FOUNDRY_AGY_COMMANDS` in the project descriptor. For example,
 `["python -m pytest -q tests/test_project_launch.py"]` permits that command
-for the execution session. The dispatch package retains the selection across
-continuations. Review sessions use their own read permissions.
+for the execution session. Each entry matches a complete shell command. Run
+listed commands individually and use native file tools for reads and edits.
+`--print-staffing` shows the effective command list or the field to configure
+when the list is empty. The manager and worker receive the same guidance.
+The dispatch package retains the selection across continuations. Review
+sessions use their own read permissions.
 
 When Codex capacity is exhausted and the prior coding attempt has settled,
 transfer the coding seat from the retained goal. The prompt file records the

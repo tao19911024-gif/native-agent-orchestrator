@@ -31,6 +31,8 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
         return [sys.executable, "-I", "-c", script, *args[1:]]
     monkeypatch.setattr(agy, "argv", fixture_argv)
     selection = {"project": scope, "launcher": "agy", "model": "gemini-4-neon-high"}
+    commands = ["git status -sb", "pnpm test"] if expected == 0 else []
+    monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", json.dumps(commands))
     first = dispatch.dispatch_order(order, **selection)
     assert first[0] == expected
     dispatch.report(first[1], project=scope, tag="TASK1", launcher="agy")
@@ -40,6 +42,9 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
                for line in printed.splitlines())
     package = json.loads(first[1].with_suffix(".package.json").read_bytes())
     receipt = json.loads(first[1].with_suffix(".receipt.json").read_bytes())
+    message = first[1].with_suffix(".result.md").read_text(encoding="utf-8")
+    assert agy.command_guidance(commands) in message
+    assert package["launch_context"]["settings"]["allowed_commands"] == commands
     assert receipt["execution"]["returncode_source"] == "agy_result"
     assert receipt["coding_usage"]["backend"] == "agy"
     assert receipt["coding_usage"]["reported_model"] == "gemini-4-neon-high"
@@ -52,16 +57,23 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
     assert dispatch.dispatch_order(order, **selection).replayed
     if expected == 0:
         answer = "Apply the requested correction."
+        monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", '["different command"]')
         resumed = dispatch.resume_order("fixture-session", tree, "TASK1", answer, **selection)
         assert resumed[0] == 0
+        assert agy.command_guidance(commands) in resumed[1].with_suffix(".result.md").read_text(encoding="utf-8")
         assert "--conversation" in launches[-1] and "fixture-session" in launches[-1]
         assert dispatch.resume_order("fixture-session", tree, "TASK1", answer, **selection).replayed
     assert len(launches) == (2 if expected == 0 else 1)
     assert not codex_launches
 
 
-def test_goal_staffing(external, capsys):
+@pytest.mark.parametrize("commands", [[], ["git status -sb", "pnpm test"]])
+def test_goal_staffing(external, capsys, monkeypatch, commands):
     _, scope, order, _ = external
+    monkeypatch.delenv("FOUNDRY_AGY_COMMANDS", raising=False)
+    descriptor = json.loads(scope.path.read_bytes())
+    descriptor["launch"] = {"FOUNDRY_AGY_COMMANDS": commands}
+    scope.path.write_text(json.dumps(descriptor), encoding="utf-8")
     assert cli.main(["--project-config", str(scope.path), "--order", str(order), "--foundry-goal",
                      "--launcher", "agy", "--print-staffing"]) == 0
     line = next(line for line in capsys.readouterr().err.splitlines() if line.startswith("FOUNDRY COMPUTE: "))
@@ -69,7 +81,19 @@ def test_goal_staffing(external, capsys):
     assert row["roles"]["coding"]["backend"] == "agy"
     assert row["roles"]["coding"]["model"] == "gemini-4-neon-high"
     assert row["team"]["profile"] == "none"
+    assert row["agy_command_guidance"] == agy.command_guidance(commands)
     assert row["manager_profile"] == "opus" and row["reviewers"]
+
+
+@pytest.mark.parametrize("preview", [True, False])
+def test_conflicting_explicit_assignment_stops_before_admission(external, monkeypatch, capsys, preview):
+    from foundry_runtime import foundry_entry
+    _, scope, order, _ = external
+    monkeypatch.setattr(foundry_entry, "_analyst_executable", lambda *_: pytest.fail("admission started"))
+    args = ["--project-config", str(scope.path), "--order", str(order), "--foundry-goal", "--launcher", "agy",
+            "--coding-model", "gemini-4-neon-high", "--review-model", "opus", "gemini-4-neon-low"]
+    assert cli.main(args + (["--print-staffing"] if preview else [])) != 0
+    assert "--review-model opus sonnet" in capsys.readouterr().err
 
 
 def test_registered_goal_prepares_agy_correction(external, monkeypatch):

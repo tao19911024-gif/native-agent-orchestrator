@@ -76,6 +76,8 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     decisions.extend([{'action': 'delegate', 'instruction': 'Use the replacement coding provider'},
                       {'action': 'delegate', 'instruction': 'Continue that same replacement session'}, wait('Ready')])
     target = 'agy' if interruption == 'replace_with_agy' else 'claude' if source == 'codex' else 'codex'
+    if target == 'agy':
+        monkeypatch.setenv('FOUNDRY_AGY_COMMANDS', '["pnpm test"]')
     options = dict(answer=f'Model unavailable; continue with {target} and retain completed work.',
                    target_provider=target, handoff_role='coding')
     if interruption == 'before_checkpoint':
@@ -120,6 +122,8 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     assert requests[1]['packet']['returncode'] == 1
     assert requests[1]['packet']['worker_evidence'] == old['manager_packet']['worker_evidence']
     assert requests[1]['packet']['operator_answer'] == options['answer']
+    if target == 'agy':
+        assert 'pnpm test' in requests[1]['packet']['agy_command_guidance']
     assert len(requests) == 4
     assert all(p.read_bytes() == raw for p, raw in before.items())
     assert all(p.read_bytes() == raw for p, raw in native_before.items())

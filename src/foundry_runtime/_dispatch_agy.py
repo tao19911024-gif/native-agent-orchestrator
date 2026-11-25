@@ -19,6 +19,16 @@ def user_frame(body):
                        ensure_ascii=False) + "\n").encode("utf-8")
 
 
+def command_guidance(commands):
+    if commands:
+        return ("Project-approved shell commands (launch.FOUNDRY_AGY_COMMANDS). Run each exact line "
+                "as a separate command. Use native file tools for other reads and edits.\n" +
+                "\n".join(commands))
+    return ("Foundry has no project-approved shell commands for this worker. Use native file tools "
+            "for reads and edits. For unattended shell checks, configure launch.FOUNDRY_AGY_COMMANDS "
+            "in the project descriptor before starting a new assignment.")
+
+
 def argv(model, session):
     args = [str(resolve_executable("agy")), "--input-format", "stream-json",
             "--output-format", "stream-json", "--mode", "accept-edits"]
@@ -95,7 +105,7 @@ def run(owner, body, worktree, log, out, tag, *, lease, on_started,
         with log.open("x", encoding="utf-8") as human, stream_path.open("xb") as stream:
             owns_log = True
             with tempfile.TemporaryFile() as prompt, stream_path.open("rb") as reader:
-                prompt.write(user_frame(body))
+                prompt.write(user_frame(command_guidance(commands) + "\n\n" + body))
                 prompt.seek(0)
                 _task_deadline.check()
                 try:

@@ -95,6 +95,10 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         raise ValueError("unknown Foundry backend or coding transport")
 
     coding_backend = backend_for_launcher(coding_launcher)
+    if (coding_backend == "agy" and review_range is None and retained is None
+            and (not coding_session or handover) and launch_context is None):
+        from ._launch_context import capture
+        launch_context = capture(tree, backend="agy")
     analyst_compute, coding_compute, role_policy = resolve_goal_compute(
         role_compute, coding_backend=coding_backend, backend=backend, analyst_model=analyst_model,
         analyst_effort=analyst_effort, coding_model=coding_model,
@@ -244,6 +248,8 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         packet, _ = owner.order_revision.manager_input(owner, previous, previous['manager_packet'])
         manifest['manager_packet'] = {**packet, 'operator_answer': continuation['answer'], 'run_id': run_id,
                                       'order': manifest['order']}
+        if coding_backend != "agy":
+            manifest['manager_packet'].pop('agy_command_guidance', None)
         if previous.get('coding_checkpoint'):
             continued_coding = {**json.loads(goal_usage._reference(previous['coding_checkpoint'])),
                 'run_id': run_id, 'order': manifest['order'], 'options': {**execution_options, 'manager_state': manager_state,
@@ -495,6 +501,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     coding = continued_coding['coding_usage']
                     coding_turns = list(coding.get('managed_turns', []))
                     manager_repeat = True
+            if retained is None and coding_backend == "agy" and launch_context is not None:
+                from ._dispatch_agy import command_guidance
+                manager_packet["agy_command_guidance"] = command_guidance(launch_context["settings"]["allowed_commands"])
             if retained is not None:
                 rc, coding_evidence = retained['returncode'], list(retained['evidence'])
                 coding = retained['coding_usage']
@@ -656,12 +665,12 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 if worker_recovery and not manager_repeat:
                     assignment = (retained or {}).get('worker_assignment', assignment)
                 if reserved:
-                    from ._compute_selection import review_model_id
+                    from ._compute_selection import coding_review_conflict, review_model_id
                     from ._launch_context import capture
                     selected = (coding_compute or {}).get('model')
-                    if selected and review_model_id(selected) in {review_model_id(m) for m in reserved}:
-                        raise GoalBlocked('Coding assignment matches a frozen reviewer: ' + selected +
-                                          '. Select an independent coding assignment before dispatch.')
+                    conflict = coding_review_conflict(selected, reserved)
+                    if conflict:
+                        raise GoalBlocked(conflict)
                     if (native_team or {}).get('profile') == 'adaptive':
                         if launch_context is None:
                             launch_context = capture(tree, root_role=native_team['lead_role'],
