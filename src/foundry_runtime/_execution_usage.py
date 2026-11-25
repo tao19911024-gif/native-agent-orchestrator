@@ -537,6 +537,16 @@ def observe(receipt, *, until, session_root=None):
         terminal_ref = next((r for r in receipt.get("evidence_refs", []) if r.get("kind") == "terminal"), None)
         if terminal_ref:
             proof = json.loads(_reference(terminal_ref))
+            if proof.get("schema_version") == "foundry-agy-terminal-1":
+                from ._dispatch_agy import verify_terminal
+                result = verify_terminal(proof, session=proof["session_id"],
+                    returncode=receipt["execution"]["returncode"], attempt_id=receipt["attempt_id"])
+                return {"coverage": "agy_session_snapshot", "backend": "agy", "usage": None,
+                        "native_usage": result.get("usage"), "session_id": proof["session_id"],
+                        "reported_model": proof.get("reported_model"),
+                        "attempt_id": receipt["attempt_id"], "ended_utc": until,
+                        "source": {"terminal": terminal_ref, "stdout": proof["stdout"]},
+                        "scope": "Native cumulative conversation counters"}
             if proof.get("schema_version") == "pdcl-claude-terminal-1":
                 from ._dispatch_claude import verify_terminal
                 from .foundry_claude import model_usage

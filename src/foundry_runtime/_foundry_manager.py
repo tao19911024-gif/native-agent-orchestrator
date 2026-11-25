@@ -103,7 +103,7 @@ def configuration_for(options, folder):
     if profile is not None and state is None:
         folder = Path(folder).resolve()
         state = configuration(profile, folder.with_name(folder.name + '-manager'))
-        if options.get('coding_launcher', 'app-server') != 'claude':
+        if options.get('coding_launcher', 'app-server') not in ('claude', 'agy'):
             state['quota_fallback_policy'] = 'codex'
         if options.get('project_record'):
             state['execution_profiles'] = options['project_record']['context']['execution_profiles']

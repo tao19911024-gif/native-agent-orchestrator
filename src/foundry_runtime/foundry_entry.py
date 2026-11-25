@@ -1,5 +1,6 @@
 """Foundry dispatch adapters: repository access, no host-selected evidence packet."""
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
 
 import json
 import argparse
@@ -45,7 +46,7 @@ def add_arguments(ap) -> None:
                     help="inspect the target repository and propose the work")
     ap.add_argument("--amend-from", help="completed BLOCK/PASS review outcome; use --prompt-file for operator additions, including PASS with no findings")
     ap.add_argument("--coding-session", help="existing coding session to continue for --amend-from")
-    ap.add_argument("--handoff-provider", choices=("codex", "claude"),
+    ap.add_argument("--handoff-provider", choices=("codex", "claude", "agy"),
                     help="with --recover-goal, transfer the selected unfinished role to a new provider session")
     ap.add_argument('--handoff-role', choices=('coding', 'manager', 'review-0', 'review-1'),
                     help='role for explicit provider handoff; coding is the default')
@@ -135,12 +136,9 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
     if getattr(a, 'review_model', None):
         if review_profile:
             ap.error('choose --review-model or --review-profile, not both')
-        from ._model_catalogue import tier_for_model
+        from ._compute_selection import named_reviewer
         try:
-            review_profile = review_assignments([
-                {'backend': BACKEND[tier_for_model(name)],
-                 'model': model(name) if name in BACKEND else name, 'effort': 'high'}
-                for name in a.review_model])
+            review_profile = review_assignments([named_reviewer(name) for name in a.review_model])
         except (KeyError, ValueError) as exc:
             ap.error('invalid --review-model pair: ' + str(exc))
         a.review_profile = review_profile
@@ -183,7 +181,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             profile = profile or "claude"
         if (a.foundry_goal or review) and not amend_from and not any((a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
             review_profile = review_profile or project_staffing.get('review_profile') or "opus-sol"
-    coding_backend = "claude" if getattr(a, "launcher", None) == "claude" else "codex"
+    coding_backend = backend_for_launcher(getattr(a, "launcher", None))
     if review_profile and (not (a.foundry_goal or review) or recovery):
         ap.error("--review-profile selects new goal/review assignments; recovery uses recorded reviewers")
     if review_profile and any((a.analyst_model, a.analyst_effort, a.analyst_backend, a.analyst_exe)):
@@ -301,11 +299,11 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             if not profile and a.analyst_backend is None:
                 backend = prior_review_backend or "codex"
             prior_launcher = amendment_launcher(prior)
-            if provider and prior_launcher and ("claude" if prior_launcher == "claude" else "codex") != provider:
+            if provider and prior_launcher and (backend_for_launcher(prior_launcher)) != provider:
                 raise ValueError("An amendment retains its provider; cross-provider transfer is not a native resume")
             if prior_launcher and not getattr(a, "launcher_explicit", False):
                 a.launcher = prior_launcher
-            coding_backend = "claude" if a.launcher == "claude" else "codex"
+            coding_backend = backend_for_launcher(a.launcher)
             if coding_backend == "claude" and not a.analyst_backend and not prior_review_backend:
                 backend = "claude"
         # Apply new-invocation defaults only. Recovery above owns frozen settings;
@@ -364,9 +362,17 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                     (task_kind == "ui-live" and a.analyst_model and backend == "codex") else "kind",
                 "model": ("explicit" if a.review_profile or a.analyst_model or (a.compute_profile and not review_profile) else
                           "project" if project_staffing.get('review_profile') else "kind")}
-            profile = profile or ("claude" if coding_backend == "claude" else
-                                  "sol-claude" if kind_row["compute_profile"] == "claude" else
-                                  kind_row["compute_profile"])
+            if coding_backend == "agy":
+                from ._compute_selection import AGY_MODEL
+                if profile:
+                    raise ValueError("AGY uses --coding-model instead of Codex or Claude compute profiles")
+                a.coding_model = a.coding_model or AGY_MODEL
+                auto_model = auto_model or a.coding_model
+                team_profile = getattr(a, "team_profile", None) or "none"
+            else:
+                profile = profile or ("claude" if coding_backend == "claude" else
+                                      "sol-claude" if kind_row["compute_profile"] == "claude" else
+                                      kind_row["compute_profile"])
             compute_source = ("explicit" if a.compute_profile or requested_provider or launcher_explicit
                               else 'project' if project_provider or project_compute else "kind")
             # New Codex execution starts with Opus coordination. A provider
@@ -383,7 +389,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                     review_profile = "opus-sol" if coding_backend == 'claude' else kind_row["review_profile"]
             if (backend == "codex" and not review_profile and not any((a.analyst_model, a.analyst_effort))
                     and (a.analyst_backend == "codex" or requested_provider == "codex")
-                    and BACKEND[GOAL_PROFILES[profile]["review"][0]] == "claude"):
+                    and profile and BACKEND[GOAL_PROFILES[profile]["review"][0]] == "claude"):
                 a.analyst_model, a.analyst_effort = profile_pair(DEFAULT_GOAL_PROFILE, "review")
                 review_source_detail["model"] = "provider-default"
         if a.foundry_goal and amend_from and not manager_profile:
@@ -414,7 +420,8 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                                 for name, row in selected.items()}
             else:
                 selected.update(coding={"backend": coding_backend, **compute_kwargs(a.coding_model, a.coding_effort, backend=coding_backend)},
-                                correction=compute_kwargs(auto_model, auto_effort, backend=coding_backend) or None)
+                                correction=({"backend": coding_backend, **compute_kwargs(auto_model, auto_effort, backend=coding_backend)}
+                                           if auto_model or auto_effort else None))
         if review_profile:
             selected.pop("review", None)
         printed_team = resolve_native_team(team_profile, backend=coding_backend,

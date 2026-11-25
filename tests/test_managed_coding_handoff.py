@@ -5,15 +5,16 @@ import sys
 
 import pytest
 
+from foundry_runtime.foundry_goal import _session_from_log
 from test_installed_runtime import external, offline
 from test_manager_input_wait import manager_io, wait
 from test_owned_goal_recovery import SERVER, SID
 from foundry_runtime import foundry_goal as goal, app_server_transport as transport
-from foundry_runtime import _dispatch_claude, foundry_native_support
+from foundry_runtime import _dispatch_agy, _dispatch_claude, foundry_native_support
 
 
 @pytest.mark.parametrize('source,interruption', [
-    ('codex', None), ('codex', 'before_handoff'), ('codex', 'after_handoff'),
+    ('codex', 'replace_with_agy'), ('codex', None), ('codex', 'before_handoff'), ('codex', 'after_handoff'),
     ('claude', None), ('claude', 'before_checkpoint')])
 def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, manager_io, tmp_path, monkeypatch, source, interruption):
     tree, scope, order, _ = external
@@ -44,6 +45,16 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
             script += ';sys.exit(1)'
         return [sys.executable, '-B', '-c', script]
 
+    agy_calls = []
+    def agy(model, session):
+        agy_calls.append(session)
+        sid = session or "replacement-agy"
+        rows = [{"event": "init", "conversation_id": sid}, {"event": "result",
+                 "result": {"conversation_id": sid, "status": "SUCCESS", "response": "Finished."}}]
+        script = "import sys;sys.stdin.buffer.read();print(" + repr("\n".join(map(json.dumps, rows))) + ")"
+        return [sys.executable, "-B", "-c", script]
+
+    monkeypatch.setattr(_dispatch_agy, "argv", agy)
     monkeypatch.setattr(transport, 'run_executor', codex)
     monkeypatch.setattr(_dispatch_claude, 'resolve_executable', lambda _: Path(sys.executable))
     monkeypatch.setattr(_dispatch_claude, 'argv', claude)
@@ -51,6 +62,8 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     monkeypatch.setattr(goal, '_session_from_log', lambda path:
         next((line.removeprefix('Claude session: ') for line in Path(path).read_text().splitlines()
               if line.startswith('Claude session: ')), SID))
+    if interruption == 'replace_with_agy':
+        monkeypatch.setattr(goal, '_session_from_log', _session_from_log)
     folder = tmp_path / 'goal'
     state = {'backend': 'claude', 'model': None, 'effort': None,
              'native_dir': str(tmp_path / 'manager')}
@@ -62,7 +75,7 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     old = json.loads((folder / 'manifest.json').read_bytes())
     decisions.extend([{'action': 'delegate', 'instruction': 'Use the replacement coding provider'},
                       {'action': 'delegate', 'instruction': 'Continue that same replacement session'}, wait('Ready')])
-    target = 'claude' if source == 'codex' else 'codex'
+    target = 'agy' if interruption == 'replace_with_agy' else 'claude' if source == 'codex' else 'codex'
     options = dict(answer=f'Model unavailable; continue with {target} and retain completed work.',
                    target_provider=target, handoff_role='coding')
     if interruption == 'before_checkpoint':
@@ -75,7 +88,7 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
             patch.setattr(goal, '_publish_coding_checkpoint', interrupted_publication)
             with pytest.raises(RuntimeError, match='fixture interrupted checkpoint publication'):
                 goal.recover_goal(order, folder, **options)
-    elif interruption:
+    elif interruption in ('before_handoff', 'after_handoff'):
         from foundry_runtime import _foundry_manager as manager
         turn, calls = manager.turn, []
         def interrupted(*args, **kwargs):
@@ -89,7 +102,10 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
                 goal.recover_goal(order, folder, **options)
     result = goal.recover_goal(order, folder, **options)
     assert result['status'] == 'awaiting_input'
-    if source == 'codex':
+    if target == 'agy':
+        assert codex_calls == [None] and not claude_calls
+        assert agy_calls == [None, 'replacement-agy']
+    elif source == 'codex':
         assert codex_calls == [None]
         assert len(claude_calls) == 2
         assert claude_calls[0][1] is False and claude_calls[1] == (claude_calls[0][0], True)
@@ -100,7 +116,7 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     saved = json.loads((child / 'manifest.json').read_bytes())
     assert saved['manager_state']['native_dir'] == old['manager_state']['native_dir']
     assert not saved['manager_state'].get('handoff')
-    assert saved['coding_launcher'] == ('claude' if target == 'claude' else 'app-server')
+    assert saved['coding_launcher'] == ('app-server' if target == 'codex' else target)
     assert requests[1]['packet']['returncode'] == 1
     assert requests[1]['packet']['worker_evidence'] == old['manager_packet']['worker_evidence']
     assert requests[1]['packet']['operator_answer'] == options['answer']
@@ -108,4 +124,4 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
     assert all(p.read_bytes() == raw for p, raw in before.items())
     assert all(p.read_bytes() == raw for p, raw in native_before.items())
     assert goal.recover_goal(order, folder, **options) == result
-    assert len(requests) == 4 and len(claude_calls) + len(codex_calls) == 3
+    assert len(requests) == 4 and len(agy_calls) + len(claude_calls) + len(codex_calls) == 3

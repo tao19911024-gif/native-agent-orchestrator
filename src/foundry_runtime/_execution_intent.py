@@ -105,14 +105,17 @@ def _verify_evidence(evidence, cleanup=None, *, terminal=False):
             raise IntentConflict("evidence unavailable: " + kind) from error
 
 
-def _verify_claude_terminal(record, evidence, returncode):
-    from ._dispatch_claude import verify_terminal
+def _verify_session_terminal(record, evidence, returncode):
+    if record["launcher"] == "agy":
+        from ._dispatch_agy import verify_terminal
+    else:
+        from ._dispatch_claude import verify_terminal
     try:
         proof = json.loads(Path(evidence['terminal']['path']).read_bytes())
         verify_terminal(proof, session=record['session_id'], returncode=returncode,
                         attempt_id=record['attempt_id'])
     except (OSError, ValueError, KeyError, TypeError) as error:
-        raise IntentConflict('invalid Claude terminal evidence: ' + str(error)) from error
+        raise IntentConflict('invalid ' + record["launcher"].capitalize() + ' terminal evidence: ' + str(error)) from error
 
 
 def _verify_terminal(record, evidence, returncode):
@@ -499,9 +502,9 @@ class ExecutionIntent:
     @staticmethod
     def _verify_completion(record):
         modern = record['_history_version'] == 2
-        _verify_evidence(record['evidence'], record['cleanup'], terminal=modern or record.get('launcher') == 'claude')
-        if record.get('launcher') == 'claude':
-            _verify_claude_terminal(record, record['evidence'], record.get('returncode'))
+        _verify_evidence(record['evidence'], record['cleanup'], terminal=modern or record.get('launcher') in ('claude', 'agy'))
+        if record.get('launcher') in ('claude', 'agy'):
+            _verify_session_terminal(record, record['evidence'], record.get('returncode'))
         if modern:
             status = _verify_terminal(record, record['evidence'], record.get('returncode'))
             if (record.get('returncode_source') != 'turn_status' or 'native_returncode' not in record
@@ -551,7 +554,7 @@ class ExecutionIntent:
             raise IntentConflict('recovery decision omits later original history')
         origin = record['frozen']
         successor = self._recovery.data['successor']
-        allowed_launcher = (self._recovery.launcher if self._recovery.launcher in {'app-server', 'claude'} else
+        allowed_launcher = (self._recovery.launcher if self._recovery.launcher in {'app-server', 'claude', 'agy'} else
                             {'dispatch': 'exec', 'resume': 'exec-resume'}.get(origin['operation']))
         if (origin.get('launcher') != allowed_launcher or record.get('launcher') != allowed_launcher
                 or (allowed_launcher == 'app-server' and
@@ -775,7 +778,7 @@ class ExecutionIntent:
             self._recovery.require_live_execution()
         if self.state != "not_started":
             raise IntentConflict("existing attempt is completed or unresolved; do not replay it")
-        allowed = ({"claude"} if self.frozen.get("launcher") == "claude" else {"app-server"} if self.frozen["operation"] == "resume"
+        allowed = ({self.frozen["launcher"]} if self.frozen.get("launcher") in ("claude", "agy") else {"app-server"} if self.frozen["operation"] == "resume"
                    and self.frozen.get("launcher") == "app-server" else
                    {"exec-resume"} if self.frozen["operation"] == "resume" else
                    {"exec", "app-server"})
@@ -925,12 +928,15 @@ class ExecutionIntent:
         modern = self._history_version == 2
         if self._record.get('launcher') == 'app-server' and not modern:
             raise IntentConflict('legacy app-server history cannot assert new terminal proof')
-        _verify_evidence(evidence, asdict(cleanup), terminal=modern or self._record.get("launcher") == "claude")
-        if self._record.get("launcher") == "claude":
-            _verify_claude_terminal(self._record, evidence, returncode)
+        _verify_evidence(evidence, asdict(cleanup), terminal=modern or self._record.get("launcher") in ('claude', 'agy'))
+        if self._record.get("launcher") in ('claude', 'agy'):
+            _verify_session_terminal(self._record, evidence, returncode)
         data = {"cleanup": asdict(cleanup), "returncode": returncode,
                 "evidence": evidence, "verification": "not_evaluated",
                 "outcome": "process_completed" if returncode == 0 else "process_failed"}
+        if self._record.get("launcher") == "agy":
+            proof = json.loads(Path(evidence["terminal"]["path"]).read_bytes())
+            data.update(native_returncode=proof["native_returncode"], returncode_source="agy_result")
         if modern:
             status = _verify_terminal({**self._record, 'cleanup': asdict(cleanup)}, evidence, returncode)
             data.update(outcome='turn_' + status, returncode_source='turn_status', native_returncode=None)

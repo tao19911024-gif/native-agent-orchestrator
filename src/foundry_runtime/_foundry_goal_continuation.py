@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from ._model_catalogue import model
+from ._compute_selection import backend_for_launcher
 
 
 def _matches_manager_assignment(path, record, decision):
@@ -79,7 +80,7 @@ def retained_dispatch(owner, folder, manifest):
         journal, record = read_intent(package, project_record=manifest.get('project_record'))
         frozen = record['frozen']
         log = path.with_name(path.name.removesuffix('.package.json') + '.log')
-        if (package.get('tag') == manifest['tag'] and record.get('launcher') in ('app-server', 'claude')
+        if (package.get('tag') == manifest['tag'] and record.get('launcher') in ('app-server', 'claude', 'agy')
                 and Path(frozen['worktree']).resolve() == Path(manifest['worktree']).resolve()
                 and package.get('attempt_id') == record.get('attempt_id')
                 and package.get('source_sha256', frozen.get('order_sha256')) == frozen.get('order_sha256')
@@ -254,7 +255,7 @@ def continue_coding(owner, order, folder, manifest, answer, *, team_profile=None
     if prior_status == 'execution_unknown' and not checkpoint.get('returncode'):
         raise owner.GoalBlocked('uncertain goal has no failed coding completion; reconcile its existing execution')
     if migrate_runtime and target_provider is None:
-        target_provider = 'claude' if checkpoint['options'].get('coding_launcher') == 'claude' else 'codex'
+        target_provider = backend_for_launcher(checkpoint['options'].get('coding_launcher'))
     if ((not manager_input and checkpoint.get("schema_version") != 1) or any(checkpoint.get(k) != manifest.get(k)
             for k in ("order", "run_id", "worktree", "base_commit"))):
         raise owner.GoalBlocked("coding checkpoint does not describe this run")
@@ -296,7 +297,7 @@ def continue_coding(owner, order, folder, manifest, answer, *, team_profile=None
     if manager_migration:
         options['migrate_recovered_manager'] = True
     if team_profile is not None:
-        team = owner.resolve_native_team(team_profile, backend=target_provider or ("claude" if options.get("coding_launcher") == "claude" else "codex"))
+        team = owner.resolve_native_team(team_profile, backend=target_provider or backend_for_launcher(options.get("coding_launcher")))
         continuation["team_override"] = team
         options["native_team"] = team
         decision = dict(options.get("execution_decision") or {})
@@ -495,7 +496,7 @@ def _admission(owner, folder, manifest):
 
 
 def handoff_options(owner, folder, manifest, checkpoint, continuation, options, provider, *, migrate_runtime=False):
-    source = "claude" if options.get("coding_launcher") == "claude" else "codex"
+    source = backend_for_launcher(options.get("coding_launcher"))
     if source == provider and not migrate_runtime:
         raise ValueError("handoff target is the current provider; omit --handoff-provider to resume")
     cleanup = [json.loads(Path(f["path"]).read_bytes()) for f in checkpoint["evidence"]
@@ -515,7 +516,10 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
               **({"project_record": manifest["project_record"]} if manifest.get("project_record") else {})}
     if "team_override" in continuation:
         packet["team_override"] = continuation["team_override"]
-    if source == provider:
+    if provider == "agy" and source != provider:
+        from ._compute_selection import AGY_MODEL
+        coding = {"backend": "agy", "model": AGY_MODEL, "effort": "high"}
+    elif source == provider:
         coding = ((options.get('role_compute') or {}).get('roles', {}).get('coding') or
                   {'backend': provider, 'model': options.get('coding_model'), 'effort': options.get('coding_effort')})
     else:
@@ -531,11 +535,18 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
                                         '. Keep the current worker or choose another eligible provider.')
         coding = {"backend": provider, "model": selected, "effort": "high"}
     options = dict(options)
+    if source != provider and "agy" in (source, provider):
+        # The old provider's hooks and native configuration belong to its session.
+        launch = options.pop("launch_context", None) or {}
+        if launch.get("worker_environment"):
+            from ._launch_context import capture
+            options["launch_context"] = {**capture(tree, backend=provider, coding_model=coding["model"]),
+                                         "worker_environment": launch["worker_environment"]}
     options.update(coding_launcher=options.get('coding_launcher', 'exec') if source == provider else
-                   "claude" if provider == "claude" else "app-server",
+                   provider if provider in ("claude", "agy") else "app-server",
                    app_server_policy=options.get('app_server_policy') if source == provider else None, handover=packet,
                    native_team=continuation.get("team_override") or (options.get('native_team') if source == provider else owner.resolve_native_team(
-                       "adaptive" if options.get("native_team") and options["native_team"].get("profile") == "adaptive" else "none",
+                       "adaptive" if provider != "agy" and options.get("native_team") and options["native_team"].get("profile") == "adaptive" else "none",
                        backend=provider)))
     if options.get("role_compute"):
         roles = options["role_compute"]
@@ -559,8 +570,11 @@ def dispatch_handoff(owner, order, handover, message, decision, policy, coding):
     receipt = handover.get("predispatch")
     if policy.get("project") is None and (not isinstance(receipt, dict) or not receipt.get("path")):
         raise owner.GoalBlocked("handover requires the original admission receipt; amendment lineage has none")
+    if handover.get("target_provider") == "agy":
+        message += ("\nUse the repository and the handoff instructions below. Evidence outside the workspace "
+                    "is retained by the manager; ask for a specific excerpt if the available evidence is insufficient.")
     return dispatch.dispatch_order(order, **policy, **(coding or {}),
         predispatch_receipt=receipt["path"] if receipt else None,
         execution_decision={**(decision or {}), "handover": handover},
-        continuation_prompt=message + "\n\nProvider handover (new native session; retain completed work and inspect referenced evidence):\n"
+        continuation_prompt=message + "\n\nProvider handover (new native session; retain completed work):\n"
                             + json.dumps(handover, ensure_ascii=False))

@@ -91,6 +91,9 @@ def record_package(log, tag, operation, intent, body, launch_context=None):
         "attempt_id": row["attempt_id"], "execution_state": row["state"],
         "intent_journal": str(intent.path.resolve()), "originating_session": origin(),
         "root_pid": row["root_pid"],
+        **({"executor": {"launcher": row["launcher"], "session_id": row.get("session_id"),
+                         "requested_model": (intent.frozen.get("requested_compute") or {}).get("model")}}
+           if row["state"] == "active" else {}),
         "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
         "source_sha256": intent.frozen.get('order_sha256'),
         "body_bytes": len(body.encode("utf-8")),

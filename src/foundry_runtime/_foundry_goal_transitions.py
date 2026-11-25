@@ -16,6 +16,10 @@ def identity(value):
 def assignment(provider, *, previous=None):
     if previous is not None:
         return {**previous, 'executable': str(resolve_executable(provider))}
+    if provider == 'agy':
+        from ._compute_selection import AGY_MODEL
+        return {'backend': provider, 'executable': str(resolve_executable(provider)),
+                'model': AGY_MODEL, 'effort': 'high'}
     return {'backend': provider, 'executable': str(resolve_executable(provider)),
             'model': model('opus' if provider == 'claude' else 'astra'), 'effort': 'high'}
 
@@ -170,7 +174,16 @@ def reviewers(checkpoint, saved, *, role, provider, migrate, completed=(), exclu
             continue
         current = transfers.get(name, [base[int(name[-1])]])[-1]
         backend = provider or current.get('backend', 'codex')
-        if (role == name and provider and current.get('model') and review_model_id(current['model']) in
+        if role == name and provider == "agy" and current.get("backend") != "agy":
+            from ._compute_selection import AGY_MODEL, named_reviewer
+            peer_index = 1 - int(name[-1])
+            peer = transfers.get("review-" + str(peer_index), [base[peer_index]])[-1]
+            occupied = {review_model_id(m) for m in [*excluded, peer.get("model")] if m}
+            replacement = next((m for m in (AGY_MODEL, "gemini-4-carbon-high") if review_model_id(m) not in occupied), None)
+            if not replacement:
+                raise ValueError("no independent AGY reviewer is available for this transfer")
+            chosen = assignment(backend, previous=named_reviewer(replacement))
+        elif (role == name and provider and current.get('model') and review_model_id(current['model']) in
                 {review_model_id(m) for m in excluded}):
             peer_index = 1 - int(name[-1])
             peer = transfers.get('review-' + str(peer_index), [base[peer_index]])[-1]

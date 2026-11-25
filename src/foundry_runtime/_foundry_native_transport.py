@@ -37,6 +37,9 @@ def argv(analyst, claude_argv, folder, attempt_id, schema, kind, *, resume_sessi
     compute = compute_for_kind(analyst._role_compute, kind, analyst._compute)
     profiles = analyst.execution_profiles
     options = {"launch_context": launch_context, **({"resume_session": resume_session} if resume_session else {})}
+    if analyst.backend == "agy":
+        from ._agy_review import review_argv
+        return review_argv(analyst.executable, schema, compute["model"], resume_session, launch_context["review_permissions"])
     if profiles is not None:
         options["execution_policy"] = profiles[analyst.backend]
     if analyst.backend == "codex":
@@ -49,7 +52,10 @@ def argv(analyst, claude_argv, folder, attempt_id, schema, kind, *, resume_sessi
 
 def environment(analyst, kind, launch_context=None):
     from ._launch_context import worker_environment
-    if analyst.backend == "codex":
+    if analyst.backend == "agy":
+        import os
+        selected = dict(os.environ)
+    elif analyst.backend == "codex":
         from .foundry_codex import codex_backend_env
         selected = codex_backend_env(analyst.executable)
     else:
@@ -71,6 +77,9 @@ def invocation(analyst, request, prompt, context, schema, now):
                    'manager' if request['kind'] == 'coordinate' else
                    'reviewer' if request['kind'] == 'review' else 'executor'), backend=analyst.backend,
         coding_model=analyst.recorded_coding_model)
+    if analyst.backend == "agy":
+        from ._agy_review import review_permissions
+        launch = {**launch, "review_permissions": review_permissions(request)}
     if analyst.worker_environment:
         launch = {**launch, 'worker_environment': analyst.worker_environment}
     args = analyst._argv(folder, allocation["attempt_id"], schema, request["kind"],

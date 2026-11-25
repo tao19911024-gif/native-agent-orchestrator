@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0a126 — 2026-11-24
+
+- Antigravity CLI is selectable for coding, correction and independent review.
+  Coding handoffs retain the worktree and start a conversation with the selected provider.
+- Project descriptors can grant exact AGY coding commands per session. Dispatch
+  records retain the executor, conversation, terminal result and reported usage.
+
 ## 0.1.0a125 — 2026-11-21
 
 - A missing or incorrect checkpoint field digest reopens the affected review

@@ -121,6 +121,8 @@ def escalation(current, evidence, *, prior_findings=(), findings=(), provider_li
 
 def review_model_id(value):
     value = value.removesuffix('[1m]')
+    if value.startswith("gemini-") and value.rsplit("-", 1)[-1] in {"low", "medium", "high", "xhigh", "max"}:
+        return value.rsplit("-", 1)[0]
     return model(value) if value in BACKEND else value
 
 
@@ -205,6 +207,14 @@ def missing_manager_profile(manifest):
     return TASK_KINDS[kind]['manager_profile']
 
 
+def named_reviewer(name):
+    if name.startswith("gemini-"):
+        return {"backend": "agy", "model": name}
+    from ._model_catalogue import tier_for_model
+    return {"backend": BACKEND[tier_for_model(name)], "model": model(name) if name in BACKEND else name,
+            "effort": "high"}
+
+
 def review_assignments(value):
     """Freeze the two review slots without changing legacy single-backend records."""
     if value is None:
@@ -219,12 +229,14 @@ def review_assignments(value):
     rows = []
     for item in value:
         row = dict(item)
-        if set(row) - {"backend", "model", "effort", "executable"} or row.get("backend") not in ("claude", "codex"):
+        if set(row) - {"backend", "model", "effort", "executable"} or row.get("backend") not in ("claude", "codex", "agy"):
             raise ValueError("unknown review assignment")
         pair = compute_kwargs(row.get("model"), row.get("effort"), backend=row["backend"])
         if not pair:
             raise ValueError("each reviewer needs its recorded model and effort")
         rows.append({**row, **pair})
+    if any(row["backend"] == "agy" for row in rows) and review_model_id(rows[0]["model"]) == review_model_id(rows[1]["model"]):
+        raise ValueError("select distinct reviewer models for the independent seats")
     return rows
 
 # Sonnet owns implementation; the separate manager owns coordination.
@@ -395,6 +407,11 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
     """
     if profile is None:
         return None
+    if backend == "agy":
+        if profile != "none":
+            raise ValueError("AGY runs a single coding executor; select --team-profile none")
+        return {"profile": "none", "backend": "agy", "version": 1, "worker_capacity": 0,
+                "lead_role": "executor", "config": {}, "instructions": ""}
     if backend == "claude":
         if profile not in {"none", "adaptive"}:
             raise ValueError("unknown Claude team profile")
@@ -697,6 +714,13 @@ def resolve_goal_profile(name, *, backend="codex", role_compute=None,
                      "coding_role": "coding"}
 
 
+AGY_MODEL = "gemini-4-neon-high"
+
+
+def backend_for_launcher(launcher):
+    return launcher if launcher in ("agy", "claude") else "codex"
+
+
 def compute_kwargs(model=None, effort=None, *, backend='codex') -> dict:
     """Omitting both inherits defaults; either override requires the whole pair.
 
@@ -705,6 +729,12 @@ def compute_kwargs(model=None, effort=None, *, backend='codex') -> dict:
     """
     if model is None and effort is None:
         return {}
+    if backend == "agy":
+        if not isinstance(model, str) or not model.strip() or any(c.isspace() for c in model):
+            raise ValueError("AGY requires a native model ID")
+        if effort is not None and model.rsplit("-", 1)[-1] != effort:
+            raise ValueError("AGY effort is encoded in the native model ID")
+        return {"model": model, **({"effort": effort} if effort is not None else {})}
     if backend == "claude" and isinstance(model, str) and model.strip() == model and model and not any(ord(c) < 32 for c in model) and effort is None:
         return {"model": model}
     if any(not isinstance(v, str) or not v.strip() or v != v.strip()
@@ -746,7 +776,7 @@ def role_assignments(value, *, backend="codex", coding_backend="codex"):
         expected = (coding_backend or row.get("backend")) if role == "coding" and isinstance(row, dict) else backend
         if not isinstance(row, dict) or set(row) != {"backend", "model", "effort"}:
             raise ValueError("each role-compute entry needs backend, model and effort")
-        if expected not in ("codex", "claude") or row["backend"] != expected:
+        if expected not in ("codex", "claude", "agy") or row["backend"] != expected:
             raise ValueError("role-compute analyst roles must match --analyst-backend; coding must match the coding provider")
         pair = compute_kwargs(row["model"], row.get("effort"), backend=expected)
         if not pair:

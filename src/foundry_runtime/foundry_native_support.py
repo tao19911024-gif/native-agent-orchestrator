@@ -15,6 +15,14 @@ def resolve_executable(backend="codex"):
     if backend == "codex":
         from ._codex_command import resolve_codex
         return Path(resolve_codex())
+    if backend == "agy":
+        path = shutil.which("agy")
+        if path:
+            return Path(path).resolve()
+        local = os.environ.get("LOCALAPPDATA")
+        if local and (installed := Path(local) / "agy/bin/agy.exe").is_file():
+            return installed
+        raise FileNotFoundError("Antigravity CLI (agy) is unavailable")
     if backend != "claude":
         raise ValueError("unknown native backend")
     candidates = list((Path.home() / ".vscode/extensions").glob(

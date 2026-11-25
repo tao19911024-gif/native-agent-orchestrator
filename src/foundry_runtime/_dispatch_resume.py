@@ -7,6 +7,7 @@ that module while this file owns the resume-specific orchestration.
 """
 
 from __future__ import annotations
+from ._compute_selection import backend_for_launcher
 
 import re
 from pathlib import Path
@@ -135,18 +136,18 @@ def resume_order(
     """Admit one correction, preserving exec-resume as the byte-compatible default."""
     from ._native_session import read_session_worktree
 
-    selection = {**owner.compute_kwargs(model, effort, backend="claude" if launcher == "claude" else "codex"), **team_kwargs(native_team)}
-    if launcher not in {"exec", "app-server", "claude"}:
+    selection = {**owner.compute_kwargs(model, effort, backend=backend_for_launcher(launcher)), **team_kwargs(native_team)}
+    if launcher not in {"exec", "app-server", "claude", "agy"}:
         raise ValueError("invalid resume launcher")
     if app_server_policy is not None and launcher != "app-server":
         raise ValueError("app-server policy applies only to app-server resume")
     policy = normalize_policy(app_server_policy, capacity_defaults=True) if launcher == "app-server" else None
-    frozen_launcher = launcher if launcher in {"app-server", "claude"} else "exec-resume"
+    frozen_launcher = launcher if launcher in {"app-server", "claude", "agy"} else "exec-resume"
     tag = owner.normalized_line(tag)
-    if launcher == "claude":
-        from ._dispatch_claude import session_worktree
+    if launcher in ("agy", "claude"):
+        from ._native_session import session_worktree
         read_session_worktree = lambda sid: session_worktree(
-            project.common_dir if project is not None else owner._project_adapter(None).goal_authority().common_dir, tag, sid)
+            project.common_dir if project is not None else owner._project_adapter(None).goal_authority().common_dir, tag, sid, launcher=launcher)
     wt = wt.resolve(strict=True)
     if read_session_worktree(session).resolve() != wt:
         raise ValueError(
@@ -253,15 +254,15 @@ def _resume_attempt(
     """Reserve before gate inputs, then retain numbered evidence and terminal truth."""
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", tag):
         raise ValueError("invalid resume tag")
-    lease_launcher = launcher if launcher in {"app-server", "claude"} else "exec-resume"
+    lease_launcher = launcher if launcher in {"app-server", "claude", "agy"} else "exec-resume"
     lease = intent.acquire_lease(wt, tag, lease_launcher)
     handed_off = False
     log = None
     try:
         from ._native_session import read_session_worktree
-        if launcher == "claude":
-            from ._dispatch_claude import session_worktree
-            read_session_worktree = lambda sid: session_worktree(authority.common_dir, tag, sid)
+        if launcher in ("agy", "claude"):
+            from ._native_session import session_worktree
+            read_session_worktree = lambda sid: session_worktree(authority.common_dir, tag, sid, launcher=launcher)
 
         if read_session_worktree(session).resolve() != wt.resolve(strict=True):
             raise ValueError(
@@ -356,7 +357,7 @@ def _resume_attempt(
             launch_context = retained_launch(ev, authority.common_dir, tag, session)
         if launch_context is None:
             launch_context = capture(wt, root_role=(native_team or {}).get('lead_role', 'executor'),
-                                     backend='claude' if launcher == 'claude' else 'codex')
+                                     backend=backend_for_launcher(launcher))
             launch_context.pop('tool_discipline', None)
             launch_context['policy_observation'] = 'legacy launch policy unavailable; no new hook enforcement added on resume'
         bind_coding_model(launch_context, model)
@@ -367,7 +368,12 @@ def _resume_attempt(
         )
         package_launch.start(lease)
         handed_off = True
-        if launcher == "claude":
+        if launcher == "agy":
+            from . import _dispatch_agy
+            rc = _dispatch_agy.run(owner, body, wt, log, out, tag, lease=lease,
+                on_started=lambda sid: package_launch.active(lease, sid), model=model,
+                launch_context=launch_context, resume_session=session)
+        elif launcher == "claude":
             from . import _dispatch_claude
             rc = _dispatch_claude.run(owner, body, wt, log, out, tag, lease=lease,
                 on_started=lambda sid: package_launch.active(lease, sid), resume_session=session,
