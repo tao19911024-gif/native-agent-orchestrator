@@ -139,7 +139,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
         from ._launch_context import capture
         launch_context = {**(launch_context or capture(tree,
             root_role=(native_team or {}).get('lead_role', 'executor'), backend=coding_backend,
-            coding_model=(coding_compute or {}).get('model'))), 'worker_environment': worker_environment,
+            coding_model=(coding_compute or {}).get('model'), resume_session=coding_session)), 'worker_environment': worker_environment,
             **({'disposable_scratch_root': scratch_base} if scratch_base is not None else {})}
     from ._followup import origin, announce
     manifest['originating_session'] = origin()
@@ -503,7 +503,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     manager_repeat = True
             if retained is None and coding_backend == "agy" and launch_context is not None:
                 from ._dispatch_agy import command_guidance
-                manager_packet["agy_command_guidance"] = command_guidance(launch_context["settings"]["allowed_commands"])
+                manager_packet["agy_command_guidance"] = command_guidance(launch_context["settings"])
             if retained is not None:
                 rc, coding_evidence = retained['returncode'], list(retained['evidence'])
                 coding = retained['coding_usage']

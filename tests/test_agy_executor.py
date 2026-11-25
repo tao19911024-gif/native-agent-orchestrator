@@ -9,8 +9,8 @@ from foundry_runtime import _dispatch_agy as agy, _foundry_dispatch as dispatch,
 from test_installed_runtime import external, offline
 
 
-@pytest.mark.parametrize("status,expected", [("SUCCESS", 0), ("ERROR", 1)])
-def test_order_and_resume(external, monkeypatch, capsys, status, expected):
+@pytest.mark.parametrize("status,expected,commands", [("SUCCESS", 0, None), ("SUCCESS", 0, ["git status -sb", "pnpm test"]), ("ERROR", 1, [])])
+def test_order_and_resume(external, monkeypatch, capsys, status, expected, commands):
     tree, scope, order, codex_launches = external
     original_argv = agy.argv
     monkeypatch.setattr(agy, "resolve_executable", lambda _: sys.executable)
@@ -22,7 +22,7 @@ args = sys.argv[1:]
 body = json.loads(sys.stdin.buffer.read())['message']['content']
 session = args[args.index('--conversation')+1] if '--conversation' in args else 'fixture-session'
 print(json.dumps({'event':'init','conversation_id':session,'init':{'model':'gemini-4-neon-high'}}))
-print(json.dumps({'event':'result','result':{'conversation_id':session,'response':body,
+print(json.dumps({'event':'result','result':{'conversation_id':session,'response':json.dumps({'body':body,'argv':args}),
       'status':STATUS, 'usage':{'input_tokens':19}}}))
 """.replace("STATUS", repr(status))
     def fixture_argv(model, session):
@@ -31,8 +31,13 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
         return [sys.executable, "-I", "-c", script, *args[1:]]
     monkeypatch.setattr(agy, "argv", fixture_argv)
     selection = {"project": scope, "launcher": "agy", "model": "gemini-4-neon-high"}
-    commands = ["git status -sb", "pnpm test"] if expected == 0 else []
-    monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", json.dumps(commands))
+    from foundry_runtime._execution_profile import agy_policy
+    if commands is None:
+        monkeypatch.delenv("FOUNDRY_AGY_COMMANDS", raising=False)
+        settings = agy_policy()
+    else:
+        monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", json.dumps(commands))
+        settings = {"allowed_commands": commands}
     first = dispatch.dispatch_order(order, **selection)
     assert first[0] == expected
     dispatch.report(first[1], project=scope, tag="TASK1", launcher="agy")
@@ -42,9 +47,11 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
                for line in printed.splitlines())
     package = json.loads(first[1].with_suffix(".package.json").read_bytes())
     receipt = json.loads(first[1].with_suffix(".receipt.json").read_bytes())
-    message = first[1].with_suffix(".result.md").read_text(encoding="utf-8")
-    assert agy.command_guidance(commands) in message
-    assert package["launch_context"]["settings"]["allowed_commands"] == commands
+    message = json.loads(first[1].with_suffix(".result.md").read_bytes())
+    assert agy.command_guidance(settings) in message["body"]
+    assert ("--dangerously-skip-permissions" in message["argv"]) == (commands is None)
+    assert ("--settings" in message["argv"]) == bool(commands)
+    assert package["launch_context"]["settings"] == settings
     assert receipt["execution"]["returncode_source"] == "agy_result"
     assert receipt["coding_usage"]["backend"] == "agy"
     assert receipt["coding_usage"]["reported_model"] == "gemini-4-neon-high"
@@ -57,10 +64,15 @@ print(json.dumps({'event':'result','result':{'conversation_id':session,'response
     assert dispatch.dispatch_order(order, **selection).replayed
     if expected == 0:
         answer = "Apply the requested correction."
-        monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", '["different command"]')
+        if commands is None:
+            monkeypatch.setenv("FOUNDRY_AGY_COMMANDS", "[]")
+        else:
+            monkeypatch.delenv("FOUNDRY_AGY_COMMANDS")
         resumed = dispatch.resume_order("fixture-session", tree, "TASK1", answer, **selection)
         assert resumed[0] == 0
-        assert agy.command_guidance(commands) in resumed[1].with_suffix(".result.md").read_text(encoding="utf-8")
+        reply = json.loads(resumed[1].with_suffix(".result.md").read_bytes())
+        assert agy.command_guidance(settings) in reply["body"]
+        assert ("--dangerously-skip-permissions" in reply["argv"]) == (commands is None)
         assert "--conversation" in launches[-1] and "fixture-session" in launches[-1]
         assert dispatch.resume_order("fixture-session", tree, "TASK1", answer, **selection).replayed
     assert len(launches) == (2 if expected == 0 else 1)
@@ -81,7 +93,7 @@ def test_goal_staffing(external, capsys, monkeypatch, commands):
     assert row["roles"]["coding"]["backend"] == "agy"
     assert row["roles"]["coding"]["model"] == "gemini-4-neon-high"
     assert row["team"]["profile"] == "none"
-    assert row["agy_command_guidance"] == agy.command_guidance(commands)
+    assert row["agy_command_guidance"] == agy.command_guidance({"allowed_commands": commands})
     assert row["manager_profile"] == "opus" and row["reviewers"]
 
 
@@ -143,6 +155,7 @@ def test_explicit_review_pair_uses_agy_native_protocol(external, tmp_path, monke
         is_agy = "--input-format" in argv
         if is_agy:
             raw = json.loads(raw)["message"]["content"].encode()
+            assert "--dangerously-skip-permissions" not in argv
             assert argv[argv.index("--mode") + 1] == "plan"
             assert "write_file(*)" in json.loads(argv[argv.index("--settings") + 1])["permissions"]["deny"]
         request = json.loads(raw.rsplit(b"\n\n", 1)[-1])

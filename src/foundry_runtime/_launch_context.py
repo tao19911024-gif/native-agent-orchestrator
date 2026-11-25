@@ -85,12 +85,18 @@ def claude_settings(launch=None):
         "DISABLE_AUTO_COMPACT": "0", "DISABLE_COMPACT": "0"}}
 
 
-def capture(workspace=None, *, enable_index=True, root_role='executor', backend='codex', coding_model=None):
+def capture(workspace=None, *, enable_index=True, root_role='executor', backend='codex', coding_model=None, resume_session=None):
     """One launch decision, retained by native calls for side-effect-free replay."""
     if backend == "agy":
-        commands = json.loads(os.environ.get("FOUNDRY_AGY_COMMANDS", "[]"))
-        validate_project_launch({"FOUNDRY_AGY_COMMANDS": commands})
-        return {"settings": {"allowed_commands": commands}, "server": None, "index_policy": "native"}
+        from ._execution_profile import agy_policy
+        configured = os.environ.get("FOUNDRY_AGY_COMMANDS")
+        if configured is None and not resume_session:
+            policy = agy_policy()
+        else:
+            commands = json.loads(configured) if configured is not None else []
+            validate_project_launch({"FOUNDRY_AGY_COMMANDS": commands})
+            policy = {"allowed_commands": commands}
+        return {"settings": policy, "server": None, "index_policy": "native"}
     from ._code_index import prepare
     observation = {'status': 'disabled', 'fallback': 'scoped-direct-reads', 'reason': 'review-direct-reads'}
     server = prepare(workspace, observation=observation) if enable_index else None

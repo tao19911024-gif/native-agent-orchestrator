@@ -433,7 +433,7 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             if coding_backend == "agy":
                 from ._dispatch_agy import command_guidance
                 from ._launch_context import capture
-                agy_guidance = command_guidance(capture(backend="agy")["settings"]["allowed_commands"])
+                agy_guidance = command_guidance(capture(backend="agy")["settings"])
         if review_profile:
             selected.pop("review", None)
         printed_team = resolve_native_team(team_profile, backend=coding_backend,

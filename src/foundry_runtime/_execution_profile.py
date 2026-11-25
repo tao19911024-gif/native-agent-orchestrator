@@ -21,6 +21,10 @@ CLAUDE_BASH_GUIDANCE = (
 )
 
 
+def agy_policy():
+    return {"contract": "trusted-executor-v1", "tool_permission": "always-proceed"}
+
+
 def claude_environment():
     return {'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS': '1',
             'BASH_MAX_TIMEOUT_MS': str(24 * 3600 * 1000),

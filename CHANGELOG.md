@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0a127 — 2026-11-25
+
+- New AGY coding sessions use the trusted executor permission profile. Projects can
+  retain exact command authorization by configuring `launch.FOUNDRY_AGY_COMMANDS`.
+  Staffing previews and worker instructions identify the selected policy.
+- Explicit coding and review model conflicts are reported before manager startup.
+
 ## 0.1.0a126 — 2026-11-24
 
 - Antigravity CLI is selectable for coding, correction and independent review.

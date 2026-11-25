@@ -202,8 +202,10 @@ def prepare_invocation(owner, a, ap, root, target, prior, prepared, *, project, 
     options['launch_context'] = capture(
         prepared['worktree'],
         root_role=(options.get('native_team') or {}).get('lead_role', 'executor'),
-        backend=backend_for_launcher(options.get('coding_launcher')))
+        backend=backend_for_launcher(options.get('coding_launcher')), resume_session=child._boundary_session)
     retained_launch = prepared.get('launch_context') or {}
+    if child._boundary_session and options.get('coding_launcher') == 'agy' and 'settings' in retained_launch:
+        options['launch_context']['settings'] = retained_launch['settings']
     if retained_launch.get('worker_environment'):
         # The new round registers its own directory through run_owned. Retain
         # the storage policy, not the previous round's concrete temp paths.

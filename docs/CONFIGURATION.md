@@ -287,15 +287,17 @@ New goals check an explicitly selected coding model against the requested review
 pair before starting the manager. With Gemini Neon coding, `--review-model opus sonnet`
 is another independent pair.
 
-For unattended coding, list the project's approved commands under
+New AGY coding sessions use Foundry's trusted executor profile. Foundry passes
+`--dangerously-skip-permissions` for that coding session, so the worker can
+choose command arguments, paths and test selectors as the work requires.
+AGY's independent review transport uses its separate read-only policy.
+
+Projects that require exact shell command authorization can set
 `launch.FOUNDRY_AGY_COMMANDS` in the project descriptor. For example,
-`["python -m pytest -q tests/test_project_launch.py"]` permits that command
-for the execution session. Each entry matches a complete shell command. Run
-listed commands individually and use native file tools for reads and edits.
-`--print-staffing` shows the effective command list or the field to configure
-when the list is empty. The manager and worker receive the same guidance.
-The dispatch package retains the selection across continuations. Review
-sessions use their own read permissions.
+`["git status -sb", "pnpm test"]` grants the two commands individually. An
+explicit empty list grants no additional shell commands through Foundry.
+`--print-staffing` shows the effective policy. Existing coding conversations
+retain the permissions recorded at dispatch.
 
 When Codex capacity is exhausted and the prior coding attempt has settled,
 transfer the coding seat from the retained goal. The prompt file records the

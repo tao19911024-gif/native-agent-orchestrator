@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from . import _task_deadline
+from ._execution_profile import agy_policy
 from ._launch_context import worker_environment
 from .foundry_native_support import resolve_executable
 
@@ -19,7 +20,10 @@ def user_frame(body):
                        ensure_ascii=False) + "\n").encode("utf-8")
 
 
-def command_guidance(commands):
+def command_guidance(settings):
+    if settings == agy_policy():
+        return "Trusted AGY coding session. Run the shell commands required by the work order, including dynamic arguments."
+    commands = settings.get("allowed_commands", [])
     if commands:
         return ("Project-approved shell commands (launch.FOUNDRY_AGY_COMMANDS). Run each exact line "
                 "as a separate command. Use native file tools for other reads and edits.\n" +
@@ -96,8 +100,10 @@ def run(owner, body, worktree, log, out, tag, *, lease, on_started,
         if any(path.exists() for path in (out, stream_path, terminal, cleanup_path)):
             raise FileExistsError("AGY dispatch evidence already exists")
         args = argv(model, resume_session)
-        commands = (launch_context or {}).get("settings", {}).get("allowed_commands", [])
-        if commands:
+        settings = (launch_context or {}).get("settings", {})
+        if settings == agy_policy():
+            args.append("--dangerously-skip-permissions")
+        elif commands := settings.get("allowed_commands"):
             # Anchor each literal command; project entries are not provider rule expressions.
             rules = ["command(regex:^" + re.escape(command).replace(r"\ ", " ") + "$)" for command in commands]
             args.extend(["--settings", json.dumps({"permissions": {"allow": rules}})])
@@ -105,7 +111,7 @@ def run(owner, body, worktree, log, out, tag, *, lease, on_started,
         with log.open("x", encoding="utf-8") as human, stream_path.open("xb") as stream:
             owns_log = True
             with tempfile.TemporaryFile() as prompt, stream_path.open("rb") as reader:
-                prompt.write(user_frame(command_guidance(commands) + "\n\n" + body))
+                prompt.write(user_frame(command_guidance(settings) + "\n\n" + body))
                 prompt.seek(0)
                 _task_deadline.check()
                 try:
