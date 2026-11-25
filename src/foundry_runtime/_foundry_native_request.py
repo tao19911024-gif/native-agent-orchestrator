@@ -324,7 +324,11 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
             from ._dispatch_agy import user_frame
             from ._agy_review import diff_command
             command = diff_command(request)
-            return user_frame((("Inspect the candidate range with this command: " + command + "\n") if command else "") + text)
+            if command:
+                text = ("For shell access, execute the following exact command on its own. "
+                        "Headless approval matches the complete command line. Use native file tools for "
+                        "other reads and return the requested structured verdict.\n" + command + "\n" + text)
+            return user_frame(text)
         return text.encode("utf-8")
     except (CollaborationError, ValueError, UnicodeError, TypeError) as exc:
         raise native_error(f"invalid native request: {exc}") from exc

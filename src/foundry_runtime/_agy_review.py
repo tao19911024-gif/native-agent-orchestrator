@@ -60,6 +60,8 @@ class ReviewProtocol:
             self.result = payload
             self.decoded = payload.get("structured_output")
             if not isinstance(self.decoded, dict):
+                if payload.get("denied_actions"):
+                    raise NativeError("AGY review permission denied: " + json.dumps(payload["denied_actions"]))
                 raise NativeError("AGY review has no structured response")
             try:
                 validate_response_shape(self.decoded, self.schema)

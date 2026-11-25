@@ -220,7 +220,9 @@ def test_package_publication_records_existing_goal_identity(tmp_path, monkeypatc
         path = package.record_package(tmp_path / 'dispatch.log', 'TASK1', 'dispatch', intent, 'work')
     finally:
         followup.goal_scope.reset(token)
-    assert json.loads(path.read_bytes())['goal'] == {'directory': str(folder), 'run_id': 'run'}
+    published = json.loads(path.read_bytes())
+    assert published['goal'] == {'directory': str(folder), 'run_id': 'run'}
+    assert 'executor' not in published
 
 
 def test_feedback_continuation_preserves_recorded_environment():
