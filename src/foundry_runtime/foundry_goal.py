@@ -1153,7 +1153,6 @@ def recover_goal(order: Path, evidence_dir: Path, *, answer=None, team_profile=N
     if handoff_role and not (target_provider or migrate_runtime):
         raise ValueError('handoff role requires a provider or explicit runtime migration')
     if target_provider is not None and (target_provider not in {"codex", "claude", "agy"} or
-            (target_provider == "agy" and handoff_role == "manager") or
             (handoff_role in (None, 'coding', 'manager') and answer is None)):
         raise ValueError("select a supported provider for the target role and supply the required continuation answer")
     if team_profile is not None and answer is None:

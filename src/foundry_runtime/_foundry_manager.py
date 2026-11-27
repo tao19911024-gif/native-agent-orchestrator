@@ -9,8 +9,9 @@ from contextvars import ContextVar
 from threading import Event, Timer
 from . import _task_deadline as deadline
 
-from ._compute_selection import compute_kwargs
-from ._model_catalogue import BACKEND, model
+from ._compute_selection import compute_kwargs, manager_compute
+from ._foundry_native_request import captured_envelope
+from ._model_catalogue import model
 from .foundry_native import NativeAnalyst
 from .foundry_native_support import resolve_executable
 
@@ -78,10 +79,9 @@ def _quota_handoff(state, record, row):
 
 
 def configuration(profile, folder):
-    if profile not in ('opus', 'astra'):
-        raise ValueError('unknown manager profile')
-    return {'profile': profile, 'backend': BACKEND[profile], 'model': model(profile),
-            'effort': 'high', 'native_dir': str(Path(folder).resolve()), 'last_call_id': None, 'artifact_delivery': True,
+    selected = manager_compute(profile)
+    expert = {**selected, 'model': model('fable')} if profile == 'opus' else dict(selected)
+    return {'profile': profile, **selected, 'native_dir': str(Path(folder).resolve()), 'last_call_id': None, 'artifact_delivery': True,
             'design_convergence': 1,
             'review_convergence': 2,
             'goal_completion': 1,
@@ -91,7 +91,13 @@ def configuration(profile, folder):
             'claude_live_events': 1,
             'live_coordination': 1,
             'scope_question_policy': 1,
-            'expert': {'backend': BACKEND[profile], 'model': model('fable' if profile == 'opus' else 'astra'), 'effort': 'high'}}
+            'expert': expert}
+
+
+def coordination_status(state):
+    if state.get('quota_fallback'):
+        return 'codex_quota_fallback'
+    return {'claude': 'opus_coordination', 'codex': 'codex_coordination', 'agy': 'agy_coordination'}[state['backend']]
 
 
 def configuration_for(options, folder):
@@ -103,7 +109,7 @@ def configuration_for(options, folder):
     if profile is not None and state is None:
         folder = Path(folder).resolve()
         state = configuration(profile, folder.with_name(folder.name + '-manager'))
-        if options.get('coding_launcher', 'app-server') not in ('claude', 'agy'):
+        if state['backend'] == 'claude' and options.get('coding_launcher', 'app-server') not in ('claude', 'agy'):
             state['quota_fallback_policy'] = 'codex'
         if options.get('project_record'):
             state['execution_profiles'] = options['project_record']['context']['execution_profiles']
@@ -125,7 +131,7 @@ def recorded_requests(analyst):
         raw = (row['folder'] / 'stdin.txt').read_bytes()
         if hashlib.sha256(raw).hexdigest() != allocation['stdin_sha256']:
             raise ValueError('recorded manager request bytes changed')
-        saved = json.loads(raw.rsplit(b'\n\n', 1)[-1])
+        saved = captured_envelope(raw)
         saved.pop('response_contract', None)
         predecessor = saved.get('continue_from')
         if predecessor in successors:

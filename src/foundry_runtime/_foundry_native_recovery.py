@@ -203,9 +203,8 @@ def inspect_call(cls, evidence_dir, request, workspace, settings):
     # The immutable stdin hash is checked below. Compare its task envelope,
     # not today's prompt wording, when reading a pre-upgrade invocation.
     raw = (call / 'stdin.txt').read_bytes()
-    if reader.backend == 'agy':
-        raw = _json(raw)['message']['content'].encode('utf-8')
-    captured_request = _json(raw.rsplit(b'\n\n', 1)[-1])
+    from ._foundry_native_request import captured_envelope
+    captured_request = captured_envelope(raw)
     expected_request = {k: v for k, v in request.items() if k != 'call_id'}
     expected_request['response_contract'] = _allocation_contract(allocation)
     if (allocation.get('kind') != request['kind'] or allocation.get('call_id') != request['call_id']

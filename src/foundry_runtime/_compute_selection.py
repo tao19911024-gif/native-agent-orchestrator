@@ -435,7 +435,7 @@ def resolve_native_team(profile, *, backend="codex", managed=False):
                 "Direct work is appropriate for trivial changes or decisions needing your expertise; briefly state why. ") +
                 "Assign code fact gathering/investigator and mechanical extraction to Haiku, implementation "
                 "and causal analysis to Sonnet, and difficult "
-                "expert reasoning to Fable. The separate Foundry manager retains Opus and does not edit. "
+                "expert reasoning to Fable. The selected Foundry manager coordinates the task and delegates edits. "
                 "The implementation lead uses Sonnet. Explicitly select the role model, "
                 "do not inherit the leader model. "
                 "Give each member a concrete deliverable, relevant source references, ownership and acceptance "
@@ -722,6 +722,15 @@ def resolve_goal_profile(name, *, backend="codex", role_compute=None,
 
 
 AGY_MODEL = "gemini-4-neon-high"
+MANAGER_PROFILES = {"opus": "claude", "astra": "codex", "carbon": "agy"}
+
+
+def manager_compute(profile):
+    if profile not in MANAGER_PROFILES:
+        raise ValueError("unknown manager profile")
+    return {"backend": MANAGER_PROFILES[profile],
+            "model": "gemini-4-carbon-high" if profile == "carbon" else model(profile),
+            "effort": "high"}
 
 
 def backend_for_launcher(launcher):

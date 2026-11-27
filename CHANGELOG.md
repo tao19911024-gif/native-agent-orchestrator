@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0a128 — 2026-11-27
+
+- New goals can select Gemini 4 Carbon High as their persistent manager through
+  Antigravity CLI. Manager continuation, explicit transfer and delivery observations
+  use the existing Foundry decision and evidence records.
+
 ## 0.1.0a127 — 2026-11-25
 
 - New AGY coding sessions use the trusted executor permission profile. Projects can

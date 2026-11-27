@@ -919,7 +919,7 @@ def task_report(paths, *, since=None):
     reviews, duplicates = _native_attempts(review_calls, "review", gaps)
     managers, manager_duplicates = _native_attempts(manager_calls, "manager", gaps)
     for call in manager_calls:
-        if call.get('backend') not in {'codex', 'claude'}:
+        if call.get('backend') not in {'codex', 'claude', 'agy'}:
             gaps.append({'kind': 'manager_identity', 'call_id': call.get('call_id'),
                          'reason': 'manager backend is missing or unsupported'})
     manager_sessions = _codex_sessions(managers.get('codex', []), gaps)
@@ -958,6 +958,8 @@ def task_report(paths, *, since=None):
             "claude_review_session_usage": claude_sessions,
             "claude_manager_session_usage": session_usage([c for c in manager_calls if c.get('backend') == 'claude']),
             "codex_manager_usage": manager_view,
+            **({"agy_manager_observations": managers["agy"]} if managers.get("agy") else {}),
+            **({"agy_expert_observations": experts["agy"]} if experts.get("agy") else {}),
             "manager_requested_model_usage": _requested_model_usage({'codex': manager_sessions}, role="manager session"),
             "duplicate_manager_observations": manager_duplicates,
             "expert_consultations": consultations,

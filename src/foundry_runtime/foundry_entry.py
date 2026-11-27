@@ -1,6 +1,6 @@
 """Foundry dispatch adapters: repository access, no host-selected evidence packet."""
 from __future__ import annotations
-from ._compute_selection import backend_for_launcher
+from ._compute_selection import backend_for_launcher, MANAGER_PROFILES, manager_compute
 
 import json
 import argparse
@@ -85,8 +85,8 @@ def add_arguments(ap) -> None:
                     help="print resolved new-goal staffing without admission, coding or review; asks vendors for current models")
     ap.add_argument("--team-profile", choices=("adaptive", "none"),
                     help="explicit native team or single executor; new goals otherwise use the task kind")
-    ap.add_argument("--manager-profile", choices=("opus", "astra"),
-                    help="persistent manager; new Codex-executed goals use Opus until a measured Claude quota refusal; retained goals keep their manager")
+    ap.add_argument("--manager-profile", choices=tuple(MANAGER_PROFILES),
+                    help="persistent manager; carbon selects Gemini 4 Carbon High via AGY; new Codex goals default to Opus")
     ap.add_argument('--review-author-model', action='append', default=[],
                     help='known design author model for standalone review; repeat for multiple authors')
 
@@ -378,7 +378,9 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             # New Codex execution starts with Opus coordination. A provider
             # selection is not evidence that Claude quota is unavailable;
             # measured refusal transfers the retained manager in the goal owner.
-            manager_profile = 'opus' if coding_backend == 'codex' else manager_profile or 'opus'
+            manager_profile = manager_profile or 'opus'
+            if coding_backend == 'codex' and manager_profile == 'astra':
+                manager_profile = 'opus'
             if coding_backend == 'codex' and getattr(a, 'manager_profile', None) == 'astra':
                 staffing_sources['manager'] = 'operator-rule'
             team_profile = team_profile or kind_row["team_profile"]
@@ -445,12 +447,11 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
         print("FOUNDRY COMPUTE: " + json.dumps({"task_kind": task_kind, "profile": profile, "roles": selected,
                **({'coordination_policy': 'opus_until_measured_claude_quota_unavailable',
                    'requested_manager_profile': getattr(a, 'manager_profile', None)}
-                  if a.foundry_goal and not amend_from and coding_backend == 'codex' else {}),
+                  if a.foundry_goal and not amend_from and coding_backend == 'codex' and manager_profile == 'opus' else {}),
                **({"reviewers": review_assignments(review_profile)} if review_profile else {}),
                **({"agy_command_guidance": agy_guidance} if agy_guidance else {}),
                "team_profile": team_profile, "manager_profile": manager_profile,
-               "manager": {"model": model(manager_profile),
-                           "effort": "high"} if manager_profile else (
+               "manager": manager_compute(manager_profile) if manager_profile else (
                            {k: recorded_manager[k] for k in ('model', 'effort', 'backend', 'profile') if k in recorded_manager}
                            if recorded_manager else None),
                "team": {"backend": coding_backend, "profile": printed_profile,

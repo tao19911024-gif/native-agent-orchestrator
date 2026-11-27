@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 
 from ._model_catalogue import model
+from ._compute_selection import MANAGER_PROFILES, manager_compute
+from ._foundry_native_request import captured_envelope
 from .foundry_native import NativeAnalyst, _native_adapter_sha256
 from .foundry_native_support import resolve_executable
 
@@ -31,7 +33,7 @@ def manager_history(owner, state, worktree, *, source_locked=False, allow_empty=
     from contextlib import nullcontext
     with nullcontext() if source_locked or read_only else owner._run_lock(source, bind_goal=False):
         for call in sorted(source.glob('call-*')):
-            envelope = json.loads((call/'stdin.txt').read_bytes().rsplit(b'\n\n', 1)[-1])
+            envelope = captured_envelope((call/'stdin.txt').read_bytes())
             envelope.pop('response_contract', None)
             allocation = json.loads((call/'reservation.json').read_bytes())
             envelope['call_id'] = allocation['call_id']
@@ -94,9 +96,10 @@ def manager(owner, folder, manifest, *, provider, migrate, answer, source_locked
                'native_manifest': owner._fact(source/'native-manifest.json'),
                'history': history, 'operator_instructions': answer,
                'semantics': 'New manager session. Continue the task using retained evidence; do not repeat completed worker actions.'}
-    selected = assignment(target, previous=state if target == state['backend'] else None)
+    profile = next(name for name, backend in MANAGER_PROFILES.items() if backend == target)
+    selected = assignment(target, previous=state if target == state['backend'] else manager_compute(profile))
     next_state = {k: selected[k] for k in ('backend', 'model', 'effort', 'executable')}
-    next_state.update(profile='opus' if target == 'claude' else 'astra', last_call_id=None,
+    next_state.update(profile=profile, last_call_id=None,
         native_dir=str(folder/('manager-transfer-'+identity({'handoff': handoff, 'target': selected, 'request': request_key})[:16])),
         artifact_delivery=state.get('artifact_delivery', False), handoff=handoff,
         transition_request=request_key)
