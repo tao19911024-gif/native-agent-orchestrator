@@ -219,9 +219,9 @@ def goal_defaults(project):
     if scratch_root is not None and (not isinstance(scratch_root, (str, Path)) or not Path(scratch_root).is_absolute()):
         raise ValueError('default_disposable_scratch_root must be an absolute directory')
     staffing = getattr(project, 'default_staffing', {})
-    from ._compute_selection import GOAL_PROFILES, REVIEW_PROFILES
+    from ._compute_selection import GOAL_PROFILES, REVIEW_PROFILES, MANAGER_PROFILES
     choices = {'compute_profile': GOAL_PROFILES, 'review_profile': REVIEW_PROFILES,
-               'manager_profile': ('opus', 'astra'), 'team_profile': ('none', 'adaptive')}
+               'manager_profile': MANAGER_PROFILES, 'team_profile': ('none', 'adaptive')}
     if not isinstance(staffing, dict) or any(
             key not in choices or not isinstance(value, str) or value not in choices[key]
             for key, value in staffing.items()):

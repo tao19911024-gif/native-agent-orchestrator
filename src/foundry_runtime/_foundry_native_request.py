@@ -11,6 +11,14 @@ from ._execution_plan_prompt import WAIT_GUIDANCE, EVIDENCE_GUIDANCE, SCOPE_QUES
 RENDERED_REQUEST_BYTES = 4 * 1024 * 1024
 
 
+def captured_envelope(raw):
+    """Read the task envelope from recorded plain-text or AGY stream-json stdin."""
+    from .foundry_native import _json
+    if raw.startswith(b'{'):
+        raw = _json(raw)['message']['content'].encode('utf-8')
+    return _json(raw.rsplit(b'\n\n', 1)[-1])
+
+
 def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQUEST_BYTES):
     if not isinstance(request, dict):
         raise native_error("native request must be an object")
@@ -19,7 +27,7 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         if "response_contract" in request and request["response_contract"] != contract:
             raise native_error("request changed the authoritative response contract")
         kind = request.get("kind")
-        if backend not in {"codex", "claude"} and not (backend == "agy" and kind == "review"):
+        if backend not in {"codex", "claude"} and not (backend == "agy" and kind in ("review", "coordinate")):
             raise native_error("unknown analyst backend")
         roles = {
             "coordinate": (
@@ -323,7 +331,12 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         if backend == "agy":
             from ._dispatch_agy import user_frame
             from ._agy_review import diff_command
-            command = diff_command(request)
+            if kind == "coordinate":
+                text = ("This is a read-only Foundry manager turn in AGY plan mode. Decide from the supplied "
+                        "packet and existing conversation. Use native file tools for a focused read when needed. "
+                        "Delegate shell commands, tests and edits to the selected worker. Return the structured "
+                        "decision directly.\n" + text)
+            command = diff_command(request) if kind == "review" else None
             if command:
                 text = ("For shell access, execute the following exact command on its own. "
                         "Headless approval matches the complete command line. Use native file tools for "

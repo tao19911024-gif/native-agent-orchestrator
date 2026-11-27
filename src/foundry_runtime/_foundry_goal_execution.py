@@ -355,7 +355,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             manifest.update(manager_state=manager_state, manager_packet=manager_packet,
                 live_manager_decision=guidance, manager_phase='dispatch_pending')
             manifest['coordination_models'] = list(dict.fromkeys(m for m in [*manifest.get('coordination_models', []), manager_state.get('model')] if m))
-            manifest['coordination'] = {**manifest.get('coordination', {}), 'status': 'opus_coordination' if manager_state['backend'] == 'claude' else 'codex_quota_fallback',
+            manifest['coordination'] = {**manifest.get('coordination', {}), 'status': _foundry_manager.coordination_status(manager_state),
                 'last_decision': guidance['evidence'], 'during_worker_turn': True}
             if guidance['action'] == 'await_input':
                 manifest['coordination']['commander_question'] = guidance['instruction']
@@ -608,8 +608,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                         execution_decision = {**(execution_decision or {}), 'manager': guidance}
                         if manager_state.get('live_coordination') == 1:
                             manifest['coordination'] = {**manifest.get('coordination', {}),
-                                'status': ('codex_quota_fallback' if manager_state.get('quota_fallback') else
-                                           'opus_coordination' if manager_state['backend'] == 'claude' else 'codex_coordination'),
+                                'status': _foundry_manager.coordination_status(manager_state),
                                 'last_decision': guidance['evidence']}
                         manifest.update(manager_state=manager_state, manager_packet=manager_packet, execution_decision=execution_decision,
                                         manager_phase='feedback_pending' if late_update else {'review': 'review_pending', 'deliver_artifacts': 'artifacts_pending',

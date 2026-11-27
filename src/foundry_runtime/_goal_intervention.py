@@ -477,7 +477,8 @@ def deliveries(root):
         raw = stdin.read_bytes()
         if hashlib.sha256(raw).hexdigest() != allocation['stdin_sha256']:
             raise ValueError('manager request bytes changed')
-        packet = json.loads(raw.rsplit(b'\n\n', 1)[-1])['packet']
+        from ._foundry_native_request import captured_envelope
+        packet = captured_envelope(raw)['packet']
         for row in (packet.get('manager_handoff') or {}).get('history', []):
             paths.add(Path(row['request']['path']).with_name('reservation.json'))
         messages = packet.get('operator_message_ids', [])

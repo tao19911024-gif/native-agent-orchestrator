@@ -327,7 +327,15 @@ project context. A standalone `--resume` uses the Bash budget supplied by the
 runtime and project used to launch it. Use the original runtime when a
 standalone session needs its original default.
 
-A new Codex-executed goal starts with a persistent Claude Opus manager. Install
+Use `--manager-profile carbon` on a new goal to select Gemini 4 Carbon High
+(`gemini-4-carbon-high`) through the signed-in Antigravity CLI. A project can set
+`default_staffing.manager_profile` to `carbon`. The manager uses plan mode to
+assign work, assess returned evidence and route the candidate to independent
+review. Coding uses the selected launcher. Subsequent decisions resume the
+recorded manager conversation. An explicit manager transfer uses
+`--handoff-role manager --handoff-provider agy` with the continuation file.
+
+By default, a new Codex-executed goal starts with a persistent Claude Opus manager. Install
 and authenticate both Codex CLI and Claude Code for the
 [coding and review workflow](../examples/REVIEW.md#requirements). Selecting
 `--team-profile none` uses a direct coding worker and retains that manager.
