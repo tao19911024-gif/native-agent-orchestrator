@@ -128,7 +128,10 @@ def test_interrupted_continuation_admission_also_restores_manager(failed_goal, t
 
 def test_manager_choice_remains_dynamic(monkeypatch, tmp_path):
     from foundry_runtime._compute_selection import missing_manager_profile
-    original = manager.model
-    monkeypatch.setattr(manager, 'model', lambda tier: 'future-opus' if tier == 'opus' else original(tier))
+    from foundry_runtime import _model_catalogue
+    catalogue = {'claude': {'models': {'opus': 'future-opus', 'fable': 'future-fable'}}}
+    monkeypatch.setattr(_model_catalogue, '_answers', lambda: catalogue)
     profile = missing_manager_profile({})
-    assert manager.configuration_for({'manager_profile': profile}, tmp_path)['model'] == 'future-opus'
+    state = manager.configuration_for({'manager_profile': profile}, tmp_path)
+    assert state['model'] == 'future-opus'
+    assert state['expert']['model'] == 'future-fable'
