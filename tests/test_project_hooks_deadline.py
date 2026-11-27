@@ -25,7 +25,7 @@ def test_project_hook_uses_task_deadline(tmp_path, monkeypatch, operation, deadl
         "print(json.dumps(result))\n", encoding='utf-8')
     selected = SimpleNamespace(
         project={'execution': {operation + '_argv': [sys.executable, str(script),
-                                                    '2' if deadline_case == 'during' else '0']}},
+                                                    '30' if deadline_case == 'during' else '0']}},
         context=SimpleNamespace(record=lambda: {'project_id': 'synthetic'}), workspace=tmp_path)
     original_spawn = hooks.OwnedProcess.spawn
     processes = []
@@ -36,8 +36,13 @@ def test_project_hook_uses_task_deadline(tmp_path, monkeypatch, operation, deadl
         return process
 
     monkeypatch.setattr(hooks.OwnedProcess, 'spawn', spawn)
-    deadline = (time.time() - 1 if deadline_case == 'expired' else
-                time.time() + .5 if deadline_case == 'during' else None)
+    now = time.time()
+    if deadline_case == 'during':
+        # Expire on the first deadline check after the real child starts. File
+        # preparation and runner scheduling must not turn this into pre-spawn expiry.
+        monkeypatch.setattr(_task_deadline, 'time', SimpleNamespace(time=lambda: now + bool(processes)))
+    deadline = (now - 1 if deadline_case == 'expired' else
+                now + .5 if deadline_case == 'during' else None)
     with _task_deadline.scope(deadline):
         result = hooks.observe(selected, operation, tmp_path / 'evidence',
                                task={'order': 'synthetic'}, subject={'candidate_commit': 'candidate'}, env=None)
