@@ -20,7 +20,7 @@ def settle_terminal(intent, log):
     from ._execution_intent import IntentConflict, _digest
     from .app_server_transport import AppServer
     record = intent.record
-    if (record['state'] not in ('active', 'unknown') or record.get('launcher') not in ('app-server', 'claude')
+    if (record['state'] not in ('active', 'unknown') or record.get('launcher') not in ('app-server', 'claude', 'agy')
             or 'recovery_authorization' in record or 'recovery_consumption' in record):
         raise IntentConflict('retained turn requires its original unresolved native attempt')
     if record['launcher'] == 'claude':
@@ -31,6 +31,14 @@ def settle_terminal(intent, log):
             raise IntentConflict('Claude native returncode is not recorded')
         result = verify_terminal(terminal, session=record['session_id'], returncode=rc, attempt_id=record['attempt_id'])
         final_text = coding_report(terminal['stdout']['path'], result)
+        binding = record
+    elif record['launcher'] == 'agy':
+        from . import _dispatch_agy
+        terminal = json.loads(log.with_suffix('.terminal.json').read_bytes())
+        rc = terminal['returncode']
+        result = _dispatch_agy.verify_terminal(terminal, session=record['session_id'], returncode=rc,
+                                                attempt_id=record['attempt_id'])
+        final_text = _dispatch_agy.coding_report(result)
         binding = record
     else:
         binding = record['turn_binding']
@@ -130,7 +138,11 @@ that did not preserve the original bound root/cleanup evidence.
         kind, data = row['kind'], row['data']
         fields = allowed.get(kind, set())
         modern = row['schema_version'] == 2
-        if kind == 'finish' and modern:
+        agy = projected.get('launcher') == 'agy'
+        refusal = kind == 'not_started' and agy and 'agy_start_refusal' in data
+        if refusal:
+            fields = fields | {'agy_start_refusal'}
+        if kind == 'finish' and (modern or agy):
             fields = fields | {'returncode_source', 'native_returncode'}
         if kind not in allowed or not set(data) <= fields:
             raise IntentConflict('recovery event changes execution identity outside its owner')
@@ -172,9 +184,15 @@ that did not preserve the original bound root/cleanup evidence.
                 raise IntentConflict('recovery unknown cleanup names another attempt')
         elif 'cleanup' in data:
             cleanup = data['cleanup']
+            keys = ('attempt_id', 'root_pid', 'root_creation_time')
+            if refusal:
+                from ._dispatch_agy import verify_start_refusal
+                verify_start_refusal(data['agy_start_refusal'])
+                if any(type(cleanup.get(k)) is not int or cleanup[k] <= 0 for k in keys[1:]):
+                    raise IntentConflict('AGY startup refusal has no cleaned native process')
+                keys = ('attempt_id',)
             if (not isinstance(cleanup, dict)
-                    or any(cleanup.get(k) != projected.get(k)
-                           for k in ('attempt_id', 'root_pid', 'root_creation_time'))
+                    or any(cleanup.get(k) != projected.get(k) for k in keys)
                     or cleanup.get('cleanup_verified') is not True
                     or cleanup.get('root_exited') is not True
                     or type(cleanup.get('job_active_processes')) is not int
@@ -192,6 +210,7 @@ that did not preserve the original bound root/cleanup evidence.
             if (predecessor or type(data['returncode']) is not int
                     or data['verification'] != 'not_evaluated'
                     or data['outcome'] not in outcomes
+                    or (agy and (data['returncode_source'] != 'agy_result' or type(data['native_returncode']) is not int))
                     or (modern and (data['returncode_source'] != 'turn_status' or data['native_returncode'] is not None))):
                 raise IntentConflict('recovery completion classification is invalid')
         projected.update(data)

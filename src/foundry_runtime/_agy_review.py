@@ -40,7 +40,8 @@ class ReviewProtocol:
         self.init = self.result = self.decoded = self.schema_failure = None
 
     def accept(self, row):
-        from .foundry_native import NativeError
+        from .foundry_native import NativeError, NativeProviderError
+        from ._dispatch_agy import start_refusal
         event = row.get("event")
         if self.result is not None:
             raise NativeError("unexpected AGY event after terminal result")
@@ -49,6 +50,9 @@ class ReviewProtocol:
             if isinstance(session, str) and session:
                 self.init = {"session_id": session, "model": row["init"].get("model")}
                 return
+        elif event == "result" and not self.init:
+            if (reason := start_refusal(row["result"])):
+                raise NativeProviderError(reason, event=row["result"])
         elif self.init and event in ("result", "step_update"):
             payload = row[event]
             if payload.get("conversation_id") != self.init["session_id"]:
@@ -56,7 +60,8 @@ class ReviewProtocol:
             if event == "step_update":
                 return
             if payload.get("status") != "SUCCESS":
-                raise NativeError("AGY review returned " + str(payload.get("status")))
+                raise NativeProviderError("AGY returned " + str(payload.get("status")) + ": " +
+                                          str(payload.get("error") or payload.get("response") or ""), event=payload)
             self.result = payload
             self.decoded = payload.get("structured_output")
             if not isinstance(self.decoded, dict):

@@ -399,7 +399,7 @@ class ExecutionIntent:
 
     @staticmethod
     def recovery_spent_without_start(intents_dir, consumption, *, task_key):
-        """True when this consumption's successor attempt ended not_started with no process.
+        """True when this consumption's successor attempt provably did no work.
 
         Such a consumption produced no execution, so the same authorization may be consumed
         again by the same successor. Judged from the successor's history, not its current
@@ -418,10 +418,14 @@ class ExecutionIntent:
             cleanup = row.get('data', {}).get('cleanup')
             if (row.get('kind') == 'not_started' and isinstance(cleanup, dict)
                     and cleanup.get('attempt_id') == consumption.get('attempt_id')
-                    and cleanup.get('root_pid') is None and cleanup.get('root_creation_time') is None
                     and cleanup.get('root_exited') is True and cleanup.get('cleanup_verified') is True
                     and cleanup.get('job_active_processes') == 0):
-                return True
+                if cleanup.get('root_pid') is None and cleanup.get('root_creation_time') is None:
+                    return True
+                if row['data'].get('agy_start_refusal'):
+                    from ._dispatch_agy import verify_start_refusal
+                    verify_start_refusal(row['data']['agy_start_refusal'])
+                    return True
         # Consumption can precede a failed admission with no start event. Test
         # this attempt's whole retained history, not the successor's current state:
         # the result must remain true after a later authorized attempt starts.
@@ -778,6 +782,12 @@ class ExecutionIntent:
             self._recovery.require_live_execution()
         if self.state != "not_started":
             raise IntentConflict("existing attempt is completed or unresolved; do not replay it")
+        prior = self._record.get("cleanup") or {}
+        if prior.get("root_pid") is not None:
+            from ._dispatch_agy import verify_start_refusal
+            if self.frozen.get("launcher") != "agy" or not self._record.get("agy_start_refusal"):
+                raise IntentConflict("previous native root lacks startup refusal evidence")
+            verify_start_refusal(self._record["agy_start_refusal"])
         allowed = ({self.frozen["launcher"]} if self.frozen.get("launcher") in ("claude", "agy") else {"app-server"} if self.frozen["operation"] == "resume"
                    and self.frozen.get("launcher") == "app-server" else
                    {"exec-resume"} if self.frozen["operation"] == "resume" else
@@ -838,15 +848,22 @@ class ExecutionIntent:
         self._check_turn_binding(self._record, binding)
         self._append('turn_bound', 'active', {'turn_binding': binding})
 
-    def not_started(self, cleanup: CleanupReceipt):
+    def not_started(self, cleanup: CleanupReceipt, *, refusal=None):
         if self.state != "starting":
             raise IntentConflict("only the starting controller may establish no-spawn")
         self._same_controller()
-        if (cleanup.attempt_id != self._record["attempt_id"] or cleanup.root_pid is not None
-                or cleanup.root_creation_time is not None or not cleanup.cleanup_verified
+        if (cleanup.attempt_id != self._record["attempt_id"] or not cleanup.cleanup_verified
                 or not cleanup.root_exited or cleanup.job_active_processes != 0):
+            raise IntentConflict("no-spawn requires a matching measured cleanup receipt")
+        data = {"cleanup": asdict(cleanup)}
+        if refusal is not None:
+            if (self._record['launcher'] != 'agy' or not cleanup.root_pid or not cleanup.root_creation_time
+                    or refusal.process_identity != (cleanup.attempt_id, cleanup.root_pid, cleanup.root_creation_time)):
+                raise IntentConflict("AGY refusal does not identify the cleaned process")
+            data["agy_start_refusal"] = refusal.reference
+        elif cleanup.root_pid is not None or cleanup.root_creation_time is not None:
             raise IntentConflict("no-spawn requires a matching measured no-child cleanup receipt")
-        self._append("not_started", "not_started", {"cleanup": asdict(cleanup)})
+        self._append("not_started", "not_started", data)
 
     def unknown(self, reason: str, cleanup: CleanupReceipt | None = None):
         if self.state not in {"starting", "active", "unknown"} or not isinstance(reason, str) or not reason:
@@ -872,6 +889,13 @@ class ExecutionIntent:
             raise IntentConflict('reconciliation requires an active/unknown bound attempt before recovery')
         identity = {key: self._record[key] for key in (
             'attempt_id', 'owner_pid', 'owner_creation_time', 'root_pid', 'root_creation_time')}
+        if identity['root_pid'] is None and self._record.get('launcher') == 'agy':
+            # Older AGY dispatches published active only after receiving init.
+            # Their same-attempt cleanup can identify the exited CLI before that boundary.
+            measured = self._record.get('cleanup') or {}
+            if (measured.get('attempt_id') == identity['attempt_id'] and measured.get('cleanup_verified') is True
+                    and measured.get('root_exited') is True and measured.get('job_active_processes') == 0):
+                identity.update(root_pid=measured['root_pid'], root_creation_time=measured['root_creation_time'])
         if lock.exists():
             raw = lock.read_bytes()
             payload = json.loads(raw)
@@ -888,7 +912,7 @@ class ExecutionIntent:
         cleanup, observation = measure_abandoned(identity)
         if lease is None:
             observation['occupancy'] = ('absent: ' + str(lock) + ' did not exist at reconciliation; '
-                                        'identities read from the intent start and active events')
+                                        'identities read from the intent journal')
             if lock.exists():
                 raise IntentConflict('executor occupancy appeared during observation')
         elif lock.read_bytes() != raw:

@@ -436,7 +436,7 @@ def _resume_attempt(
         if "package_launch" in locals():
             package_launch.finish()
         if log is not None:
-            owner._failed_intent(intent, log)
+            owner._failed_intent(intent, log, exc)
             if log.with_suffix('.package.json').is_file():
                 exc.dispatch_package = str(log.with_suffix('.package.json'))
         raise

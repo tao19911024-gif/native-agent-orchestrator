@@ -1004,7 +1004,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
             _write(evidence_dir / 'manifest.json', manifest)
         elif ((manager_state is not None or manifest.get('expert_state')) and manifest.get('manager_phase') == 'dispatch_pending'
                 and isinstance(getattr(exc, 'dispatch_stop', None), DispatchNotStarted)):
-            # The dispatcher still owns proof that no child started. Preserve
+            # The dispatcher owns proof that no worker turn started. Preserve
             # the same decision for an explicit retry after resolving its refusal.
             manifest['manager_phase'] = 'delegation_ready'
             _write(evidence_dir / 'manifest.json', manifest)

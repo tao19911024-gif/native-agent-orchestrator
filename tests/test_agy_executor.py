@@ -2,11 +2,109 @@
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 import pytest
 
 from foundry_runtime import _dispatch_agy as agy, _foundry_dispatch as dispatch, cli
 from test_installed_runtime import external, offline
+
+
+@pytest.mark.parametrize("change", [{"num_turns": 1}, {"conversation_id": "existing"},
+                                    {"usage": {"total_tokens": 4}}, {"error": "connection lost"}])
+def test_ambiguous_startup_is_not_retryable(tmp_path, change):
+    row = {"status": "ERROR", "error": "failed to start conversation: unavailable", "response": "",
+           "conversation_id": "", "num_turns": 0, "usage": {"total_tokens": 0}, **change}
+    stream = tmp_path / "dispatch.agy.jsonl"
+    stream.write_text(json.dumps({"event": "result", "result": row}))
+    with pytest.raises(ValueError) as error:
+        agy.read_result(stream, None)
+    assert not isinstance(error.value, agy.StartRefused)
+
+
+def test_structured_roles_retain_provider_reason():
+    from foundry_runtime._agy_review import ReviewProtocol
+    from foundry_runtime.foundry_native import NativeProviderError
+    protocol = ReviewProtocol({})
+    row = {"status": "ERROR", "error": "failed to start conversation: unavailable", "response": "",
+           "conversation_id": "", "num_turns": 0, "usage": {"total_tokens": 0}}
+    with pytest.raises(NativeProviderError, match="failed to start conversation"):
+        protocol.accept({"event": "result", "result": row})
+    protocol = ReviewProtocol({})
+    protocol.accept({"event": "init", "conversation_id": "sid", "init": {}})
+    with pytest.raises(NativeProviderError, match="fixture failure"):
+        protocol.accept({"event": "result", "result": {**row, "conversation_id": "sid", "error": "fixture failure"}})
+
+
+@pytest.mark.parametrize("route", ["reconcile", "authorize", "legacy_close"])
+def test_recover_interrupted_agy_dispatch(external, tmp_path, monkeypatch, route):
+    from foundry_runtime import recovery
+    from foundry_runtime._execution_intent import ExecutionIntent
+    from foundry_runtime._recovery_reconciliation import _execution_events
+    tree, scope, order, _ = external
+    sid = "00000000-0000-0000-0000-000000000001"
+    rows = [{"event": "init", "conversation_id": sid, "init": {}}, {"event": "result", "result":
+        {"conversation_id": sid, "status": "ERROR", "response": "", "error": "fixture service error"}}]
+    args = [sys.executable, "-B", "-c", "import sys;sys.stdin.buffer.read();print(" +
+            repr("\n".join(map(json.dumps, rows))) + ")"]
+    if route == "legacy_close":
+        # An older controller exited after spawning the CLI but before receiving init.
+        args = [sys.executable, "-B", "-c", "pass"]
+    controller = """
+import sys
+from pathlib import Path
+from foundry_runtime import _dispatch_agy as agy, _foundry_dispatch as dispatch
+from foundry_runtime._project_execution import open_project
+import json
+agy.argv = lambda *a: json.loads(sys.argv[3])
+def interrupted(*args): raise RuntimeError('fixture interrupted publication')
+dispatch._finish_intent = interrupted
+dispatch.dispatch_order(Path(sys.argv[2]), project=open_project(sys.argv[1]), launcher='agy', model='gemini-4-neon-high')
+"""
+    proc = subprocess.run([sys.executable, "-B", "-c", controller, str(scope.path), str(order), json.dumps(args)],
+                          capture_output=True, text=True, timeout=30)
+    assert proc.returncode
+    log = scope.evidence("TASK1") / "dispatch.log"
+    if route == "legacy_close":
+        assert "lacks matching conversation" in proc.stderr
+        journal, = (scope.common_dir / "pdcl-dispatch/task-TASK1/intents").iterdir()
+        record = ExecutionIntent.read_history(journal, task_key="TASK1")[0]
+        assert record["root_pid"] is None and record["cleanup"]["root_pid"]
+        closed = ExecutionIntent.settle_abandoned(scope.common_dir, "TASK1", record["frozen"],
+            intent_id=record["intent_id"], output=tmp_path / "legacy.cleanup.json", close_reason="Retire the abandoned task")
+        assert closed["state"] == "closed" and closed["cleanup"]["root_pid"] == record["cleanup"]["root_pid"]
+        return
+    assert "fixture interrupted publication" in proc.stderr
+    package = log.with_suffix(".package.json")
+    journal = Path(json.loads(package.read_bytes())["intent_journal"])
+    record = ExecutionIntent.read_history(journal, task_key="TASK1")[0]
+    assert record["state"] == "unknown"
+    plan = recovery.command_plan(package, journal, record)
+    assert plan["status"] == "explicit_recovery_commands"
+    if route == "reconcile":
+        saved = ExecutionIntent.settle_completed_turn(scope.common_dir, "TASK1", record["frozen"],
+                                                     intent_id=record["intent_id"], log=log)
+        assert saved["outcome"] == "process_failed" and saved["returncode"] == 1
+        assert Path(saved["evidence"]["result"]["path"]).read_text() == "fixture service error"
+        _execution_events(journal)
+        return
+    grant = tmp_path / "ruling.md"
+    grant.write_text("Continue the original session.\n\n## owner-recovery\n- **Authority:** operator\n"
+                     "- **Granted:** 2026-10-08\n- **Scope:** TASK1; recover this candidate.\n")
+    commands = {key: [str(grant) if arg == "<prompt-file>" else "owner-recovery" if arg == "<grant-anchor>" else arg
+                      for arg in argv] for key, argv in plan["argv"].items()}
+    assert recovery.main(commands["reconcile"][3:]) == 0
+    assert recovery.main([*commands["authorize"][3:], "--operator-grant-document", str(grant)]) == 0
+    calls = []
+    def continued(model, session):
+        calls.append((model, session))
+        return args
+    monkeypatch.setattr(agy, "argv", continued)
+    resume = dict(project=scope, launcher="agy", model="gemini-4-neon-high", recovery_file=commands["authorize"][-1])
+    attempt = dispatch.resume_order(sid, tree, "TASK1", grant.read_text(), **resume)
+    assert attempt[0] == 1
+    assert dispatch.resume_order(sid, tree, "TASK1", grant.read_text(), **resume).replayed
+    assert calls == [("gemini-4-neon-high", sid)]
 
 
 @pytest.mark.parametrize("status,expected,commands", [("SUCCESS", 0, None), ("SUCCESS", 0, ["git status -sb", "pnpm test"]), ("ERROR", 1, [])])

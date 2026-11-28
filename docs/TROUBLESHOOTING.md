@@ -117,6 +117,22 @@ progress. An exited process without a receipt still needs cleanup and result
 reconciliation; it is not evidence of a deadlock. Preserve successful native
 terminals and inspect the exact attempt before considering recovery.
 
+### Antigravity session startup and recovery
+
+If AGY reports `failed to start conversation`, inspect the dispatch's
+`.agy.jsonl` and `.cleanup.json`. A single startup rejection with an empty
+conversation ID, zero turns and zero tokens, followed by verified process
+cleanup, leaves the assignment ready for an explicit retry. Recover the
+managed goal through its existing entry, or repeat the original standalone
+dispatch. Each attempt retains its own stream and cleanup record.
+
+After AGY has returned a conversation ID, use the recorded session for
+continuations. If the controller stopped before publishing the hand-back,
+goal recovery verifies the existing terminal result and process cleanup
+before returning the result to the manager. An interrupted turn without a
+terminal uses the original active journal event and the project's recovery
+grant. The recovery command in project status supplies the session header.
+
 Include the reproduction command, installed package version, Python and native
 client versions, operating system, expected result, actual result, and relevant
 receipt fields. Retain full logs locally and provide excerpts with synthetic

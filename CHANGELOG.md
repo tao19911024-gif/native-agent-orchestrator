@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0a129 — 2026-11-27
+
+- An AGY startup rejection with zero execution and verified cleanup preserves
+  the manager's assignment for explicit retry. Coding, manager and reviewer
+  diagnostics retain the provider's error message.
+- Interrupted AGY workers support terminal reconciliation and authorized
+  same-session recovery. Recovery verifies the native result, process cleanup
+  and original journal identity. Coding transfers respect frozen AGY reviewers.
+
 ## 0.1.0a128 — 2026-11-27
 
 - New goals can select Gemini 4 Carbon High as their persistent manager through
