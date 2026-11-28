@@ -75,8 +75,14 @@ def command_plan(package_path, journal, record):
     launcher = record['frozen']['launcher']
     kind = 'turn_bound' if launcher == 'app-server' else 'active'
     events = [(p, json.loads(p.read_bytes())) for p in sorted(journal.glob('*.json'))]
-    headers = [p for p, event in events if event.get('kind') == kind and
-               (event.get('data', {}).get('turn_binding') or event.get('data', {})).get('attempt_id') == record['attempt_id']]
+    headers = []
+    attempt_id = None
+    for path, event in events:
+        data = event['data']
+        if event['kind'] == 'start':
+            attempt_id = data['attempt_id']
+        if event['kind'] == kind and attempt_id == record['attempt_id']:
+            headers.append(path)
     session = (record.get('turn_binding') or {}).get('thread_id') or record.get('session_id')
     descriptor = (record['frozen'].get('project_context') or {}).get('descriptor')
     if descriptor:
@@ -99,10 +105,10 @@ def command_plan(package_path, journal, record):
     def powershell(argv):
         variables = {'<prompt-file>': '$PromptFile', '<grant-anchor>': '$GrantAnchor'}
         return '& ' + ' '.join(variables.get(arg, "'" + str(arg).replace("'", "''") + "'") for arg in argv)
-    if launcher not in ('app-server', 'claude') or len(headers) != 1 or not session:
+    if launcher not in ('app-server', 'claude', 'agy') or len(headers) != 1 or not session:
         return {'status': 'reconcile_only', 'runtime_python': python, 'argv': commands,
                 'powershell': {key: powershell(argv) for key, argv in commands.items()},
-                'reason': 'Authorization needs a recorded native session and original app-server turn_bound or Claude active event; '
+                'reason': 'Authorization needs a recorded native session and original app-server turn_bound or Claude/AGY active event; '
                           'exec recovery requires its original Codex startup header. Reconciliation alone does not authorize execution.'}
     from ._project_status import resume_argv
     continuation = resume_argv(descriptor or '', record['task_key'], session, record['frozen'], python,
@@ -139,7 +145,7 @@ def prepare(*, task_key, predecessor, successor, operator_grant, output, session
     if output.exists() or source.exists():
         raise ValueError('recovery output/source already exists; preserve the original evidence')
     value = {
-        'schema_version': 'pdcl-execution-recovery-5' if successor.get('candidate_snapshot') else {'claude': 'pdcl-execution-recovery-4',
+        'schema_version': 'pdcl-execution-recovery-5' if successor.get('candidate_snapshot') else {'claude': 'pdcl-execution-recovery-4', 'agy': 'pdcl-execution-recovery-4',
                            'app-server': 'pdcl-execution-recovery-3'}.get(
                                successor.get('launcher'), 'pdcl-execution-recovery-2'),
         'decision_id': str(uuid.uuid4()), 'authorized_by': 'operator',
@@ -271,7 +277,7 @@ def main(argv=None, *, project_adapter=None):
     launcher = record['frozen'].get('launcher')
     if launcher == 'app-server':
         session = record.get('turn_binding', {}).get('thread_id')
-    elif launcher == 'claude':
+    elif launcher in ('claude', 'agy'):
         session = record.get('session_id')
     else:
         session = read_session_header(args.session_header, tree)
@@ -304,7 +310,7 @@ def main(argv=None, *, project_adapter=None):
         'candidate_head': _worktree_head(tree, **_repository_options(project)),
         'amendment_sha256': _sha(message.encode('utf-8')),
     }
-    if launcher in {'app-server', 'claude'}:
+    if launcher in {'app-server', 'claude', 'agy'}:
         successor['launcher'] = launcher
     if args.foundry_manifest and manifest.get('manager_state') is not None:
         if args.amendment:

@@ -517,7 +517,12 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
     if "team_override" in continuation:
         packet["team_override"] = continuation["team_override"]
     if provider == "agy" and source != provider:
-        from ._compute_selection import AGY_MODEL
+        from ._compute_selection import AGY_MODEL, coding_review_conflict
+        from ._foundry_goal_transitions import reserved_review_models
+        conflict = coding_review_conflict(AGY_MODEL, reserved_review_models(options.get('task_staffing'),
+            options.get('compute_assignment'), options.get('reviewers'), options.get('manager_state')))
+        if conflict:
+            raise owner.GoalBlocked(conflict)
         coding = {"backend": "agy", "model": AGY_MODEL, "effort": "high"}
     elif source == provider:
         coding = ((options.get('role_compute') or {}).get('roles', {}).get('coding') or

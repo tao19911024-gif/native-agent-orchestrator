@@ -134,9 +134,9 @@ class RecoveryAuthorization:
         snapshot = value['schema_version'] == 'pdcl-execution-recovery-5'
         launcher = successor.get('launcher') if isinstance(successor, dict) else None
         modern = value['schema_version'] == 'pdcl-execution-recovery-3' or (snapshot and launcher == 'app-server')
-        claude = value['schema_version'] == 'pdcl-execution-recovery-4' or (snapshot and launcher == 'claude')
+        active_session = value['schema_version'] == 'pdcl-execution-recovery-4' or (snapshot and launcher in ('claude', 'agy'))
         fields = {"session_id", "session_header", "worktree", "candidate_head", "amendment_sha256"}
-        if modern or claude:
+        if modern or active_session:
             fields.add('launcher')
         if snapshot:
             fields.add('candidate_snapshot')
@@ -148,7 +148,7 @@ class RecoveryAuthorization:
             _reference_bytes(successor['foundry_manifest'], 'Foundry recovery manifest')
         if (not isinstance(successor, dict) or set(successor) != fields
                 or (modern and successor['launcher'] != 'app-server')
-                or (claude and successor['launcher'] != 'claude')):
+                or (active_session and launcher not in ('claude', 'agy'))):
             raise IntentConflict("recovery successor fields are incomplete")
         if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', str(successor['session_id'])):
             raise IntentConflict('recovery successor session identity is invalid')
@@ -177,8 +177,8 @@ class RecoveryAuthorization:
                 tree = read_session_worktree(bound, self._session_root) if self._session_root else read_session_worktree(bound)
                 if tree.resolve() != Path(worktree).resolve():
                     raise IntentConflict('app-server recovery thread belongs to another worktree')
-        elif claude:
-            # Claude's active journal event already owns session/process identity.
+        elif active_session:
+            # The active journal event already owns session/process identity.
             # Retain it, as app-server retains turn_bound; do not invent a Codex header.
             event = json.loads(header_raw)
             active = event.get('data', {})
@@ -186,7 +186,7 @@ class RecoveryAuthorization:
                     or event.get('intent_id') != predecessor['intent_id']
                     or predecessor['event_sha256s'].get(Path(successor['session_header']['path']).name) != _sha(header_raw)
                     or any(active.get(k) != predecessor[k] for k in ('root_pid', 'root_creation_time'))):
-                raise IntentConflict('Claude recovery requires the original active session event')
+                raise IntentConflict(f'{launcher} recovery requires the original active session event')
             bound = active.get('session_id')
         elif self._historical_readback:
             from ._native_session import read_retained_session_header

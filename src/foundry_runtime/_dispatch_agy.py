@@ -43,31 +43,67 @@ def argv(model, session):
     return args
 
 
+class StartRefused(ValueError):
+    """A sole native terminal explicitly reports that no worker turn began."""
+
+    def __init__(self, message, reference):
+        super().__init__(message)
+        self.reference = reference
+
+
+def start_refusal(result):
+    error = result.get("error")
+    usage = result.get("usage")
+    if (result.get("status") == "ERROR" and result.get("conversation_id") == ""
+            and type(result.get("num_turns")) is int and result["num_turns"] == 0 and result.get("response") == ""
+            and isinstance(usage, dict) and usage.get("total_tokens") == 0
+            and all(type(value) is int and value == 0 for value in usage.values())
+            and isinstance(error, str) and error.startswith("failed to start conversation:")):
+        return error
+
+
 def read_result(path, session):
     digest = hashlib.sha256()
     init = result = reported_model = None
+    events = 0
     with Path(path).open("rb") as stream:
         for line in stream:
             digest.update(line)
             if not line.strip():
                 continue
             row = json.loads(line)
+            events += 1
+            if result is not None:
+                raise ValueError("unexpected AGY event after terminal result")
             if row.get("event") == "init":
                 if init is not None:
                     raise ValueError("duplicate AGY initialization")
                 init = row["conversation_id"]
                 reported_model = (row.get("init") or {}).get("model")
             elif row.get("event") == "result":
-                if result is not None or not init:
-                    raise ValueError("unexpected AGY result")
                 result = row["result"]
+    reference = {"path": str(Path(path).resolve()), "sha256": digest.hexdigest()}
+    if (events == 1 and session is None and not row.get("conversation_id") and isinstance(result, dict)
+            and (error := start_refusal(result))):
+        raise StartRefused(error, reference)
     if not init or init != session or not result or result.get("conversation_id") != init:
         raise ValueError("AGY terminal lacks matching conversation evidence")
-    return result, reported_model, {"path": str(Path(path).resolve()), "sha256": digest.hexdigest()}
+    return result, reported_model, reference
+
+
+def verify_start_refusal(reference):
+    try:
+        read_result(reference["path"], None)
+    except StartRefused as refusal:
+        if refusal.reference == reference:
+            return
+    raise ValueError("AGY startup refusal differs from the recorded stream")
 
 
 def coding_report(result):
     response = result.get("response") or ""
+    if result.get("status") != "SUCCESS" and result.get("error"):
+        response = "\n\n".join(filter(None, (response, str(result["error"]))))
     denied = result.get("denied_actions") or []
     if denied:
         details = json.dumps(denied, ensure_ascii=False)
@@ -146,7 +182,11 @@ def run(owner, body, worktree, log, out, tag, *, lease, on_started,
                         break
                     _task_deadline.check()
                     time.sleep(0.2)
-        result, reported_model, reference = read_result(stream_path, session)
+        try:
+            result, reported_model, reference = read_result(stream_path, session)
+        except StartRefused as exc:
+            exc.process_identity = (lease.attempt_id, proc.pid, proc.creation_time)
+            raise
         rc = native_rc or int(result["status"] != "SUCCESS")
         proof = {"schema_version": "foundry-agy-terminal-1", "session_id": session,
                  "attempt_id": lease.attempt_id, "executable": args[0],

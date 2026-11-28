@@ -492,9 +492,9 @@ def _finish_intent(intent, log, out, rc):
     return _intent_outcome(intent)
 
 
-def _failed_intent(intent, log):
+def _failed_intent(intent, log, error=None):
     # A root may have started even if the handoff or its callback raised.
-    # Only a measured matching no-child receipt allows retry.
+    # A retry needs verified cleanup and evidence that no worker turn began.
     if intent.state not in {"starting", "active"}:
         return
     cleanup = None
@@ -502,7 +502,11 @@ def _failed_intent(intent, log):
         cleanup = CleanupReceipt(**json.loads(log.with_suffix(".cleanup.json").read_bytes()))
     except (OSError, ValueError, TypeError):
         pass
-    if intent.state == "starting" and cleanup is not None and cleanup.root_pid is None:
+    from ._dispatch_agy import StartRefused
+    if (intent.state == "starting" and isinstance(error, StartRefused) and cleanup and cleanup.cleanup_verified
+            and cleanup.root_exited and cleanup.job_active_processes == 0):
+        intent.not_started(cleanup, refusal=error)
+    elif intent.state == "starting" and cleanup is not None and cleanup.root_pid is None:
         intent.not_started(cleanup)
     else:
         intent.unknown("launcher did not durably complete; reconcile before another execution", cleanup)
@@ -582,9 +586,8 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
             out = log.parent / (log.stem.replace("dispatch", "last_message", 1) + ".md")
             prior = intent.record.get("cleanup")
             if prior is not None and intent.state == "not_started":
-                # Only the durable same-intent no-child transition grants this
-                # retry path. A failed/unknown root still requires reconciliation.
-                if (prior.get("root_pid") is not None or prior.get("cleanup_verified") is not True
+                # The intent owner verifies the previous start evidence before launch.
+                if (prior.get("cleanup_verified") is not True
                         or prior.get("attempt_id") != intent.record.get("attempt_id")):
                     raise RuntimeError("prior no-child receipt is inconsistent")
                 attempts = [int(m[1]) for p in log.parent.glob(stem + "_retry*.log")
@@ -644,7 +647,7 @@ def dispatch_order(order: Path, *, tag: str = "", launcher: str = "exec",
         except BaseException as exc:
             if "package_launch" in locals():
                 package_launch.finish()
-            _failed_intent(intent, log)
+            _failed_intent(intent, log, exc)
             if log.with_suffix('.package.json').is_file():
                 exc.dispatch_package = str(log.with_suffix('.package.json'))
             raise

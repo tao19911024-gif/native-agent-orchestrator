@@ -142,6 +142,12 @@ def stop_cause(terminal):
     """
     if terminal.get('schema_version') == 'pdcl-app-server-terminal-1':
         return terminal.get('expiration_cause') or _app_server_provider_cause(terminal)
+    if terminal.get('schema_version') == 'foundry-agy-terminal-1' and terminal.get('returncode'):
+        from ._dispatch_agy import verify_terminal as verify_agy
+        result = verify_agy(terminal, session=terminal['session_id'], returncode=terminal['returncode'],
+                            attempt_id=terminal['attempt_id'])
+        stop = reported_stop(result)
+        return stop['category'] if stop else 'provider_error'
     if terminal.get('schema_version') != 'pdcl-claude-terminal-1' or not terminal.get('native_returncode'):
         return terminal.get('expiration_cause')
     from ._dispatch_claude import verify_terminal

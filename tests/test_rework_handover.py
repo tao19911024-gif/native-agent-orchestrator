@@ -67,9 +67,9 @@ def test_explicit_coding_transfer_reserves_frozen_reviewers(tmp_path, monkeypatc
                   'coding_session': 'fixture', 'base_commit': 'base', 'order': {}}
     options = {'compute_assignment': {'selection': {'source': 'explicit'}},
                'reviewers': [{'model': model('opus')}, {'model': model('astra')}]}
-    def transfer():
+    def transfer(provider='claude'):
         return handoff_options(goal, tmp_path, {'project_record': {'project_id': 'fixture'}},
-                               checkpoint, {'checkpoint': {}}, options, 'claude')
+                               checkpoint, {'checkpoint': {}}, options, provider)
     result = transfer()
     assert result['coding_model'] == model('sonnet')
     assert result['compute_assignment']['roles']['handover']['model'] == result['coding_model']
@@ -77,3 +77,7 @@ def test_explicit_coding_transfer_reserves_frozen_reviewers(tmp_path, monkeypatc
     options['reviewers'][1] = {'model': model('sonnet')}
     with pytest.raises(goal.GoalBlocked, match='frozen reviewer'):
         transfer()
+    from foundry_runtime._compute_selection import AGY_MODEL
+    options['reviewers'][1] = {'model': AGY_MODEL.rsplit('-', 1)[0] + '-low'}
+    with pytest.raises(goal.GoalBlocked, match='frozen reviewer'):
+        transfer('agy')
