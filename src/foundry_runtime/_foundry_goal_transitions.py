@@ -166,6 +166,15 @@ def restore_opus(owner, folder, manifest, *, live=False):
     return manifest
 
 
+def effective_reviewers(manifest):
+    rows = manifest.get('reviewers')
+    if rows is None:
+        return None
+    transfers = manifest.get('review_transfers') or {}
+    return [{key: value for key, value in (transfers.get(f'review-{index}') or [row])[-1].items()
+             if key in ('backend', 'model', 'effort', 'executable')} for index, row in enumerate(rows)]
+
+
 def reviewers(checkpoint, saved, *, role, provider, migrate, completed=(), excluded=()):
     """Freeze only explicitly selected targets; completed slots remain reusable."""
     from ._compute_selection import independent_reviewers, review_model_id

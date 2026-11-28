@@ -670,9 +670,9 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                     conflict = coding_review_conflict(selected, reserved)
                     if conflict:
                         raise GoalBlocked(conflict)
-                    if (native_team or {}).get('profile') == 'adaptive':
+                    if coding_backend == 'claude' or (native_team or {}).get('profile') == 'adaptive':
                         if launch_context is None:
-                            launch_context = capture(tree, root_role=native_team['lead_role'],
+                            launch_context = capture(tree, root_role=(native_team or {}).get('lead_role', 'executor'),
                                                      backend=coding_backend, coding_model=selected)
                         hooks = launch_context.get('tool_discipline')
                         if hooks:
@@ -939,6 +939,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
 
         if owner._referenced_fields(context):
             context['review_field_reads'] = True
+            context['review_field_reader'] = 1
 
         checkpoint = {"schema_version": 1, "context_delivery": "reference-v1", "review_read_policy": 1,
                       "run_id": run_id, "order": manifest["order"],
@@ -957,6 +958,7 @@ def run_owned(order: Path, evidence_dir: Path, executable: Path, *, target_workt
                 checkpoint['implementation_evidence']['review_exclusion_models'] = [coding_compute['model']]
                 checkpoint['implementation_evidence']['review_exclusion_basis'] = 'recorded coding assignment fallback; editing authorship unverified'
             checkpoint['implementation_evidence']['review_exclusion_models'] = list(dict.fromkeys([
+                *((previous_review or {}).get('review_exclusion_models') or []),
                 *checkpoint['implementation_evidence'].get('review_exclusion_models', checkpoint['implementation_evidence']['implementation_models']),
                 *(manifest.get('coordination_models', [])
                   if (compute_assignment or {}).get('profile_version', 0) < 6 else [])]))

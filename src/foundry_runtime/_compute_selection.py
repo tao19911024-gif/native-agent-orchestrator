@@ -141,11 +141,22 @@ def independent_reviewers(assignments, implementation_models, *, explicit=False,
         return rows[:count]  # Missing observation is not evidence of a prohibited reviewer.
     if not any(review_model_id(row['model']) in excluded for row in rows):
         return rows[:count]
-    if explicit:
-        raise ValueError('Reviewer model matches an observed coding participant; select another model, preferably another provider.')
     from ._model_catalogue import tier_for_model
     providers = {BACKEND.get(tier_for_model(m)) for m in excluded}
     tiers = ('opus', 'sonnet', 'astra', 'sol', 'fable', 'terra', 'luna') if providers == {'codex'} else ('astra', 'sol', 'opus', 'sonnet', 'fable', 'terra', 'luna')
+    if explicit:
+        occupied = excluded | {review_model_id(row['model']) for row in rows}
+        suggestions = []
+        for index, row in enumerate(rows):
+            if review_model_id(row['model']) in excluded:
+                tier = next((t for t in tiers if review_model_id(model(t)) not in occupied
+                             and (available_backends is None or BACKEND[t] in available_backends)), None)
+                if tier:
+                    occupied.add(review_model_id(model(tier)))
+                    suggestions.append(f"review-{index}: {model(tier)} (--handoff-provider {BACKEND[tier]} --handoff-role review-{index})")
+        raise ValueError('Reviewer model matches an observed coding participant. ' +
+                         ('Independent alternatives: ' + ', '.join(suggestions) if suggestions else
+                          'Select an independent reviewer before continuing.'))
     result = []
     for tier in tiers:
         if available_backends is not None and BACKEND[tier] not in available_backends:

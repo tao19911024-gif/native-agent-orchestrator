@@ -138,3 +138,26 @@ client versions, operating system, expected result, actual result, and relevant
 receipt fields. Retain full logs locally and provide excerpts with synthetic
 paths and identifiers. Use [GitHub Issues](https://github.com/tao19911024-gif/native-agent-orchestrator/issues)
 and the [contribution guide](../CONTRIBUTING.md).
+
+## Reassign a reviewed correction
+
+Use `--foundry-goal --amend-from <outcome.json> --provider codex` or
+`--launcher agy` with the original order and project descriptor to assign the
+correction to another coding provider. Foundry reads the previous worker
+checkpoint and starts a native session with the reviewed candidate and findings.
+For a same-provider continuation, supply its original `--coding-session`.
+The next round inherits transferred review seats. Prior coding participants
+remain excluded from review.
+
+## Close an abandoned descriptor-based assignment
+
+When another order has delivered the work, inspect the blocking intent and its
+owner first. Use the selected runtime to record the operator's decision:
+
+```powershell
+& $RuntimePython -m foundry_runtime.recovery --project-config $Descriptor --task $OriginalTask --predecessor $IntentId --reconcile --output $CleanupReceipt --close-reason $Reason
+```
+
+The command measures process exit and closes the named intent. The cleanup
+receipt needs a fresh output path. A failed Codex turn retains its account
+error and return code. A new dispatch can select an eligible model.

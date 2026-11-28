@@ -209,11 +209,8 @@ def run_owned(owner, order, evidence_dir, executable, correction, options):
                 # Its retained manager now owns continuation, not the initial default.
                 options.pop('manager_profile', None)
             if child_manifest.get("reviewers") is not None:
-                options = {**options, "reviewers": [
-                    {key: value for key, value in
-                     ((child_manifest.get('review_transfers') or {}).get('review-' + str(index)) or [row])[-1].items()
-                     if key in ('backend', 'model', 'effort', 'executable')}
-                    for index, row in enumerate(child_manifest['reviewers'])]}
+                from ._foundry_goal_transitions import effective_reviewers
+                options = {**options, "reviewers": effective_reviewers(child_manifest)}
             if child_manifest.get('review_tier_decisions'):
                 manifest.setdefault('review_tier_decisions', []).extend(
                     {'after_round': len(rounds), **decision} for decision in child_manifest['review_tier_decisions'])

@@ -28,7 +28,7 @@ def test_failed_provider_handoff_keeps_manager_and_resumes_new_worker(external, 
         script = 'HANG=False\n' + SERVER
         if source == 'codex':
             script = script.replace("'status':'completed','items':[],'error':None",
-                "'status':'failed','items':[],'error':{'message':'model_not_found: model unavailable', 'codexErrorInfo':'badRequest'}")
+                "'status':'failed','items':[],'error':{'message':'model_not_found: model unavailable', 'codexErrorInfo':'modelNotFound'}")
         def spawn(argv, **options):
             return transport.OwnedProcess.spawn([sys.executable, '-B', '-c', script], **options)
         return original(*args, process_factory=spawn, **kwargs)

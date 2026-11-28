@@ -495,7 +495,8 @@ def _admission(owner, folder, manifest):
     raise owner.GoalBlocked("handoff needs the retained original admission receipt")
 
 
-def handoff_options(owner, folder, manifest, checkpoint, continuation, options, provider, *, migrate_runtime=False):
+def handoff_options(owner, folder, manifest, checkpoint, continuation, options, provider, *, migrate_runtime=False,
+                    target_compute=None):
     source = backend_for_launcher(options.get("coding_launcher"))
     if source == provider and not migrate_runtime:
         raise ValueError("handoff target is the current provider; omit --handoff-provider to resume")
@@ -516,14 +517,14 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
               **({"project_record": manifest["project_record"]} if manifest.get("project_record") else {})}
     if "team_override" in continuation:
         packet["team_override"] = continuation["team_override"]
-    if provider == "agy" and source != provider:
+    if target_compute or (provider == "agy" and source != provider):
         from ._compute_selection import AGY_MODEL, coding_review_conflict
         from ._foundry_goal_transitions import reserved_review_models
-        conflict = coding_review_conflict(AGY_MODEL, reserved_review_models(options.get('task_staffing'),
+        coding = {"backend": provider, **(target_compute or {"model": AGY_MODEL, "effort": "high"})}
+        conflict = coding_review_conflict(coding['model'], reserved_review_models(options.get('task_staffing'),
             options.get('compute_assignment'), options.get('reviewers'), options.get('manager_state')))
         if conflict:
             raise owner.GoalBlocked(conflict)
-        coding = {"backend": "agy", "model": AGY_MODEL, "effort": "high"}
     elif source == provider:
         coding = ((options.get('role_compute') or {}).get('roles', {}).get('coding') or
                   {'backend': provider, 'model': options.get('coding_model'), 'effort': options.get('coding_effort')})
@@ -537,7 +538,7 @@ def handoff_options(owner, folder, manifest, checkpoint, continuation, options, 
             selected = model(MEMBER_TIERS[provider]['worker'])
             if review_model_id(selected) in reserved:
                 raise owner.GoalBlocked('Coding transfer would select a frozen reviewer on ' + provider +
-                                        '. Keep the current worker or choose another eligible provider.')
+                                        '. Choose an independent coding model for the amendment or another eligible provider.')
         coding = {"backend": provider, "model": selected, "effort": "high"}
     options = dict(options)
     if source != provider and "agy" in (source, provider):

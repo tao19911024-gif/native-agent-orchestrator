@@ -330,7 +330,7 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
         )
         if backend == "agy":
             from ._dispatch_agy import user_frame
-            from ._agy_review import diff_command
+            from ._agy_review import diff_command, field_commands
             if kind == "coordinate":
                 text = ("This is a read-only Foundry manager turn in AGY plan mode. Decide from the supplied "
                         "packet and existing conversation. Use native file tools for a focused read when needed. "
@@ -341,6 +341,11 @@ def build_prompt(request, backend, native_error, *, max_input_bytes=RENDERED_REQ
                 text = ("For shell access, execute the following exact command on its own. "
                         "Headless approval matches the complete command line. Use native file tools for "
                         "other reads and return the requested structured verdict.\n" + command + "\n" + text)
+            if kind == "review" and (commands := field_commands(request)):
+                text = ("Read each referenced field with its exact shell command below. Each prints the "
+                        "canonical field and its SHA-256 read receipt. Use those receipts for read_fields. "
+                        "These commands run directly in the terminal. Do not use RunWorkflow.\n" +
+                        "\n".join(commands) + "\n" + text)
             return user_frame(text)
         return text.encode("utf-8")
     except (CollaborationError, ValueError, UnicodeError, TypeError) as exc:
