@@ -234,6 +234,7 @@ def test_explicit_review_pair_uses_agy_native_protocol(external, tmp_path, monke
     from foundry_runtime._compute_selection import named_reviewer, review_assignments
     from test_installed_runtime import git
     tree, scope, order, _ = external
+    order.write_text(order.read_text(encoding="utf-8") + "\n" + "Review the candidate. " * 260, encoding="utf-8")
     base = git(tree, "rev-parse", "HEAD")
     (tree / "candidate.txt").write_text("candidate")
     git(tree, "add", ".")
@@ -259,6 +260,22 @@ def test_explicit_review_pair_uses_agy_native_protocol(external, tmp_path, monke
         request = json.loads(raw.rsplit(b"\n\n", 1)[-1])
         value = {"candidate_commit": head, "packet_sha256": request["packet_sha256"],
                  "verdict": "PASS", "findings": []}
+        from foundry_runtime._agy_review import field_commands
+        import subprocess
+        import re
+        reads = []
+        for command in field_commands(request):
+            if is_agy:
+                assert command in raw.decode()
+                allowed = json.loads(argv[argv.index("--settings") + 1])["permissions"]["allow"]
+                assert any(re.fullmatch(rule[len("command(regex:"):-1], command)
+                           for rule in allowed if rule.startswith("command(regex:"))
+            field, receipt = subprocess.check_output([sys.executable, "-I", "-B", "-m",
+                "foundry_runtime._agy_review", command.split()[-1]]).splitlines()
+            assert json.loads(receipt)["sha256"] == goal._sha(field)
+            reads.append(json.loads(receipt))
+        assert reads
+        value["read_fields"] = reads
         sid = "00000000-0000-0000-0000-00000000000" + ("1" if is_agy else "2")
         rows = ([{"event": "init", "conversation_id": sid, "init": {"model": pair[0]["model"]}},
                  {"event": "result", "result": {"status": "SUCCESS", "conversation_id": sid,

@@ -366,8 +366,10 @@ def _amendment(order, tree, outcome_path, session, *, operator_additions=None):
     if not isinstance(session, str) or not session.strip():
         raise ValueError("amendment requires the existing coding session")
     coding, rounds = prior.get("coding"), manifest.get("rounds")
+    participants = prior.get('implementation_evidence') or {}
     return {"prior_outcome": _fact(path), "prior_manifest": _fact(manifest_path),
             "candidate_commit": head, "base_commit": base, "coding_session": session,
+            "review_exclusion_models": participants.get('review_exclusion_models', participants.get('implementation_models', [])),
             **({'integration_base': prior['integration_base']} if 'integration_base' in prior else {}),
             "reviews": reviews, "host_findings": prior.get("host_findings", []), "prior_status": status,
             **({'operator_additions': operator_additions} if operator_additions is not None else {}),
@@ -592,14 +594,16 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             if admission:
                 kwargs["predispatch_receipt"] = Path(admission["path"])
         recorded_launcher = amendment_launcher(prior)
-        if recorded_launcher and (backend_for_launcher(kwargs.get("coding_launcher", recorded_launcher))
-                                  != backend_for_launcher(recorded_launcher)):
-            raise ValueError("amendment must retain the recorded coding provider")
+        target_provider = backend_for_launcher(kwargs.get("coding_launcher", recorded_launcher))
+        transferring = recorded_launcher and target_provider != backend_for_launcher(recorded_launcher)
+        if transferring and kwargs.get('coding_session'):
+            raise ValueError("A cross-provider amendment starts a new session; omit --coding-session")
         if recorded_launcher:
             kwargs.setdefault("coding_launcher", recorded_launcher)
         if prior.get('manager_state') is not None:
             kwargs.setdefault('manager_state', prior['manager_state'])
-        prior_reviewers = prior.get("reviewers")
+        from ._foundry_goal_transitions import effective_reviewers
+        prior_reviewers = effective_reviewers(prior)
         changed_review_provider = (kwargs.get("backend") is not None and prior_reviewers is not None
             and any(row["backend"] != kwargs["backend"] for row in prior_reviewers))
         if (compute_profile is None and not changed_review_provider and
@@ -613,18 +617,34 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             for role, prefix in (("coding", "coding"), ("review", "analyst")):
                 chosen = recorded.get(role) or {}
                 provider_changed = role == "review" and kwargs.get("backend", chosen.get("backend")) != chosen.get("backend")
+                if role == "coding" and transferring:
+                    continue
                 if not provider_changed and not any(kwargs.get(prefix + "_" + k) for k in ("model", "effort")):
                     for key in ("model", "effort"):
                         if chosen.get(key):
                             kwargs[prefix + "_" + key] = chosen[key]
                 if role == "review" and chosen.get("backend"):
                     kwargs.setdefault("backend", chosen["backend"])
+        if transferring:
+            ref = prior.get('coding_checkpoint')
+            if not ref:
+                raise GoalBlocked('Provider transfer requires the recorded worker checkpoint')
+            checkpoint = json.loads(goal_usage._reference(ref))
+            outcome = json.loads(Path(kwargs['amend_from']).read_bytes())
+            if (not checkpoint.get('coding_session') or checkpoint['coding_session'] != outcome.get('coding_session')
+                    or any(checkpoint.get(k) != prior.get(k) for k in ('run_id', 'order', 'worktree', 'base_commit'))):
+                raise GoalBlocked('Amendment worker checkpoint differs from its reviewed goal')
+            target = compute_kwargs(kwargs.get('coding_model'), kwargs.get('coding_effort'), backend=target_provider)
+            kwargs.update(coding_session=checkpoint['coding_session'], coding_launcher=recorded_launcher,
+                          native_team=prior.get('native_team'), execution_decision=prior.get('execution_decision'))
+            kwargs = goal_continuation.handoff_options(sys.modules[__name__], Path(ref['path']).parent, prior,
+                checkpoint, {'checkpoint': ref}, kwargs, target_provider, target_compute=target)
     elif kwargs.get("predispatch_receipt"):
         from . import _foundry_dispatch as dispatch
         plan = dispatch._project_adapter(None).goal_execution_plan(
             order, kwargs.get("target_worktree"), kwargs["predispatch_receipt"])
     coding_backend = backend_for_launcher(kwargs.get("coding_launcher"))
-    decision = dict(prior.get("execution_decision", {}))
+    decision = dict(kwargs.get("execution_decision") or prior.get("execution_decision") or {})
     if team_profile is None and not kwargs.get("amend_from") and "native_team" not in kwargs and plan:
         team_profile = plan["team"]["profile"]
         decision["team"] = {**plan["team"], "source": "admission_plan"}
@@ -705,7 +725,7 @@ def prepare_goal(order: Path, evidence_dir: Path, executable: Path, *,
             **({"correction_policy": "explicit"} if auto_amend_model or auto_amend_effort else {})}
     if kwargs.get("reviewers") is not None:
         kwargs["reviewers"] = review_assignments(kwargs["reviewers"])
-        if kwargs.get("compute_assignment") is not None and (not prior or overrides["reviewers"]):
+        if kwargs.get("compute_assignment") is not None and (not prior or overrides["reviewers"] or prior.get("review_transfers")):
             assignment = kwargs["compute_assignment"]
             reviewer_source = staffing_sources["reviewers"] if staffing_sources else "explicit"
             kwargs["compute_assignment"] = {**assignment,

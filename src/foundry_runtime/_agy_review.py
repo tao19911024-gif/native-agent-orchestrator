@@ -1,6 +1,10 @@
 """Antigravity structured review transport for Foundry's native analyst."""
+import base64
 import json
+import os
 import re
+import shlex
+import sys
 from pathlib import Path
 
 from ._foundry_response_contract import SchemaResponseError, validate_response_shape
@@ -13,6 +17,35 @@ def diff_command(request):
         return "git diff --no-ext-diff --no-textconv " + " ".join(endpoints)
 
 
+def field_commands(request):
+    """One fixed read-only command per field of the frozen review checkpoint."""
+    reader = (request.get("packet") or {}).get("review_field_reader")
+    reference = request.get("context_reference")
+    if reader != 1 or not reference:
+        return []
+    from .foundry_goal import _json_bytes
+    # Encode the data argument so arbitrary workspace paths remain shell data.
+    # The command itself only reads a hash-bound field and prints its receipt.
+    executable = Path(sys.executable).as_posix()
+    if os.name == "nt":
+        executable = ("& '" + executable.replace("'", "''") + "'" if
+                      re.fullmatch(r"[\w:/.-]+", executable) is None else executable)
+    else:
+        executable = shlex.quote(executable)
+    return [executable + " -I -B -m foundry_runtime._agy_review " +
+            base64.urlsafe_b64encode(_json_bytes([reference, field])).decode("ascii")
+            for field in sorted(request.get("context_fields") or {})]
+
+
+def read_field(argument):
+    from .foundry_goal import _json_bytes, _referenced_fields, _sha, goal_usage
+    ref, field = json.loads(base64.urlsafe_b64decode(argument))
+    context = json.loads(goal_usage._reference(ref))["context"]
+    pointer = _referenced_fields(context)[field]
+    raw = _json_bytes(context[field])
+    return raw + b"\n" + _json_bytes({"pointer": pointer, "sha256": _sha(raw)}) + b"\n"
+
+
 def review_permissions(request):
     rules = []
     ref = request.get("context_reference") or {}
@@ -21,6 +54,8 @@ def review_permissions(request):
     command = diff_command(request)
     if command:
         rules.append("command(regex:^" + command + "$)")
+    for command in field_commands(request):
+        rules.append("command(regex:^" + re.escape(command).replace(r"\ ", " ") + "$)")
     return {"deny": ["write_file(*)"], "allow": rules}
 
 
@@ -80,3 +115,7 @@ class ReviewProtocol:
         if self.result is None or self.decoded is None:
             raise NativeError("incomplete AGY review stream")
         return self.decoded, self.init, self.result
+
+
+if __name__ == "__main__":
+    sys.stdout.buffer.write(read_field(sys.argv[1]))

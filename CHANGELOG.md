@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0a130 — 2026-11-27
+
+- Record Codex account model refusals as failed turns. Explicit recovery can reconcile the bound failure after process cleanup. Descriptor-based settlement identifies an exited pre-session AGY attempt from its verified cleanup.
+- Retain transferred review seats and observed coding participants across reviewed amendments. An operator can assign a correction to another provider using the prior worker checkpoint and a fresh native session.
+- Reserve explicitly assigned reviewers during Claude delegation on single-worker goals. Conflicts identify independent alternatives by seat.
+- Provide a read-only field command for headless AGY reviews requiring a digest acknowledgement. The command reads the frozen checkpoint and returns the requested field and its digest.
+
 ## 0.1.0a129 — 2026-11-27
 
 - An AGY startup rejection with zero execution and verified cleanup preserves

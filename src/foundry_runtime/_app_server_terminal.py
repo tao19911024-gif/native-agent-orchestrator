@@ -15,6 +15,7 @@ _CODEX_ERROR_STRINGS = (
     'rateLimitExceeded', 'serverOverloaded', 'cyberPolicy',
     'misalignmentPolicyViolation', 'internalServerError', 'unauthorized',
     'badRequest', 'threadRollbackFailed', 'sandboxError', 'other',
+    'modelNotFound',  # Current AppServer reports account/model refusal on the bound turn.
 )
 
 

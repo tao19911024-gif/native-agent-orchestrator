@@ -43,9 +43,7 @@ def settle_terminal(intent, log):
     else:
         binding = record['turn_binding']
         terminal, final_text, stopped = AppServer.retained_terminal(log, binding, record['frozen']['app_server_policy'])
-        if terminal['params']['turn']['status'] != 'completed':
-            raise IntentConflict('retained worker turn did not complete')
-        rc = 0
+        rc = 0 if terminal['params']['turn']['status'] == 'completed' else 1
         terminal = {'schema_version': 'pdcl-app-server-terminal-1', 'binding': binding,
             'terminal': terminal, 'returncode': rc, 'returncode_source': 'turn_status',
             'native_returncode': None, 'app_server_policy': record['frozen']['app_server_policy'],

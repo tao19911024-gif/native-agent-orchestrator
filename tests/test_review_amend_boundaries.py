@@ -140,6 +140,45 @@ def test_retained_context_mismatch_names_the_field(external):
         from_record(saved, selected=scope)
 
 
+def test_amendment_transfers_worker_and_retains_reviewer_seat(external, tmp_path, monkeypatch):
+    from foundry_runtime._compute_selection import named_reviewer
+    tree, scope, order, base, head = candidate(external)
+    prior = tmp_path / 'prior'
+    prior.mkdir()
+    source = {'order': goal._fact(order), 'worktree': str(tree), 'run_id': 'round-A', 'base_commit': base}
+    goal._write(prior / 'worker.cleanup.json', {'root_exited': True, 'cleanup_verified': True, 'job_active_processes': 0})
+    checkpoint = {**source, 'coding_session': 'source-session', 'evidence': [goal._fact(prior / 'worker.cleanup.json')]}
+    goal._write(prior / 'coding-checkpoint.json', checkpoint)
+    pair = [named_reviewer('sonnet'), named_reviewer('sol')]
+    replacement = named_reviewer('astra')
+    goal._write(prior / 'manifest.json', {**source, 'project_record': scope.record(), 'coding_launcher': 'claude',
+        'coding_checkpoint': goal._fact(prior / 'coding-checkpoint.json'), 'reviewers': pair,
+        'review_transfers': {'review-0': [replacement]}})
+    review = {'candidate_commit': head, 'verdict': 'PASS', 'findings': [], 'packet_sha256': 'b'*64}
+    goal._write(prior / 'outcome.json', {'status': 'candidate_verified', 'candidate_commit': head,
+        'coding_session': 'source-session', 'reviews': [review, review],
+        'implementation_evidence': {'review_exclusion_models': ['sonnet', 'opus']}})
+    additions = tmp_path / 'instructions.txt'
+    additions.write_text('Apply the additional requirement.')
+    observed = []
+    def run(order, evidence, executable, **options):
+        observed.append(options)
+        lineage = goal._amendment(order, tree, options['amend_from'], options['coding_session'],
+                                  operator_additions=options['amend_prompt'])
+        assert lineage['review_exclusion_models'] == ['sonnet', 'opus']
+        return {'status': 'candidate_verified'}
+    monkeypatch.setattr(foundry_entry, '_analyst_executable', lambda _: Path(sys.executable))
+    monkeypatch.setattr(goal, '_run', run)
+    assert cli.main(['--foundry-goal', '--project-config', str(scope.path), '--order', str(order),
+                     '--amend-from', str(prior / 'outcome.json'), '--provider', 'codex',
+                     '--prompt-file', str(additions)]) == 0
+    options, = observed
+    assert options['coding_launcher'] == 'app-server'
+    assert options['handover']['prior_coding_session'] == 'source-session'
+    assert options['handover']['target_provider'] == 'codex'
+    assert options['reviewers'] == [replacement, pair[1]]
+
+
 @pytest.mark.parametrize('root', [False, True])
 def test_completed_goal_answer_exits_nonzero_without_execution(external, tmp_path, root):
     tree, scope, order, base, head = candidate(external)

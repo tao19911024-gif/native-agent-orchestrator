@@ -208,8 +208,9 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
                  "Remove workspace/model/profile overrides and amendment options. Use: " + RECOVERY_USAGE)
     if (auto_model or auto_effort) and not a.foundry_goal:
         ap.error("automatic amendment requires --foundry-goal")
-    if (amend_from or coding_session) and (not a.foundry_goal or not (amend_from and coding_session)):
-        ap.error("--amend-from and --coding-session require each other and --foundry-goal")
+    if (amend_from or coding_session) and not (a.foundry_goal and amend_from and
+            (coding_session or requested_provider or launcher_explicit)):
+        ap.error("--amend-from requires --foundry-goal and a coding session or an explicit transfer target")
     if (getattr(a, "review_base", None) or getattr(a, "review_head", None)) and not review:
         ap.error("--review-base and --review-head require --foundry-review")
     if not (a.foundry_goal or a.foundry_analyze or review):
@@ -299,9 +300,14 @@ def handle_mode(a, ap, *, project=None, project_adapter=None) -> int | None:
             if not profile and a.analyst_backend is None:
                 backend = prior_review_backend or "codex"
             prior_launcher = amendment_launcher(prior)
-            if provider and prior_launcher and (backend_for_launcher(prior_launcher)) != provider:
-                raise ValueError("An amendment retains its provider; cross-provider transfer is not a native resume")
-            if prior_launcher and not getattr(a, "launcher_explicit", False):
+            explicit_target = bool(provider or launcher_explicit)
+            transferring = explicit_target and prior_launcher and (
+                backend_for_launcher(prior_launcher) != backend_for_launcher(a.launcher))
+            if transferring and coding_session:
+                raise ValueError("A cross-provider amendment starts a new session; omit --coding-session")
+            if not transferring and not coding_session:
+                raise ValueError("Same-provider amendment requires --coding-session")
+            if prior_launcher and not explicit_target:
                 a.launcher = prior_launcher
             coding_backend = backend_for_launcher(a.launcher)
             if coding_backend == "claude" and not a.analyst_backend and not prior_review_backend:

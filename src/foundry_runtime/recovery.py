@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import argparse
 import copy
 import json
+import sys
 from pathlib import Path
 import uuid
 
@@ -14,11 +15,13 @@ import uuid
 def blocker_advice(journal, record):
     """Observe a predecessor; settlement remains an explicit operator action."""
     from ._executor_lifecycle import process_identity_exited
+    from ._execution_intent import reconciliation_identity
     report = {'holder_line': record['task_key'], 'intent_id': record['intent_id'],
               'alive': None, 'processes': {}, 'journal': str(journal)}
     try:
+        identity = reconciliation_identity(record)
         for role in ('owner', 'root'):
-            pid, created = record.get(role + '_pid'), record.get(role + '_creation_time')
+            pid, created = identity[role + '_pid'], identity[role + '_creation_time']
             if pid is None and role == 'root' and record.get('state') == 'starting':
                 continue
             if not pid or not created:
@@ -35,19 +38,27 @@ def blocker_advice(journal, record):
         else:
             from ._foundry_dispatch import _project_adapter
             evidence = _project_adapter(None).evidence(record['task_key'])
-        matches = []
-        for path in evidence.glob('dispatch*.package.json'):
-            package = json.loads(path.read_bytes())
-            if (package.get('intent_id') == record['intent_id']
-                    and package.get('attempt_id') == record.get('attempt_id')):
-                matches.append(path)
-        if len(matches) != 1:
-            raise ValueError('settlement command needs one exact original package; found ' + str(len(matches)))
-        plan = command_plan(matches[0], journal, record)
-        if plan['status'] == 'recovery_already_recorded':
-            report.update(plan)
-            return report
-        argv = plan['argv']['reconcile'] + ['--close-reason', '<close-reason>']
+        if context.get('descriptor') and not record.get('recovery_authorization') and not record.get('recovery_consumption'):
+            # Settlement measures the journal identities directly. The selected
+            # observer can also close older pre-init attempts without a package.
+            argv = [sys.executable, '-m', 'foundry_runtime.recovery', '--project-config', context['descriptor'],
+                    '--task', record['task_key'], '--predecessor', record['intent_id'], '--reconcile',
+                    '--output', str(evidence / (record['intent_id'] + '.close.cleanup.json'))]
+        else:
+            matches = []
+            for path in evidence.glob('dispatch*.package.json'):
+                package = json.loads(path.read_bytes())
+                if (package.get('intent_id') == record['intent_id']
+                        and package.get('attempt_id') == record.get('attempt_id')):
+                    matches.append(path)
+            if len(matches) != 1:
+                raise ValueError('settlement command needs one exact original package; found ' + str(len(matches)))
+            plan = command_plan(matches[0], journal, record)
+            if plan['status'] == 'recovery_already_recorded':
+                report.update(plan)
+                return report
+            argv = plan['argv']['reconcile']
+        argv = [*argv, '--close-reason', '<close-reason>']
         report.update(reconcile_argv=argv, reconcile_powershell='& ' + ' '.join(
             '$CloseReason' if arg == '<close-reason>' else "'" + str(arg).replace("'", "''") + "'" for arg in argv),
             next_action='Set $CloseReason to the operator decision ending this predecessor, then run the command. '

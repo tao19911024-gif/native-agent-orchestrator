@@ -147,6 +147,18 @@ def _verify_terminal(record, evidence, returncode):
         raise IntentConflict('invalid bound terminal evidence: ' + str(error)) from error
 
 
+def reconciliation_identity(record):
+    identity = {key: record.get(key) for key in (
+        'attempt_id', 'owner_pid', 'owner_creation_time', 'root_pid', 'root_creation_time')}
+    if identity['root_pid'] is None and record.get('launcher') == 'agy':
+        # Before AGY initialization the journal may only have the cleanup's root.
+        measured = record.get('cleanup') or {}
+        if (measured.get('attempt_id') == identity['attempt_id'] and measured.get('cleanup_verified') is True
+                and measured.get('root_exited') is True and measured.get('job_active_processes') == 0):
+            identity.update(root_pid=measured['root_pid'], root_creation_time=measured['root_creation_time'])
+    return identity
+
+
 class ExecutionIntent:
     @classmethod
     def open(cls, common_dir: Path, task_key: str, frozen: dict, *, intent_id=None,
@@ -887,15 +899,7 @@ class ExecutionIntent:
             return self.record  # completed reconciliation is not another event or execution
         if self.state not in {'active', 'unknown'} or 'recovery_authorization' in self._record:
             raise IntentConflict('reconciliation requires an active/unknown bound attempt before recovery')
-        identity = {key: self._record[key] for key in (
-            'attempt_id', 'owner_pid', 'owner_creation_time', 'root_pid', 'root_creation_time')}
-        if identity['root_pid'] is None and self._record.get('launcher') == 'agy':
-            # Older AGY dispatches published active only after receiving init.
-            # Their same-attempt cleanup can identify the exited CLI before that boundary.
-            measured = self._record.get('cleanup') or {}
-            if (measured.get('attempt_id') == identity['attempt_id'] and measured.get('cleanup_verified') is True
-                    and measured.get('root_exited') is True and measured.get('job_active_processes') == 0):
-                identity.update(root_pid=measured['root_pid'], root_creation_time=measured['root_creation_time'])
+        identity = reconciliation_identity(self._record)
         if lock.exists():
             raw = lock.read_bytes()
             payload = json.loads(raw)
